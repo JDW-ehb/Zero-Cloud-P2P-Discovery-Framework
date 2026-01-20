@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="ZCL/ZCL.csproj" />
+  <Project Path="ZCM/ZCM.csproj">
+    <Deploy Solution="Debug|*" />
+  </Project>
+</Solution>
