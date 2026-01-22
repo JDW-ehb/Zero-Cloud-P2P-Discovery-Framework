@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
@@ -26,7 +27,7 @@ namespace ZCL.APIs.ZCSP
         }
 
         // =====================
-        // hosting
+        // HOSTING (server role)
         // =====================
 
         public async Task StartHostingAsync(int port)
@@ -34,7 +35,7 @@ namespace ZCL.APIs.ZCSP
             var listener = new TcpListener(IPAddress.Any, port);
             listener.Start();
 
-            Console.WriteLine($"[{_peerId}] Listening on {port}");
+            Console.WriteLine($"[{_peerId}] Hosting on port {port}");
 
             while (true)
             {
@@ -114,7 +115,6 @@ namespace ZCL.APIs.ZCSP
 
             var incomingText = BinaryCodec.ReadString(reader);
 
-            // Store message
             var message = _messaging.Store(
                 fromPeer: session.PeerId,
                 toPeer: _peerId,
@@ -122,13 +122,102 @@ namespace ZCL.APIs.ZCSP
 
             Console.WriteLine(message);
 
-            // Echo back (for now)
             var response = BinaryCodec.Serialize(
                 ZcspMessageType.SessionData,
                 session.Id,
                 w => BinaryCodec.WriteString(w, message.Content));
 
             await Framing.WriteAsync(stream, response);
+        }
+
+        // =====================
+        // CONNECTING (client role)
+        // =====================
+
+        public async Task ConnectAsync(string host, int port)
+        {
+            using var client = new TcpClient();
+            Console.WriteLine($"[{_peerId}] Connecting to {host}:{port}");
+            await client.ConnectAsync(host, port);
+
+            using var stream = client.GetStream();
+
+            var request = BinaryCodec.Serialize(
+                ZcspMessageType.ServiceRequest,
+                null,
+                w =>
+                {
+                    w.Write(Guid.NewGuid().ToByteArray()); // requestId
+                    BinaryCodec.WriteString(w, _peerId);
+                    BinaryCodec.WriteString(w, "remote");
+                    BinaryCodec.WriteString(w, "Messaging");
+                });
+
+            await Framing.WriteAsync(stream, request);
+
+            var frame = await Framing.ReadAsync(stream);
+            if (frame == null) return;
+
+            var (type, sessionId, _, reader) =
+                BinaryCodec.Deserialize(frame);
+
+            if (type != ZcspMessageType.ServiceResponse || sessionId == null)
+                return;
+
+            var approved = reader.ReadBoolean();
+            reader.ReadInt64(); // expiresAt
+
+            if (!approved)
+            {
+                Console.WriteLine("Service request rejected");
+                return;
+            }
+
+            Console.WriteLine($"[{_peerId}] Session established: {sessionId}");
+
+            await StartChatAsync(stream, sessionId.Value);
+        }
+
+        // =====================
+        // SHARED CHAT LOOP
+        // =====================
+
+        private async Task StartChatAsync(NetworkStream stream, Guid sessionId)
+        {
+            Console.WriteLine("Chat started. Press Ctrl+C to exit.\n");
+
+            var receive = Task.Run(async () =>
+            {
+                while (true)
+                {
+                    var frame = await Framing.ReadAsync(stream);
+                    if (frame == null) break;
+
+                    var (type, sessionId, timestamp, reader) =
+                        BinaryCodec.Deserialize(frame);
+
+                    Console.WriteLine($"\n[REMOTE] {BinaryCodec.ReadString(reader)}");
+                }
+            });
+
+            var send = Task.Run(async () =>
+            {
+                while (true)
+                {
+                    var line = Console.ReadLine();
+                    if (string.IsNullOrWhiteSpace(line))
+                        continue;
+
+                    var data = BinaryCodec.Serialize(
+                        ZcspMessageType.SessionData,
+                        sessionId,
+                        w => BinaryCodec.WriteString(w, line));
+
+                    await Framing.WriteAsync(stream, data);
+                }
+            });
+
+            await Task.WhenAny(send, receive);
         }
     }
 }
