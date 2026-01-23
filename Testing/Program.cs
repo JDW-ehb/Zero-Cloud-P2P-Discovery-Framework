@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 using ZCL.APIs.ZCSP;
 using ZCL.APIs.ZCSP.Sessions;
 using ZCL.Services.Messaging;
@@ -15,17 +16,27 @@ class Program
         // Give listener a moment to bind
         await Task.Delay(500);
 
-        // Connect to another peer
-        await peer.ConnectAsync("127.0.0.1", 5556);
+        // Uncomment in second console to connect
+        // await peer.ConnectAsync("127.0.0.1", 5555, "Messaging");
 
-        // Keep process alive
         await Task.Delay(Timeout.Infinite);
     }
+
     static ZcspPeer BuildPeer(string peerId)
     {
         var sessions = new SessionRegistry();
-        var messaging = new MessagingService();
 
-        return new ZcspPeer(peerId, sessions, messaging);
+        // Instantiate services
+        var messagingService = new MessagingService();
+
+        // Register services with ZCSP
+        IZcspService[] services =
+        {
+            messagingService
+            // FileTransferService later
+            // AIChatService later
+        };
+
+        return new ZcspPeer(peerId, sessions, services);
     }
 }
