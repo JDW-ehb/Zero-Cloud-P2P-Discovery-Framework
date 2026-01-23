@@ -87,7 +87,7 @@ namespace ZCL.APIs.ZCSP
         }
 
         // =====================
-        // CONNECTING
+        // CONNECTING CLIENT -> HOST
         // =====================
 
         public async Task ConnectAsync(string host, int port, string serviceName)
