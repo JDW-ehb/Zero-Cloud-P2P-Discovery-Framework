@@ -2,9 +2,11 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Net.Sockets;
 using System.Threading.Tasks;
 using ZCL.APIs.ZCSP;
 using ZCL.APIs.ZCSP.Protocol;
+using ZCL.APIs.ZCSP.Transport;
 
 namespace ZCL.Services.Messaging
 {
@@ -12,27 +14,59 @@ namespace ZCL.Services.Messaging
     {
         public string ServiceName => "Messaging";
 
+        private NetworkStream? _stream;
         private readonly ConcurrentDictionary<string, List<ChatMessage>> _messages = new();
+
+        public void BindStream(NetworkStream stream)
+        {
+            _stream = stream;
+        }
 
         public Task OnSessionStartedAsync(Guid sessionId, string remotePeerId)
         {
-            // Nothing special needed for messaging (yet)
+            Console.WriteLine($"[Messaging] Session started with {remotePeerId}");
+            Console.WriteLine("Type messages and press Enter\n");
+
+            _ = Task.Run(async () =>
+            {
+                while (true)
+                {
+                    var line = Console.ReadLine();
+                    if (string.IsNullOrWhiteSpace(line) || _stream == null)
+                        continue;
+
+                    var data = BinaryCodec.Serialize(
+                        ZcspMessageType.SessionData,
+                        sessionId,
+                        w =>
+                        {
+                            BinaryCodec.WriteString(w, "local");
+                            BinaryCodec.WriteString(w, remotePeerId);
+                            BinaryCodec.WriteString(w, line);
+                        });
+
+                    await Framing.WriteAsync(_stream, data);
+                }
+            });
+
             return Task.CompletedTask;
         }
 
         public Task OnSessionDataAsync(Guid sessionId, BinaryReader reader)
         {
-            // Payload format owned by MessagingService
             var fromPeer = BinaryCodec.ReadString(reader);
             var toPeer = BinaryCodec.ReadString(reader);
             var content = BinaryCodec.ReadString(reader);
 
-            Store(fromPeer, toPeer, content);
+            var msg = Store(fromPeer, toPeer, content);
+            Console.WriteLine(msg);
+
             return Task.CompletedTask;
         }
 
         public Task OnSessionClosedAsync(Guid sessionId)
         {
+            Console.WriteLine("[Messaging] Session closed");
             return Task.CompletedTask;
         }
 
@@ -40,13 +74,12 @@ namespace ZCL.Services.Messaging
         // Messaging logic
         // =====================
 
-        public ChatMessage Store(string fromPeer, string toPeer, string content)
+        private ChatMessage Store(string fromPeer, string toPeer, string content)
         {
             var message = new ChatMessage(fromPeer, toPeer, content);
-
             var key = BuildConversationKey(fromPeer, toPeer);
-            var conversation = _messages.GetOrAdd(key, _ => new List<ChatMessage>());
 
+            var conversation = _messages.GetOrAdd(key, _ => new List<ChatMessage>());
             lock (conversation)
             {
                 conversation.Add(message);
@@ -55,18 +88,7 @@ namespace ZCL.Services.Messaging
             return message;
         }
 
-        public IReadOnlyList<ChatMessage> GetConversation(string peerA, string peerB)
-        {
-            var key = BuildConversationKey(peerA, peerB);
-
-            return _messages.TryGetValue(key, out var conversation)
-                ? conversation.AsReadOnly()
-                : Array.Empty<ChatMessage>();
-        }
-
         private static string BuildConversationKey(string a, string b)
-        {
-            return string.CompareOrdinal(a, b) < 0 ? $"{a}|{b}" : $"{b}|{a}";
-        }
+            => string.CompareOrdinal(a, b) < 0 ? $"{a}|{b}" : $"{b}|{a}";
     }
 }

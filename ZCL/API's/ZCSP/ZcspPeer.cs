@@ -60,7 +60,7 @@ namespace ZCL.APIs.ZCSP
 
                 reader.ReadBytes(16); // requestId
                 var fromPeer = BinaryCodec.ReadString(reader);
-                BinaryCodec.ReadString(reader); // toPeer
+                BinaryCodec.ReadString(reader); // toPeer (ignored)
                 var serviceName = BinaryCodec.ReadString(reader);
 
                 if (!_services.TryGetValue(serviceName, out var service))
@@ -78,6 +78,8 @@ namespace ZCL.APIs.ZCSP
                     });
 
                 await Framing.WriteAsync(stream, response);
+
+                service.BindStream(stream);
                 await service.OnSessionStartedAsync(session.Id, fromPeer);
 
                 await RunSessionAsync(stream, session.Id, service);
@@ -115,6 +117,9 @@ namespace ZCL.APIs.ZCSP
                 return;
 
             var service = _services[serviceName];
+            service.BindStream(stream);
+
+            await service.OnSessionStartedAsync(sessionId.Value, host);
             await RunSessionAsync(stream, sessionId.Value, service);
         }
 
