@@ -1,22 +1,28 @@
-﻿using System;
+﻿using Microsoft.EntityFrameworkCore;
+using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
+using System.Diagnostics;
 
-namespace ZCL.API_s
+using ZCL.Models;
+
+namespace ZCL.API
 {
+    public static class Config
+    {
+        public const string dbFileName = "services.db";
+        public const int port = 2600;
+        public const string multicastAddressString = "224.0.0.26";
+        public const UInt16 ZCDPProtocolVersion = 0;
+    }
+
     public enum MsgType
     {
         None = 0,
         Announce
-    }
-
-    public class Service
-    {
-        UInt16 port;
-        public required string name;
     }
 
     public class MsgHeader
@@ -24,7 +30,7 @@ namespace ZCL.API_s
         public UInt16 version;
         public UInt32 type;
         public UInt64 messageID;
-        public UInt128 peerUUID;
+        public Guid peerGuid;
     }
 
     public class MsgAnnounce
@@ -32,12 +38,13 @@ namespace ZCL.API_s
         public UInt64 servicesCount;
     }
 
-    public class ZCDP
+    public static class ZCDPPeer
     {
-        public static void StartAndRunPeer(IPAddress multicastAddress, int port)
+        public static void StartAndRun(IPAddress multicastAddress, int port, string dbPath)
         {
             UInt64 MessageID = 0;
-            UInt16 ZCDPProtocolVersion = 0;
+            UInt16 ZCDPProtocolVersion = Config.ZCDPProtocolVersion;
+            Guid peerGuid = Guid.Parse("2c0dbe0c-91c4-46cf-92e4-cf43a614a914");
 
             Socket? sender;
             // Create sender
@@ -49,7 +56,7 @@ namespace ZCL.API_s
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine($"Error: {e.Message}");
+                    Debug.WriteLine($"Error: {e.Message}");
                     sender = null;
                 }
             }
@@ -107,13 +114,13 @@ namespace ZCL.API_s
 
                     listener.Client.Bind(new IPEndPoint(IPAddress.Any, port));
 
-                    Console.WriteLine($"Listening for multicast on {multicastAddress}:{port}");
-                    Console.WriteLine($"Local endpoint: {listener.Client.LocalEndPoint}");
+                    Debug.WriteLine($"Listening for multicast on {multicastAddress}:{port}");
+                    Debug.WriteLine($"Local endpoint: {listener.Client.LocalEndPoint}");
 
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine($"Error: {e.Message}");
+                    Debug.WriteLine($"Error: {e.Message}");
                     listener = null;
                 }
             }
@@ -125,16 +132,17 @@ namespace ZCL.API_s
             {
                 try
                 {
+                    var optionsBuilder = new DbContextOptionsBuilder<ServiceDBContext>();
+                    optionsBuilder.UseSqlite($"Data Source={dbPath}");
+                    var db = new ServiceDBContext(optionsBuilder.Options);
+                    
                     if (listener != null)
                     {
-                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] Waiting for data...");
+                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss}] Waiting for data...");
 
                         if (listener.Available > 0)
                         {
                             byte[] bytes = listener.Receive(ref remoteEP);
-
-                            Console.WriteLine($"\n>>> Received from {remoteEP}");
-                            Console.WriteLine($">>> Length: {bytes.Length} bytes");
 
                             // TODO(luca): Bulletproof reading of packets since they might be corrupted or wrong.
                             // Create a wrapper that will exit and log if reading fails.
@@ -153,10 +161,14 @@ namespace ZCL.API_s
                                     messageID = reader.ReadUInt64()
                                 };
 
-                                UInt64 upper = reader.ReadUInt64();
-                                UInt64 lower = reader.ReadUInt64();
-                                header.peerUUID = ((UInt128)(lower) | ((UInt128)(upper) << 64));
+                                Span<byte> guidBytes = stackalloc byte[16];
+                                reader.Read(guidBytes);
+                                header.peerGuid = new Guid(guidBytes);
                             }
+
+
+                            Debug.WriteLine($"\n>>> Received from {remoteEP} ({header.peerGuid}):");
+                            Debug.WriteLine($">>> Length: {bytes.Length} bytes");
 
                             switch ((MsgType)header.type)
                             {
@@ -171,17 +183,32 @@ namespace ZCL.API_s
                                         {
                                             if (idx == 0)
                                             {
-                                                Console.WriteLine("Services:");
+                                                Debug.WriteLine("Services:");
                                             }
 
-                                            UInt64 nameLength = reader.ReadUInt64();
-                                            byte[] nameBytes = reader.ReadBytes((int)nameLength);
                                             Service service = new Service
                                             {
-                                                name = Encoding.UTF8.GetString(nameBytes)
+                                                name = reader.ReadString(),
+                                                address = reader.ReadString(),
+                                                port = reader.ReadUInt16(),
+                                                peerGuid = header.peerGuid,
                                             };
 
-                                            Console.WriteLine($"- {service.name}");
+                                            db.Add(service);
+
+                                            Debug.WriteLine($"- {service.name}");
+                                        }
+
+                                        try
+                                        {
+                                            
+                                            db.SaveChanges();
+                                           
+                                        }
+                                        catch (Exception e)
+                                        {
+                                            Debug.WriteLine($"Could not save changes: {e.Message}");
+                                            Debug.WriteLine(e.InnerException?.Message);
                                         }
 
                                         break;
@@ -196,20 +223,20 @@ namespace ZCL.API_s
                         }
                         else
                         {
-                            Console.WriteLine("  (no data received, still listening...)");
+                            Debug.WriteLine("  (no data received, still listening...)");
                         }
                     }
 
                     // Announce services to other peers
                     if (sender != null)
                     {
-                        Console.WriteLine("Announcing...");
+                        Debug.WriteLine("Announcing...");
 
                         Service[] services =
                         [
-                               new Service { name = "FileTransfer" },
-                               new Service { name = "Messaging" },
-                               new Service { name = "AIChat" },
+                               new Service { name = "FileTransfer", address = "1.1.1.1", port = 1111 },
+                               new Service { name = "Messaging", address = "2.2.2.2", port = 2222 },
+                               new Service { name = "AIChat", address = "3.3.3.3", port = 3333 },
                         ];
 
                         MsgHeader header = new MsgHeader
@@ -217,7 +244,7 @@ namespace ZCL.API_s
                             version = (UInt16)ZCDPProtocolVersion,
                             type = (UInt32)MsgType.Announce,
                             messageID = MessageID,
-                            peerUUID = UInt128.Parse("12345678901234567890123456789012")
+                            peerGuid = peerGuid,
                         };
 
                         MsgAnnounce message = new MsgAnnounce
@@ -231,19 +258,15 @@ namespace ZCL.API_s
                         writer.Write(header.version);
                         writer.Write(header.type);
                         writer.Write(header.messageID);
-
-                        UInt64 lower = (UInt64)(header.peerUUID);
-                        UInt64 upper = (UInt64)(header.peerUUID >> 64);
-                        writer.Write(upper);
-                        writer.Write(lower);
+                        writer.Write(header.peerGuid.ToByteArray());
 
                         writer.Write(message.servicesCount);
 
                         foreach (Service service in services)
                         {
-                            byte[] nameBytes = Encoding.UTF8.GetBytes(service.name);
-                            writer.Write((UInt64)nameBytes.Length);
-                            writer.Write(nameBytes);
+                            writer.Write(service.name);
+                            writer.Write(service.address);
+                            writer.Write(service.port);
                         }
 
                         writer.Flush();
@@ -257,12 +280,13 @@ namespace ZCL.API_s
 
                     }
 
-                    Thread.Sleep(3 * 1000);
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine($"Error: {e.Message}");
+                    Debug.WriteLine($"Error: {e.Message}");
                 }
+
+                Thread.Sleep(3 * 1000);
 
             }
         }
