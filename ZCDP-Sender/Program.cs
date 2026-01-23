@@ -5,7 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 
-using ZCL.Models;
+using ZCL.API_s;
 
 namespace ZCDP_Sender
 {
@@ -66,7 +66,6 @@ namespace ZCDP_Sender
             socket.SendTo(packet, endPoint);
 
             socket.Close();
-
         }
     }
 }

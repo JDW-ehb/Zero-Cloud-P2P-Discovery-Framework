@@ -1,5 +1,4 @@
 <Solution>
-  <Project Path="ZCDP-Sender/ZCDP-Sender.csproj" Id="b68872a5-13c2-4ce0-a8e8-451beadd500a" />
   <Project Path="ZCDP/ZCDP.csproj" Id="6157ce2a-d499-4148-ac34-4dc6773a740f" />
   <Project Path="ZCL/ZCL.csproj" />
   <Project Path="ZCM/ZCM.csproj">

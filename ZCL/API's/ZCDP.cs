@@ -2,8 +2,8 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace ZCL.Models
-{    
+namespace ZCL.API_s
+{
     public enum MsgType
     {
         None = 0,
@@ -27,6 +27,5 @@ namespace ZCL.Models
     public class MsgAnnounce
     {
         public UInt64 servicesCount;
-    }
- 
+    } 
 }
