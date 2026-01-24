@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="ZCL/ZCL.csproj" />
+  <Project Path="ZCM-Console/ZCM-Console.csproj" Id="a6d9abe0-8502-45ad-a36d-9e34962247e0" />
   <Project Path="ZCM/ZCM.csproj">
     <Deploy Solution="Debug|*" />
   </Project>
