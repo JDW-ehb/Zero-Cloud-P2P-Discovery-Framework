@@ -40,6 +40,19 @@ namespace ZCL.API
 
     public static class ZCDPPeer
     {
+        public static ServiceDBContext CreateDBContext(string dbPath)
+        {
+            ServiceDBContext result;
+
+            var optionsBuilder = new DbContextOptionsBuilder<ServiceDBContext>();
+            optionsBuilder.UseSqlite($"Data Source={dbPath}");
+            result = new ServiceDBContext(optionsBuilder.Options);
+            
+            result.Database.EnsureCreated();
+
+            return result;
+        }
+
         public static void StartAndRun(IPAddress multicastAddress, int port, string dbPath)
         {
             UInt64 MessageID = 0;
@@ -132,10 +145,8 @@ namespace ZCL.API
             {
                 try
                 {
-                    var optionsBuilder = new DbContextOptionsBuilder<ServiceDBContext>();
-                    optionsBuilder.UseSqlite($"Data Source={dbPath}");
-                    var db = new ServiceDBContext(optionsBuilder.Options);
-                    
+                    var db = CreateDBContext(dbPath);
+
                     if (listener != null)
                     {
                         Debug.WriteLine($"[{DateTime.Now:HH:mm:ss}] Waiting for data...");

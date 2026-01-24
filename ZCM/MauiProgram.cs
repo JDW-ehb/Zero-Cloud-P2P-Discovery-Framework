@@ -20,11 +20,11 @@ namespace ZCM
         public static T GetService<T>() => Services.GetService<T>();
     }
 
-    // dotnet ef migrations add InitialCreate --framework net10.0-windows10.0.19041.0 --no-build
-    // dotnet ef database update --framework net10.0-windows10.0.19041.0 --no-build
-
     public class ServiceDBContextFactory : IDesignTimeDbContextFactory<ServiceDBContext>
     {
+        // dotnet ef migrations add InitialCreate --framework net10.0-windows10.0.19041.0 --no-build
+        // dotnet ef database update --framework net10.0-windows10.0.19041.0 --no-build
+
         public ServiceDBContext CreateDbContext(string[] args)
         {
             var optionsBuilder = new DbContextOptionsBuilder<ServiceDBContext>();
