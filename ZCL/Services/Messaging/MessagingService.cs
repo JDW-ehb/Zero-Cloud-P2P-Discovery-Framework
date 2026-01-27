@@ -12,10 +12,76 @@ namespace ZCL.Services.Messaging
 {
     public sealed class MessagingService : IZcspService
     {
+        // =====================
+        // Protocol identity
+        // =====================
+
         public string ServiceName => "Messaging";
 
+        // =====================
+        // Dependency (protocol)
+        // =====================
+
+        private readonly ZcspPeer _peer;
+
+        // =====================
+        // Runtime state
+        // =====================
+
         private NetworkStream? _stream;
+        private Guid _currentSessionId;
+        private string? _remotePeerId;
+
         private readonly ConcurrentDictionary<string, List<ChatMessage>> _messages = new();
+
+        // =====================
+        // Constructor
+        // =====================
+
+        public MessagingService(ZcspPeer peer)
+        {
+            _peer = peer;
+        }
+
+        // =====================
+        // Public API (called from Main / UI)
+        // =====================
+
+        /// <summary>
+        /// Initiate a messaging session to a remote peer using ZCSP.
+        /// </summary>
+        public Task ConnectToPeerAsync(string host, int port)
+        {
+            return _peer.ConnectAsync(host, port, this);
+        }
+
+        /// <summary>
+        /// Send a chat message inside an active session.
+        /// </summary>
+        public async Task SendMessageAsync(string content)
+        {
+            if (_stream == null || _remotePeerId == null)
+                throw new InvalidOperationException("Messaging session is not active.");
+
+            if (string.IsNullOrWhiteSpace(content))
+                return;
+
+            var data = BinaryCodec.Serialize(
+                ZcspMessageType.SessionData,
+                _currentSessionId,
+                w =>
+                {
+                    BinaryCodec.WriteString(w, "local");
+                    BinaryCodec.WriteString(w, _remotePeerId);
+                    BinaryCodec.WriteString(w, content);
+                });
+
+            await Framing.WriteAsync(_stream, data);
+        }
+
+        // =====================
+        // IZcspService implementation
+        // =====================
 
         public void BindStream(NetworkStream stream)
         {
@@ -24,31 +90,10 @@ namespace ZCL.Services.Messaging
 
         public Task OnSessionStartedAsync(Guid sessionId, string remotePeerId)
         {
+            _currentSessionId = sessionId;
+            _remotePeerId = remotePeerId;
+
             Console.WriteLine($"[Messaging] Session started with {remotePeerId}");
-            Console.WriteLine("Type messages and press Enter\n");
-
-            _ = Task.Run(async () =>
-            {
-                while (true)
-                {
-                    var line = Console.ReadLine();
-                    if (string.IsNullOrWhiteSpace(line) || _stream == null)
-                        continue;
-
-                    var data = BinaryCodec.Serialize(
-                        ZcspMessageType.SessionData,
-                        sessionId,
-                        w =>
-                        {
-                            BinaryCodec.WriteString(w, "local");
-                            BinaryCodec.WriteString(w, remotePeerId);
-                            BinaryCodec.WriteString(w, line);
-                        });
-
-                    await Framing.WriteAsync(_stream, data);
-                }
-            });
-
             return Task.CompletedTask;
         }
 
@@ -67,6 +112,11 @@ namespace ZCL.Services.Messaging
         public Task OnSessionClosedAsync(Guid sessionId)
         {
             Console.WriteLine("[Messaging] Session closed");
+
+            _stream = null;
+            _remotePeerId = null;
+            _currentSessionId = Guid.Empty;
+
             return Task.CompletedTask;
         }
 
@@ -89,6 +139,8 @@ namespace ZCL.Services.Messaging
         }
 
         private static string BuildConversationKey(string a, string b)
-            => string.CompareOrdinal(a, b) < 0 ? $"{a}|{b}" : $"{b}|{a}";
+            => string.CompareOrdinal(a, b) < 0
+                ? $"{a}|{b}"
+                : $"{b}|{a}";
     }
 }
