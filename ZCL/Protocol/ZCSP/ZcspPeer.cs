@@ -3,11 +3,11 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
-using ZCL.APIs.ZCSP.Protocol;
-using ZCL.APIs.ZCSP.Sessions;
-using ZCL.APIs.ZCSP.Transport;
+using ZCL.Protocol.ZCSP.Protocol;
+using ZCL.Protocol.ZCSP.Sessions;
+using ZCL.Protocol.ZCSP.Transport;
 
-namespace ZCL.APIs.ZCSP
+namespace ZCL.Protocol.ZCSP
 {
     public sealed class ZcspPeer
     {

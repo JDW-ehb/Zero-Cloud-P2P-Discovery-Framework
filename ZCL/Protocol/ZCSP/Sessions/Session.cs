@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace ZCL.APIs.ZCSP.Sessions
+namespace ZCL.Protocol.ZCSP.Sessions
 {
     public sealed class Session
     {

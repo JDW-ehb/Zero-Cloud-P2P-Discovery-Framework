@@ -4,9 +4,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net.Sockets;
 using System.Threading.Tasks;
-using ZCL.APIs.ZCSP;
-using ZCL.APIs.ZCSP.Protocol;
-using ZCL.APIs.ZCSP.Transport;
+using ZCL.Protocol.ZCSP;
+using ZCL.Protocol.ZCSP.Protocol;
+using ZCL.Protocol.ZCSP.Transport;
 
 namespace ZCL.Services.Messaging
 {
