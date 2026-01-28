@@ -1,4 +1,4 @@
-﻿namespace ZCL.APIs.ZCSP
+﻿namespace ZCL.Protocols.ZCSP
 {
     public interface IZcspConnector
     {

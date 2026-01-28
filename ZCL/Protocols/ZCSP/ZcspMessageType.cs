@@ -1,4 +1,4 @@
-﻿namespace ZCL.APIs.ZCSP.Protocol
+﻿namespace ZCL.Protocols.ZCSP.Protocol
 {
     public enum ZcspMessageType : byte
     {
