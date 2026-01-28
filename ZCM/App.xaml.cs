@@ -8,12 +8,28 @@ namespace ZCM
         {
             InitializeComponent();
 
-            MainPage = new NavigationPage(new MainPage());
+            AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[UNHANDLED] {e.ExceptionObject}"
+                );
+            };
+
+            TaskScheduler.UnobservedTaskException += (s, e) =>
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[TASK] {e.Exception}"
+                );
+                e.SetObserved();
+            };
         }
 
         protected override Window CreateWindow(IActivationState? activationState)
         {
             return new Window(new AppShell());
         }
+
+
+
     }
 }

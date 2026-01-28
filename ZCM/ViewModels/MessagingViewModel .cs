@@ -1,86 +1,74 @@
 ﻿using System.Collections.ObjectModel;
 using System.Windows.Input;
+using ZCL.Protocol.ZCSP;
 using ZCL.Services.Messaging;
 
 namespace ZCM.ViewModels;
 
-public class MessagingViewModel : BindableObject
+public class MessagingViewModel
 {
+    private readonly ZcspPeer _peer;
     private readonly MessagingService _messaging;
 
-    public ObservableCollection<ChatMessage> Messages { get; } = new();
+    public string TargetIp { get; set; } = "192.168.1.22";
 
-    // =====================
-    // Connection inputs
-    // =====================
-
-    private string _remoteIp = "127.0.0.1";
-    public string RemoteIp
-    {
-        get => _remoteIp;
-        set { _remoteIp = value; OnPropertyChanged(); }
-    }
-
-    private int _remotePort = 5555;
-    public int RemotePort
-    {
-        get => _remotePort;
-        set { _remotePort = value; OnPropertyChanged(); }
-    }
-
-    private int _hostPort = 5555;
-    public int HostPort
-    {
-        get => _hostPort;
-        set { _hostPort = value; OnPropertyChanged(); }
-    }
-
-    // =====================
-    // Messaging input
-    // =====================
-
-    private string _outgoingMessage;
-    public string OutgoingMessage
-    {
-        get => _outgoingMessage;
-        set { _outgoingMessage = value; OnPropertyChanged(); }
-    }
-
-    // =====================
-    // Commands
-    // =====================
-
-    public ICommand StartHostingCommand { get; }
+    public ICommand HostCommand { get; }
     public ICommand ConnectCommand { get; }
+    public ObservableCollection<ChatMessage> Messages { get; } = new();
+    public string OutgoingMessage { get; set; } = "";
     public ICommand SendMessageCommand { get; }
 
-    public MessagingViewModel(MessagingService messaging)
+
+
+
+    public MessagingViewModel(ZcspPeer peer, MessagingService messaging)
     {
+        _peer = peer;
         _messaging = messaging;
 
-        _messaging.MessageReceived += msg =>
+        HostCommand = new Command(() =>
         {
-            MainThread.BeginInvokeOnMainThread(() =>
-                Messages.Add(msg));
-        };
-
-        StartHostingCommand = new Command(async () =>
-        {
-            await _messaging.StartHostingAsync(HostPort);
+            Task.Run(async () =>
+            {
+                try
+                {
+                    await _peer.StartHostingAsync(
+                        5555,
+                        name => name == _messaging.ServiceName ? _messaging : null
+                    );
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[HOST ERROR] {ex}"
+                    );
+                }
+            });
         });
+
 
         ConnectCommand = new Command(async () =>
         {
-            await _messaging.ConnectToPeerAsync(RemoteIp, RemotePort);
+            await _messaging.ConnectToPeerAsync(TargetIp, 5555);
         });
 
         SendMessageCommand = new Command(async () =>
         {
-            if (string.IsNullOrWhiteSpace(OutgoingMessage))
-                return;
-
-            await _messaging.SendMessageAsync(OutgoingMessage);
-            OutgoingMessage = string.Empty;
+            if (!string.IsNullOrWhiteSpace(OutgoingMessage))
+            {
+                await _messaging.SendMessageAsync(OutgoingMessage);
+                OutgoingMessage = "";
+            }
         });
+
+        _messaging.MessageReceived += msg =>
+        {
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                Messages.Add(msg);
+            });
+        };
+
     }
 }
+

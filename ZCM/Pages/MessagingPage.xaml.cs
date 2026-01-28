@@ -1,5 +1,6 @@
-using ZCM.ViewModels;
+using ZCL.Protocol.ZCSP;
 using ZCL.Services.Messaging;
+using ZCM.ViewModels;
 
 namespace ZCM.Pages;
 
@@ -10,6 +11,9 @@ public partial class MessagingPage : ContentPage
         InitializeComponent();
 
         var messaging = ServiceHelper.GetService<MessagingService>();
-        BindingContext = new MessagingViewModel(messaging);
+        BindingContext = new MessagingViewModel(
+                    ServiceHelper.GetService<ZcspPeer>(),
+                    ServiceHelper.GetService<MessagingService>()
+                );
     }
 }

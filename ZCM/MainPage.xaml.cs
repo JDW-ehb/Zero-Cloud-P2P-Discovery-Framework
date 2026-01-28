@@ -38,8 +38,18 @@ namespace ZCM
 
             Task.Run(() =>
             {
-                ZCDPPeer.StartAndRun(multicastAddress, port, dbPath);
+                try
+                {
+                    ZCDPPeer.StartAndRun(multicastAddress, port, dbPath);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[DISCOVERY ERROR] {ex}"
+                    );
+                }
             });
+
 
         }
 

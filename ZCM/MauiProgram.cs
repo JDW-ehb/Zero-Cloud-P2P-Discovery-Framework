@@ -7,6 +7,7 @@ using System.Net;
 using ZCL.API;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
+using ZCL.Protocol.ZCSP.Sessions;
 using ZCL.Services.Messaging;
 
 namespace ZCM
@@ -57,13 +58,22 @@ namespace ZCM
                         b => b.MigrationsAssembly("ZCM"));
             });
 
+            builder.Services.AddSingleton(sp =>
+            {
+                var sessions = new SessionRegistry();
+                return new ZcspPeer("peer-A", sessions);
+            });
+
+            builder.Services.AddSingleton<MessagingService>();
+
+
+
 #if DEBUG
             builder.Logging.AddDebug();
 #endif
             var app = builder.Build();
 
-            builder.Services.AddSingleton<ZcspPeer>();
-            builder.Services.AddSingleton<MessagingService>();
+            
 
             ServiceHelper.Initialize(app.Services);
 
