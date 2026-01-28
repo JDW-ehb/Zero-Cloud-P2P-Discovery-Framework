@@ -31,6 +31,12 @@
                 Clicked="OnCounterClicked"
                 HorizontalOptions="Fill" />
 
+            <Button
+                Text="Open Messaging"
+                Clicked="OnOpenMessagingClicked"
+                HorizontalOptions="Fill" />
+
+
             <CollectionView ItemsSource="{Binding Services}">
                 <CollectionView.ItemTemplate>
                     <DataTemplate>

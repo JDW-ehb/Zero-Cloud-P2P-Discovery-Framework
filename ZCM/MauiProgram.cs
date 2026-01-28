@@ -4,9 +4,10 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.Net;
-
 using ZCL.API;
 using ZCL.Models;
+using ZCL.Protocol.ZCSP;
+using ZCL.Services.Messaging;
 
 namespace ZCM
 {
@@ -60,6 +61,9 @@ namespace ZCM
             builder.Logging.AddDebug();
 #endif
             var app = builder.Build();
+
+            builder.Services.AddSingleton<ZcspPeer>();
+            builder.Services.AddSingleton<MessagingService>();
 
             ServiceHelper.Initialize(app.Services);
 

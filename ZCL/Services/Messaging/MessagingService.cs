@@ -35,6 +35,12 @@ namespace ZCL.Services.Messaging
         private readonly ConcurrentDictionary<string, List<ChatMessage>> _messages = new();
 
         // =====================
+        // Events
+        // =====================
+
+        public event Action<ChatMessage>? MessageReceived;
+
+        // =====================
         // Constructor
         // =====================
 
@@ -106,6 +112,8 @@ namespace ZCL.Services.Messaging
             var msg = Store(fromPeer, toPeer, content);
             Console.WriteLine(msg);
 
+            MessageReceived?.Invoke(msg);
+
             return Task.CompletedTask;
         }
 
@@ -119,6 +127,15 @@ namespace ZCL.Services.Messaging
 
             return Task.CompletedTask;
         }
+
+        public Task StartHostingAsync(int port)
+        {
+            return _peer.StartHostingAsync(
+                port,
+                serviceName => serviceName == ServiceName ? this : null
+            );
+        }
+
 
         // =====================
         // Messaging logic

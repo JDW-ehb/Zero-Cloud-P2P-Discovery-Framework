@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Net;
 using ZCL.API;
 using ZCL.Models;
+using ZCM.Pages;
 
 namespace ZCM
 {
@@ -52,6 +53,11 @@ namespace ZCM
                 CounterBtn.Text = $"Clicked {count} times";
 
             SemanticScreenReader.Announce(CounterBtn.Text);
+        }
+
+        private async void OnOpenMessagingClicked(object sender, EventArgs e)
+        {
+            await Navigation.PushAsync(new MessagingPage());
         }
     }
 }
