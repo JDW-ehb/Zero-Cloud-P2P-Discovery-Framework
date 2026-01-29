@@ -70,4 +70,16 @@
 	  <ProjectReference Include="..\ZCL\ZCL.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <Compile Update="DiscoveryPage.xaml.cs">
+	    <DependentUpon>DiscoveryPage.xaml</DependentUpon>
+	  </Compile>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <MauiXaml Update="DiscoveryPage.xaml">
+	    <Generator>MSBuild:Compile</Generator>
+	  </MauiXaml>
+	</ItemGroup>
+
 </Project>

@@ -1,22 +1,33 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
-using System.Diagnostics;
-
 using ZCL.Models;
 
 namespace ZCL.API
 {
     public static class Config
     {
-        public const string dbFileName = "services.db";
-        public const int port = 2600;
-        public const string multicastAddressString = "224.0.0.26";
+        public const string DBFileName = "services.db";
+        public const int Port = 2600;
+        public const string MulticastAddress = "224.0.0.26";
         public const UInt16 ZCDPProtocolVersion = 0;
+        public const int DiscoveryTimeoutMS = (3 * 1000);
+
+        // TODO(luca): We should really use the computer's name instead.
+        public const string peerName = "Luca's desktop";
+    }
+
+    public class DataStore
+    {
+        public ObservableCollection<Peer> Peers { get; } = new();
+
     }
 
     public enum MsgType
@@ -27,19 +38,34 @@ namespace ZCL.API
 
     public class MsgHeader
     {
-        public UInt16 version;
-        public UInt32 type;
-        public UInt64 messageID;
-        public Guid peerGuid;
+        public UInt16 Version;
+        public UInt32 Type;
+        public UInt64 MessageId;
+        public Guid PeerGuid;
     }
 
-    public class MsgAnnounce
+    public class MsgPeerAnnounce
     {
-        public UInt64 servicesCount;
+        public required string Name;
+        public required UInt64 ServicesCount;
     }
 
     public static class ZCDPPeer
     {
+        public static Peer? AddUniquePeer(this ObservableCollection<Peer> peers, Peer peer)
+        {
+            var found = peers.FirstOrDefault(s => s.Name == peer.Name &&
+                                                     s.Address == peer.Address &&
+                                                     s.Guid == peer.Guid);
+
+            if (found == null)
+            {
+                peers.Add(peer);
+            }
+
+            return found;
+        }
+
         public static ServiceDBContext CreateDBContext(string dbPath)
         {
             ServiceDBContext result;
@@ -47,13 +73,13 @@ namespace ZCL.API
             var optionsBuilder = new DbContextOptionsBuilder<ServiceDBContext>();
             optionsBuilder.UseSqlite($"Data Source={dbPath}");
             result = new ServiceDBContext(optionsBuilder.Options);
-            
+
             result.Database.EnsureCreated();
 
             return result;
         }
 
-        public static void StartAndRun(IPAddress multicastAddress, int port, string dbPath)
+        public static void StartAndRun(IPAddress multicastAddress, int port, string dbPath, DataStore store)
         {
             UInt64 MessageID = 0;
             UInt16 ZCDPProtocolVersion = Config.ZCDPProtocolVersion;
@@ -139,13 +165,14 @@ namespace ZCL.API
             }
 
 
-            IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, 0);
+            IPEndPoint remoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
 
             while (true)
             {
                 try
                 {
                     var db = CreateDBContext(dbPath);
+                    //  db.ChangeTracker.Clear();
 
                     if (listener != null)
                     {
@@ -153,7 +180,7 @@ namespace ZCL.API
 
                         if (listener.Available > 0)
                         {
-                            byte[] bytes = listener.Receive(ref remoteEP);
+                            byte[] bytes = listener.Receive(ref remoteEndPoint);
 
                             // TODO(luca): Bulletproof reading of packets since they might be corrupted or wrong.
                             // Create a wrapper that will exit and log if reading fails.
@@ -167,30 +194,70 @@ namespace ZCL.API
                             {
                                 header = new MsgHeader
                                 {
-                                    version = reader.ReadUInt16(),
-                                    type = reader.ReadUInt32(),
-                                    messageID = reader.ReadUInt64()
+                                    Version = reader.ReadUInt16(),
+                                    Type = reader.ReadUInt32(),
+                                    MessageId = reader.ReadUInt64()
                                 };
 
-                                Span<byte> guidBytes = stackalloc byte[16];
+                                Span<byte> guidBytes = new byte[16];
                                 reader.Read(guidBytes);
-                                header.peerGuid = new Guid(guidBytes);
+                                header.PeerGuid = new Guid(guidBytes);
                             }
 
 
-                            Debug.WriteLine($"\n>>> Received from {remoteEP} ({header.peerGuid}):");
+                            Debug.WriteLine($"\n>>> Received from {remoteEndPoint} ({header.PeerGuid}):");
                             Debug.WriteLine($">>> Length: {bytes.Length} bytes");
 
-                            switch ((MsgType)header.type)
+                            switch ((MsgType)header.Type)
                             {
                                 case MsgType.Announce:
                                     {
-                                        MsgAnnounce message = new MsgAnnounce
+                                        MsgPeerAnnounce message = new MsgPeerAnnounce
                                         {
-                                            servicesCount = reader.ReadUInt64()
+                                            Name = reader.ReadString(),
+                                            ServicesCount = reader.ReadUInt64(),
                                         };
 
-                                        for (UInt32 idx = 0; idx < message.servicesCount; idx += 1)
+                                        // NOTE(luca): Sometimes the address of a peer might change, we should detect based on the Guid.
+
+                                        Peer peer = db.Peers.FirstOrDefault(p => p.Guid == header.PeerGuid &&
+                                                                                 p.Name == message.Name);
+
+                                        if (peer != null)
+                                        {
+                                            peer.Name = message.Name;
+                                            peer.Address = remoteEndPoint.Address.ToString();
+                                            peer.LastSeen = DateTime.UtcNow;
+
+                                            var memoryPeer = store.Peers.FirstOrDefault(p => p.Guid == header.PeerGuid &&
+                                                                                             p.Name == peer.Name);
+                                            if (memoryPeer != null)
+                                            {
+                                                memoryPeer.LastSeen = DateTime.UtcNow;
+                                                memoryPeer.LastSeenSeconds = "0 seconds ago";
+
+                                                
+                                            }
+
+                                        }
+                                        else
+                                        {
+                                            peer = new Peer
+                                            {
+                                                Name = message.Name,
+                                                Guid = header.PeerGuid,
+                                                Address = remoteEndPoint.Address.ToString(),
+                                                LastSeen = DateTime.UtcNow
+                                            };
+
+                                            db.Peers.Add(peer);
+                                            store.Peers.Add(peer);
+                                        }
+
+
+                                        db.SaveChanges();
+
+                                        for (UInt32 idx = 0; idx < message.ServicesCount; idx += 1)
                                         {
                                             if (idx == 0)
                                             {
@@ -199,22 +266,35 @@ namespace ZCL.API
 
                                             Service service = new Service
                                             {
-                                                name = reader.ReadString(),
-                                                address = reader.ReadString(),
-                                                port = reader.ReadUInt16(),
-                                                peerGuid = header.peerGuid,
+                                                Name = reader.ReadString(),
+                                                Address = reader.ReadString(),
+                                                Port = reader.ReadUInt16(),
+                                                PeerRefId = peer.PeerId,
                                             };
 
-                                            db.Add(service);
+                                            // TODO(luca): This is really annoying, what I would want is that the dbContext does not fail when
+                                            // adding a new service because that will break the updates above as well.
 
-                                            Debug.WriteLine($"- {service.name}");
+                                            // Add only if it is unique
+                                            {
+
+                                                bool exists = db.Services.Any(s => s.PeerRefId == peer.PeerId &&
+                                                                                     s.Name == service.Name &&
+                                                                                     s.Address == service.Address &&
+                                                                                     s.Port == service.Port);
+
+                                                if (!exists)
+                                                {
+                                                    db.Services.Add(service);
+                                                    Debug.WriteLine($"- Added service {service.Name}");
+                                                }
+
+                                            }
                                         }
 
                                         try
                                         {
-                                            
                                             db.SaveChanges();
-                                           
                                         }
                                         catch (Exception e)
                                         {
@@ -245,39 +325,41 @@ namespace ZCL.API
 
                         Service[] services =
                         [
-                               new Service { name = "FileTransfer", address = "1.1.1.1", port = 1111 },
-                               new Service { name = "Messaging", address = "2.2.2.2", port = 2222 },
-                               new Service { name = "AIChat", address = "3.3.3.3", port = 3333 },
+                               new Service { Name = "FileTransfer", Address = "1.1.1.1", Port = 1111 },
+                               new Service { Name = "Messaging", Address = "2.2.2.2", Port = 2222 },
+                               new Service { Name = "AIChat", Address = "3.3.3.3", Port = 3333 },
                         ];
 
                         MsgHeader header = new MsgHeader
                         {
-                            version = (UInt16)ZCDPProtocolVersion,
-                            type = (UInt32)MsgType.Announce,
-                            messageID = MessageID,
-                            peerGuid = peerGuid,
+                            Version = (UInt16)ZCDPProtocolVersion,
+                            Type = (UInt32)MsgType.Announce,
+                            MessageId = MessageID,
+                            PeerGuid = peerGuid,
                         };
 
-                        MsgAnnounce message = new MsgAnnounce
+                        MsgPeerAnnounce message = new MsgPeerAnnounce
                         {
-                            servicesCount = (UInt64)services.Length
+                            Name = Config.peerName,
+                            ServicesCount = (UInt64)services.Length
                         };
 
                         using MemoryStream memory = new MemoryStream();
                         using BinaryWriter writer = new BinaryWriter(memory, Encoding.UTF8, leaveOpen: true);
 
-                        writer.Write(header.version);
-                        writer.Write(header.type);
-                        writer.Write(header.messageID);
-                        writer.Write(header.peerGuid.ToByteArray());
+                        writer.Write(header.Version);
+                        writer.Write(header.Type);
+                        writer.Write(header.MessageId);
+                        writer.Write(header.PeerGuid.ToByteArray());
 
-                        writer.Write(message.servicesCount);
+                        writer.Write(message.Name);
+                        writer.Write(message.ServicesCount);
 
                         foreach (Service service in services)
                         {
-                            writer.Write(service.name);
-                            writer.Write(service.address);
-                            writer.Write(service.port);
+                            writer.Write(service.Name);
+                            writer.Write(service.Address);
+                            writer.Write(service.Port);
                         }
 
                         writer.Flush();
@@ -297,7 +379,7 @@ namespace ZCL.API
                     Debug.WriteLine($"Error: {e.Message}");
                 }
 
-                Thread.Sleep(3 * 1000);
+                Thread.Sleep(Config.DiscoveryTimeoutMS);
 
             }
         }

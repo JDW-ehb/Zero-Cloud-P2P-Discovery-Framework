@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using System.Net;
 
@@ -28,7 +29,7 @@ namespace ZCM
         public ServiceDBContext CreateDbContext(string[] args)
         {
             var optionsBuilder = new DbContextOptionsBuilder<ServiceDBContext>();
-            var dbPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Config.dbFileName);
+            var dbPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Config.DBFileName);
 
             optionsBuilder.UseSqlite($"Data Source={dbPath}");
 
@@ -51,10 +52,12 @@ namespace ZCM
 
             builder.Services.AddDbContext<ServiceDBContext>(options =>
             {
-                var dbPath = Path.Combine(FileSystem.AppDataDirectory, Config.dbFileName);
+                var dbPath = Path.Combine(FileSystem.AppDataDirectory, Config.DBFileName);
                 options.UseSqlite($"Data Source={dbPath}",
                         b => b.MigrationsAssembly("ZCM"));
             });
+
+            builder.Services.AddSingleton<DataStore>();
 
 #if DEBUG
             builder.Logging.AddDebug();
@@ -62,6 +65,31 @@ namespace ZCM
             var app = builder.Build();
 
             ServiceHelper.Initialize(app.Services);
+
+            var db = ServiceHelper.GetService<ServiceDBContext>();
+            db.Database.EnsureCreated();
+            
+            var store = ServiceHelper.GetService<DataStore>();
+            // Initialize store
+            {
+                var peersFromDB = db.Peers.ToList();
+                foreach (Peer peer in peersFromDB)
+                {
+                    store.Peers.Add(peer);
+                }
+            }
+
+            // Run discovery service
+            {
+                int port = Config.Port;
+                var multicastAddress = IPAddress.Parse(Config.MulticastAddress);
+                string dbPath = db.Database.GetDbConnection().DataSource;
+
+                Task.Run(() =>
+                {
+                    ZCDPPeer.StartAndRun(multicastAddress, port, dbPath, store);
+                });
+            }
 
             return app;
         }

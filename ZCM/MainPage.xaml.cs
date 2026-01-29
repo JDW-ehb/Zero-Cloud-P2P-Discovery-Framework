@@ -8,16 +8,6 @@ using ZCL.Models;
 
 namespace ZCM
 {
-    public class MainViewModel
-    {
-        public List<string> Services { get; }
-
-        public MainViewModel(ServiceDBContext db)
-        {
-            Services = db.Services.Select(s => s.name).ToList();
-        }
-    }
-
     public partial class MainPage : ContentPage
     {
         int count = 0;
@@ -25,33 +15,11 @@ namespace ZCM
         public MainPage()
         {
             InitializeComponent();
-
-            var db = ServiceHelper.GetService<ServiceDBContext>();
-            db.Database.EnsureCreated();
-
-            BindingContext = new MainViewModel(db);
-
-            int port = Config.port;
-            var multicastAddress = IPAddress.Parse(Config.multicastAddressString);
-            string dbPath = db.Database.GetDbConnection().DataSource;
-
-            Task.Run(() =>
-            {
-                ZCDPPeer.StartAndRun(multicastAddress, port, dbPath);
-            });
-
         }
 
-        private void OnCounterClicked(object? sender, EventArgs e)
+        private void DiscoveryPageButton_Clicked(object sender, EventArgs e)
         {
-            count++;
-
-            if (count == 1)
-                CounterBtn.Text = $"Clicked {count} time";
-            else
-                CounterBtn.Text = $"Clicked {count} times";
-
-            SemanticScreenReader.Announce(CounterBtn.Text);
+            Navigation.PushModalAsync(new DiscoveryPage());
         }
     }
 }

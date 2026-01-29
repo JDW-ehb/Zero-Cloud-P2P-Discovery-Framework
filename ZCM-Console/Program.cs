@@ -17,7 +17,7 @@ namespace ZCM_Console
             public ServiceDBContext CreateDbContext(string[] args)
             {
                 var optionsBuilder = new DbContextOptionsBuilder<ServiceDBContext>();
-                var dbPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Config.dbFileName);
+                var dbPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Config.DBFileName);
 
                 optionsBuilder.UseSqlite($"Data Source={dbPath}", b => b.MigrationsAssembly("ZCM-Console"));
 
@@ -26,12 +26,14 @@ namespace ZCM_Console
         }
         static void Main(string[] args)
         { 
-            int port = Config.port;
-            var multicastAddress = IPAddress.Parse(Config.multicastAddressString);
-            var dbPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Config.dbFileName);
+            int port = Config.Port;
+            var multicastAddress = IPAddress.Parse(Config.MulticastAddress);
+            var dbPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Config.DBFileName);
             Debug.WriteLine($"dbPath: {dbPath}");
 
-            ZCDPPeer.StartAndRun(multicastAddress, port, dbPath);
+            var store = new DataStore();
+
+            ZCDPPeer.StartAndRun(multicastAddress, port, dbPath, store);
         }
     }
 }
