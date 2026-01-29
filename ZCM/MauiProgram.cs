@@ -64,7 +64,8 @@ namespace ZCM
                 return new ZcspPeer("peer-A", sessions);
             });
 
-            builder.Services.AddScoped<MessagingService>();
+            builder.Services.AddSingleton<MessagingService>();
+
 
 
 

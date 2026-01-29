@@ -85,7 +85,7 @@
                             HorizontalOptions="{Binding IsLocal, Converter={StaticResource MessageAlignmentConverter}}">
                             <Label
                                 Text="{Binding Content}"
-                                TextColor="White" />
+                                TextColor="Black" />
                         </Frame>
 
                     </DataTemplate>
