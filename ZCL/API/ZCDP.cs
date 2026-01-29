@@ -27,7 +27,6 @@ namespace ZCL.API
     public class DataStore
     {
         public ObservableCollection<Peer> Peers { get; } = new();
-
     }
 
     public enum MsgType
@@ -83,6 +82,8 @@ namespace ZCL.API
         {
             UInt64 MessageID = 0;
             UInt16 ZCDPProtocolVersion = Config.ZCDPProtocolVersion;
+
+            // TODO(luca): This should be generated at first launch.
             Guid peerGuid = Guid.Parse("2c0dbe0c-91c4-46cf-92e4-cf43a614a914");
 
             Socket? sender;
@@ -172,7 +173,6 @@ namespace ZCL.API
                 try
                 {
                     var db = CreateDBContext(dbPath);
-                    //  db.ChangeTracker.Clear();
 
                     if (listener != null)
                     {
@@ -234,9 +234,6 @@ namespace ZCL.API
                                             if (memoryPeer != null)
                                             {
                                                 memoryPeer.LastSeen = DateTime.UtcNow;
-                                                memoryPeer.LastSeenSeconds = "0 seconds ago";
-
-                                                
                                             }
 
                                         }
@@ -252,6 +249,7 @@ namespace ZCL.API
 
                                             db.Peers.Add(peer);
                                             store.Peers.Add(peer);
+
                                         }
 
 
