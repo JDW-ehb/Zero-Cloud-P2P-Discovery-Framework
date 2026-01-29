@@ -1,18 +1,42 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
-using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations.Schema;
 
-namespace ZCL.Services.Messaging.Persistence
+namespace ZCL.Models;
+
+public enum MessageDirection
 {
-    [Index(nameof(FromPeer), nameof(ToPeer), nameof(Timestamp))]
-    public class MessageEntity
-    {
-        [Key]
-        public Guid Id { get; set; }
+    Incoming = 0,
+    Outgoing = 1
+}
 
-        public string FromPeer { get; set; } = null!;
-        public string ToPeer { get; set; } = null!;
-        public string Content { get; set; } = null!;
-        public DateTime Timestamp { get; set; }
-    }
+public enum MessageStatus
+{
+    Sent = 0,
+    Delivered = 1,
+    Failed = 2
+}
+
+public class MessageEntity
+{
+    [Key]
+    public Guid MessageId { get; set; }
+
+    [Required]
+    public Guid PeerId { get; set; }
+
+    [Required]
+    public Guid SessionId { get; set; }
+
+    [Required]
+    public string Content { get; set; } = string.Empty;
+
+    public DateTime Timestamp { get; set; }
+
+    public MessageDirection Direction { get; set; }
+
+    public MessageStatus Status { get; set; }
+
+    // Navigation (optional but future-proof)
+    public PeerNode? Peer { get; set; }
 }

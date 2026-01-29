@@ -15,9 +15,25 @@ namespace ZCL.Models
     {
         public DbSet<Service> Services => Set<Service>();
 
+        public DbSet<MessageEntity> Messages => Set<MessageEntity>();
+        public DbSet<PeerNode> Peers => Set<PeerNode>();
+
         public ServiceDBContext(DbContextOptions<ServiceDBContext> options)
             : base(options)
         {
+        }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<MessageEntity>()
+                .HasIndex(m => new { m.PeerId, m.Timestamp });
+
+            modelBuilder.Entity<MessageEntity>()
+                .HasOne(m => m.Peer)
+                .WithMany()
+                .HasForeignKey(m => m.PeerId);
+
+            base.OnModelCreating(modelBuilder);
         }
     }
 

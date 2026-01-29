@@ -7,11 +7,6 @@ namespace ZCL.Services.Messaging.Persistence
 {
     public class MessagingDbContext : DbContext
     {
-        public DbSet<MessageEntity> Messages => Set<MessageEntity>();
-
-        public MessagingDbContext(DbContextOptions<MessagingDbContext> options)
-            : base(options)
-        {
-        }
+        
     }
 }
