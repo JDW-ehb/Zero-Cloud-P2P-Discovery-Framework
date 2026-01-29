@@ -4,7 +4,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:vm="clr-namespace:ZCM.ViewModels"
     xmlns:conv="clr-namespace:ZCM.Converters"
-    x:Class="ZCM.Pages.MessagingPage">
+    x:Class="ZCM.Pages.MessagingPage"
+    BackgroundColor="#1e1e1e">
 
     <ContentPage.Resources>
         <ResourceDictionary>
@@ -12,68 +13,109 @@
         </ResourceDictionary>
     </ContentPage.Resources>
 
-    <VerticalStackLayout Padding="20" Spacing="15">
+    <!-- ROOT GRID -->
+    <Grid ColumnDefinitions="260,*"
+          RowDefinitions="*"
+          Padding="0">
 
-        <Label
-            Text="Messaging"
-            FontSize="24"
-            TextColor="White" />
+        <!-- ===================== -->
+        <!-- LEFT CONTROL PANEL -->
+        <!-- ===================== -->
+        <VerticalStackLayout
+            Grid.Column="0"
+            Padding="16"
+            Spacing="12"
+            BackgroundColor="#151515">
 
-        <!-- STATUS -->
-        <Label
-            Text="{Binding StatusMessage}"
-            FontSize="12"
-            TextColor="LightGray" />
+            <Label
+                Text="Messaging"
+                FontSize="22"
+                TextColor="White" />
 
-        <!-- HOST -->
-        <Button
-            Text="Start Hosting"
-            Command="{Binding HostCommand}"
-            BackgroundColor="{Binding IsHosting, Converter={StaticResource BoolToColorConverter}}"
-            TextColor="White" />
-
-        <!-- PEER SELECT -->
-        <Picker
-            Title="Select peer"
-            ItemsSource="{Binding AvailablePeers}"
-            ItemDisplayBinding="{Binding HostName}"
-            SelectedItem="{Binding SelectedPeer}" />
-
-        <!-- CONNECT -->
-        <Button
-            Text="Connect"
-            Command="{Binding ConnectCommand}"
-            BackgroundColor="#6B5DD3"
-            TextColor="White" />
-
-        <!-- MESSAGES -->
-        <CollectionView ItemsSource="{Binding Messages}">
-            <CollectionView.ItemTemplate>
-                <DataTemplate>
-                    <Frame
-                        Padding="10"
-                        Margin="5"
-                        BackgroundColor="#2A2A2A">
-                        <Label
-                            Text="{Binding Content}"
-                            TextColor="White" />
-                    </Frame>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
-
-        <!-- INPUT -->
-        <Grid ColumnDefinitions="*,Auto">
-            <Entry
-                Grid.Column="0"
-                Text="{Binding OutgoingMessage}"
-                Placeholder="Type a message..." />
+            <Label
+                Text="{Binding StatusMessage}"
+                FontSize="12"
+                TextColor="LightGray" />
 
             <Button
-                Grid.Column="1"
-                Text="Send"
-                Command="{Binding SendMessageCommand}" />
+                Text="Start Hosting"
+                Command="{Binding HostCommand}"
+                BackgroundColor="{Binding IsHosting, Converter={StaticResource BoolToColorConverter}}"
+                TextColor="White"
+                CornerRadius="8" />
+
+            <Label
+                Text="Select peer"
+                FontSize="12"
+                TextColor="#CCCCCC" />
+
+            <Picker
+                ItemsSource="{Binding AvailablePeers}"
+                ItemDisplayBinding="{Binding HostName}"
+                SelectedItem="{Binding SelectedPeer}"
+                BackgroundColor="#2A2A2A"
+                TextColor="White" />
+
+            <Button
+                Text="Connect"
+                Command="{Binding ConnectCommand}"
+                BackgroundColor="#6B5DD3"
+                TextColor="White"
+                CornerRadius="8" />
+        </VerticalStackLayout>
+
+        <!-- ===================== -->
+        <!-- CHAT AREA -->
+        <!-- ===================== -->
+        <Grid Grid.Column="1"
+              RowDefinitions="*,Auto"
+              Padding="16">
+
+            <!-- MESSAGES -->
+            <CollectionView
+                ItemsSource="{Binding Messages}"
+                Margin="0,0,0,12">
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Frame
+                            Padding="10"
+                            Margin="6"
+                            BackgroundColor="#2A2A2A"
+                            CornerRadius="10"
+                            HorizontalOptions="Start">
+
+                            <Label
+                                Text="{Binding Content}"
+                                TextColor="White" />
+                        </Frame>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
+            <!-- INPUT BAR -->
+            <Grid Grid.Row="1"
+                  ColumnDefinitions="*,Auto"
+                  Padding="0">
+
+                <Entry
+                    Grid.Column="0"
+                    Text="{Binding OutgoingMessage}"
+                    Placeholder="Type a message..."
+                    BackgroundColor="#2A2A2A"
+                    TextColor="White"
+                    HeightRequest="44" />
+
+                <Button
+                    Grid.Column="1"
+                    Text="Send"
+                    Command="{Binding SendMessageCommand}"
+                    BackgroundColor="#6B5DD3"
+                    TextColor="White"
+                    CornerRadius="8"
+                    Margin="8,0,0,0" />
+            </Grid>
         </Grid>
 
-    </VerticalStackLayout>
+    </Grid>
 </ContentPage>
