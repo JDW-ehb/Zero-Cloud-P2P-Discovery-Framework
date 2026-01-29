@@ -51,8 +51,12 @@ public class MessagingViewModel : BindableObject
         {
             _selectedPeer = value;
             OnPropertyChanged();
+
+            if (_selectedPeer != null)
+                _ = LoadHistoryAsync(_selectedPeer);
         }
     }
+
 
     public ObservableCollection<ChatMessage> Messages { get; } = new();
 
@@ -173,4 +177,27 @@ public class MessagingViewModel : BindableObject
         foreach (var peer in peers)
             AvailablePeers.Add(peer);
     }
+
+    private async Task LoadHistoryAsync(PeerNode peer)
+    {
+        var history = await _db.Messages
+            .Where(m => m.PeerId == peer.PeerId)
+            .OrderBy(m => m.Timestamp)
+            .ToListAsync();
+
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            Messages.Clear();
+
+            foreach (var msg in history)
+            {
+                Messages.Add(new ChatMessage(
+                    msg.Direction == MessageDirection.Outgoing ? "local" : peer.ProtocolPeerId,
+                    peer.ProtocolPeerId,
+                    msg.Content
+                ));
+            }
+        });
+    }
+
 }
