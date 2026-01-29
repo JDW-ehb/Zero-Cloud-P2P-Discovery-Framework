@@ -1,6 +1,8 @@
 ﻿using System.Collections.ObjectModel;
+using System.Net.Sockets;
 using System.Windows.Input;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Maui.Dispatching;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Services.Messaging;
@@ -14,7 +16,7 @@ public class MessagingViewModel : BindableObject
     private readonly ServiceDBContext _db;
 
     // =====================
-    // UI state
+    // UI STATE
     // =====================
 
     private bool _isHosting;
@@ -24,6 +26,17 @@ public class MessagingViewModel : BindableObject
         set
         {
             _isHosting = value;
+            OnPropertyChanged();
+        }
+    }
+
+    private string _statusMessage = "Idle";
+    public string StatusMessage
+    {
+        get => _statusMessage;
+        set
+        {
+            _statusMessage = value;
             OnPropertyChanged();
         }
     }
@@ -55,7 +68,7 @@ public class MessagingViewModel : BindableObject
     }
 
     // =====================
-    // Commands
+    // COMMANDS
     // =====================
 
     public ICommand HostCommand { get; }
@@ -63,7 +76,7 @@ public class MessagingViewModel : BindableObject
     public ICommand SendMessageCommand { get; }
 
     // =====================
-    // Constructor
+    // CONSTRUCTOR
     // =====================
 
     public MessagingViewModel(
@@ -80,12 +93,13 @@ public class MessagingViewModel : BindableObject
         HostCommand = new Command(async () =>
         {
             if (IsHosting)
-                return; // already hosting → do nothing
-
-            IsHosting = true;
+                return;
 
             try
             {
+                IsHosting = true;
+                StatusMessage = "Hosting started on port 5555";
+
                 await _peer.StartHostingAsync(
                     5555,
                     name => name == _messaging.ServiceName ? _messaging : null
@@ -93,21 +107,38 @@ public class MessagingViewModel : BindableObject
             }
             catch (Exception ex)
             {
-                IsHosting = false; // rollback if start failed
-                System.Diagnostics.Debug.WriteLine($"[HOST ERROR] {ex}");
+                IsHosting = false;
+                StatusMessage = $"Hosting failed: {ex.Message}";
             }
         });
-
 
         ConnectCommand = new Command(async () =>
         {
             if (SelectedPeer == null)
+            {
+                StatusMessage = "No peer selected";
                 return;
+            }
 
-            await _messaging.ConnectToPeerAsync(
-                SelectedPeer.IpAddress,
-                5555
-            );
+            try
+            {
+                StatusMessage = $"Connecting to {SelectedPeer.HostName} ({SelectedPeer.IpAddress})...";
+
+                await _messaging.ConnectToPeerAsync(
+                    SelectedPeer.IpAddress,
+                    5555
+                );
+
+                StatusMessage = $"Connected to {SelectedPeer.HostName}";
+            }
+            catch (SocketException)
+            {
+                StatusMessage = $"Connection refused — {SelectedPeer.HostName} is not hosting";
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = $"Connection failed: {ex.Message}";
+            }
         });
 
         SendMessageCommand = new Command(async () =>
@@ -129,7 +160,7 @@ public class MessagingViewModel : BindableObject
     }
 
     // =====================
-    // Helpers
+    // HELPERS
     // =====================
 
     private void LoadPeers()
