@@ -79,14 +79,25 @@ public class MessagingViewModel : BindableObject
 
         HostCommand = new Command(async () =>
         {
-            if (!IsHosting)
-                return;
+            if (IsHosting)
+                return; // already hosting → do nothing
 
-            await _peer.StartHostingAsync(
-                5555,
-                name => name == _messaging.ServiceName ? _messaging : null
-            );
+            IsHosting = true;
+
+            try
+            {
+                await _peer.StartHostingAsync(
+                    5555,
+                    name => name == _messaging.ServiceName ? _messaging : null
+                );
+            }
+            catch (Exception ex)
+            {
+                IsHosting = false; // rollback if start failed
+                System.Diagnostics.Debug.WriteLine($"[HOST ERROR] {ex}");
+            }
         });
+
 
         ConnectCommand = new Command(async () =>
         {
