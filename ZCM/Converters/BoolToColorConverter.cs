@@ -4,14 +4,13 @@ namespace ZCM.Converters;
 
 public class BoolToColorConverter : IValueConverter
 {
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        if (value is bool isActive && isActive)
-            return Colors.Green;
+    public Color OutgoingColor { get; set; } = Color.FromArgb("#6C63FF");
+    public Color IncomingColor { get; set; } = Color.FromArgb("#2A2A2A");
 
-        return Color.FromArgb("#6B5DD3"); // default purple
-    }
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => (bool)value ? OutgoingColor : IncomingColor;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotImplementedException();
 }
+

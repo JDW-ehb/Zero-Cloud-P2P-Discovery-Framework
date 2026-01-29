@@ -74,23 +74,30 @@
             <!-- MESSAGES -->
             <CollectionView
                 ItemsSource="{Binding Messages}"
-                Margin="0,0,0,12">
+                VerticalOptions="FillAndExpand"
+                Margin="12">
 
                 <CollectionView.ItemTemplate>
                     <DataTemplate>
-                        <Frame
-                            Padding="10"
-                            Margin="5"
-                            BackgroundColor="{Binding IsLocal, Converter={StaticResource MessageColorConverter}}"
-                            HorizontalOptions="{Binding IsLocal, Converter={StaticResource MessageAlignmentConverter}}">
-                            <Label
-                                Text="{Binding Content}"
-                                TextColor="Black" />
-                        </Frame>
+                        <Grid>
+                            <Frame
+                                Padding="12"
+                                CornerRadius="16"
+                                HasShadow="False"
+                                MaxWidthRequest="420"
+                                HorizontalOptions="{Binding IsOutgoing, Converter={StaticResource BoolToLayoutConverter}}"
+                                BackgroundColor="{Binding IsOutgoing, Converter={StaticResource BoolToColorConverter}}">
 
+                                <Label
+                                    Text="{Binding Content}"
+                                    TextColor="White"
+                                    LineBreakMode="WordWrap" />
+                            </Frame>
+                        </Grid>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
             </CollectionView>
+
 
             <!-- INPUT BAR -->
             <Grid Grid.Row="1"

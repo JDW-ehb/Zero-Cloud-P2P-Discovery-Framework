@@ -10,6 +10,9 @@ namespace ZCL.Services.Messaging
         public string Content { get; }
         public DateTime Timestamp { get; }
 
+        public bool IsOutgoing => FromPeer == "local";
+        public bool IsIncoming => !IsOutgoing;
+
         public ChatMessage(string fromPeer, string toPeer, string content)
         {
             if (string.IsNullOrWhiteSpace(fromPeer))
