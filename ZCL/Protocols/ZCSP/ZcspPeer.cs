@@ -3,8 +3,9 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
-using ZCL.Protocols.ZCSP.Protocol;
 using ZCL.Protocols.ZCSP.Sessions;
+using ZCL.Protocols.ZCSP;
+using ZCL.Protocols.ZCSP.Protocol;
 using ZCL.Protocols.ZCSP.Transport;
 
 namespace ZCL.Protocols.ZCSP

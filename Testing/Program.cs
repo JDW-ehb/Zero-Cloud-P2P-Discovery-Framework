@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
-using ZCL.APIs.ZCSP;
-using ZCL.APIs.ZCSP.Sessions;
+using ZCL.Protocols.ZCSP;
+using ZCL.Protocols.ZCSP.Sessions;
 using ZCL.Services.Messaging;
 
 class Program
