@@ -160,19 +160,18 @@ namespace ZCL.Services.Messaging
             if (fromPeer == "local")
                 return;
 
-            var peerGuid = await GetOrCreatePeerAsync(_remotePeerId);
+            var peerGuid = await GetOrCreatePeerAsync(fromPeer);
 
             var entity = new MessageEntity
             {
                 MessageId = Guid.NewGuid(),
                 PeerId = peerGuid,
-                SessionId = _currentSessionId,
+                SessionId = sessionId,
                 Content = content,
                 Timestamp = DateTime.UtcNow,
-                Direction = MessageDirection.Outgoing,
-                Status = MessageStatus.Sent
+                Direction = MessageDirection.Incoming,
+                Status = MessageStatus.Delivered
             };
-
 
             await _dbLock.WaitAsync();
             try
@@ -184,6 +183,7 @@ namespace ZCL.Services.Messaging
             {
                 _dbLock.Release();
             }
+
 
             var msg = Store(fromPeer, toPeer, content);
             Console.WriteLine(msg);

@@ -80,15 +80,14 @@
                     <DataTemplate>
                         <Frame
                             Padding="10"
-                            Margin="6"
-                            BackgroundColor="#2A2A2A"
-                            CornerRadius="10"
-                            HorizontalOptions="Start">
-
+                            Margin="5"
+                            BackgroundColor="{Binding IsLocal, Converter={StaticResource MessageColorConverter}}"
+                            HorizontalOptions="{Binding IsLocal, Converter={StaticResource MessageAlignmentConverter}}">
                             <Label
                                 Text="{Binding Content}"
                                 TextColor="White" />
                         </Frame>
+
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
             </CollectionView>
