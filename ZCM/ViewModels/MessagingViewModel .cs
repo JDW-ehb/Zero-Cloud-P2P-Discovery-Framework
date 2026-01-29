@@ -1,64 +1,111 @@
 ﻿using System.Collections.ObjectModel;
 using System.Windows.Input;
+using Microsoft.EntityFrameworkCore;
+using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Services.Messaging;
 
 namespace ZCM.ViewModels;
 
-public class MessagingViewModel
+public class MessagingViewModel : BindableObject
 {
     private readonly ZcspPeer _peer;
     private readonly MessagingService _messaging;
+    private readonly ServiceDBContext _db;
 
-    public string TargetIp { get; set; } = "192.168.1.22";
+    // =====================
+    // UI state
+    // =====================
+
+    private bool _isHosting;
+    public bool IsHosting
+    {
+        get => _isHosting;
+        set
+        {
+            _isHosting = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public ObservableCollection<PeerNode> AvailablePeers { get; } = new();
+
+    private PeerNode? _selectedPeer;
+    public PeerNode? SelectedPeer
+    {
+        get => _selectedPeer;
+        set
+        {
+            _selectedPeer = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public ObservableCollection<ChatMessage> Messages { get; } = new();
+
+    private string _outgoingMessage = string.Empty;
+    public string OutgoingMessage
+    {
+        get => _outgoingMessage;
+        set
+        {
+            _outgoingMessage = value;
+            OnPropertyChanged();
+        }
+    }
+
+    // =====================
+    // Commands
+    // =====================
 
     public ICommand HostCommand { get; }
     public ICommand ConnectCommand { get; }
-    public ObservableCollection<ChatMessage> Messages { get; } = new();
-    public string OutgoingMessage { get; set; } = "";
     public ICommand SendMessageCommand { get; }
 
+    // =====================
+    // Constructor
+    // =====================
 
-
-
-    public MessagingViewModel(ZcspPeer peer, MessagingService messaging)
+    public MessagingViewModel(
+        ZcspPeer peer,
+        MessagingService messaging,
+        ServiceDBContext db)
     {
         _peer = peer;
         _messaging = messaging;
+        _db = db;
 
-        HostCommand = new Command(() =>
+        LoadPeers();
+
+        HostCommand = new Command(async () =>
         {
-            Task.Run(async () =>
-            {
-                try
-                {
-                    await _peer.StartHostingAsync(
-                        5555,
-                        name => name == _messaging.ServiceName ? _messaging : null
-                    );
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine(
-                        $"[HOST ERROR] {ex}"
-                    );
-                }
-            });
-        });
+            if (!IsHosting)
+                return;
 
+            await _peer.StartHostingAsync(
+                5555,
+                name => name == _messaging.ServiceName ? _messaging : null
+            );
+        });
 
         ConnectCommand = new Command(async () =>
         {
-            await _messaging.ConnectToPeerAsync(TargetIp, 5555);
+            if (SelectedPeer == null)
+                return;
+
+            await _messaging.ConnectToPeerAsync(
+                SelectedPeer.IpAddress,
+                5555
+            );
         });
 
         SendMessageCommand = new Command(async () =>
         {
-            if (!string.IsNullOrWhiteSpace(OutgoingMessage))
-            {
-                await _messaging.SendMessageAsync(OutgoingMessage);
-                OutgoingMessage = "";
-            }
+            if (string.IsNullOrWhiteSpace(OutgoingMessage))
+                return;
+
+            await _messaging.SendMessageAsync(OutgoingMessage);
+            OutgoingMessage = string.Empty;
         });
 
         _messaging.MessageReceived += msg =>
@@ -68,7 +115,20 @@ public class MessagingViewModel
                 Messages.Add(msg);
             });
         };
+    }
 
+    // =====================
+    // Helpers
+    // =====================
+
+    private void LoadPeers()
+    {
+        var peers = _db.Peers
+            .OrderByDescending(p => p.LastSeen)
+            .ToList();
+
+        AvailablePeers.Clear();
+        foreach (var peer in peers)
+            AvailablePeers.Add(peer);
     }
 }
-
