@@ -157,6 +157,9 @@ namespace ZCL.Services.Messaging
             var toPeer = BinaryCodec.ReadString(reader);
             var content = BinaryCodec.ReadString(reader);
 
+            if (fromPeer == "local")
+                return;
+
             var peerGuid = await GetOrCreatePeerAsync(_remotePeerId);
 
             var entity = new MessageEntity
