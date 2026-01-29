@@ -197,17 +197,32 @@ namespace ZCL.API
                                                 Debug.WriteLine("Services:");
                                             }
 
-                                            Service service = new Service
+                                            string name = reader.ReadString();
+                                            string address = reader.ReadString();
+                                            ushort servicePort = reader.ReadUInt16();
+
+                                            bool exists = db.Services.Any(s =>
+                                                s.name == name &&
+                                                s.address == address &&
+                                                s.port == servicePort &&
+                                                s.peerGuid == header.peerGuid
+                                            );
+
+                                            if (!exists)
                                             {
-                                                name = reader.ReadString(),
-                                                address = reader.ReadString(),
-                                                port = reader.ReadUInt16(),
-                                                peerGuid = header.peerGuid,
-                                            };
+                                                var service = new Service
+                                                {
+                                                    name = name,
+                                                    address = address,
+                                                    port = servicePort,
+                                                    peerGuid = header.peerGuid
+                                                };
 
-                                            db.Add(service);
+                                                db.Services.Add(service);
+                                            }
 
-                                            Debug.WriteLine($"- {service.name}");
+                                            Debug.WriteLine($"- {name}");
+
                                         }
 
                                         try
