@@ -10,17 +10,21 @@ namespace ZCL.Services.Messaging
         public string Content { get; }
         public DateTime Timestamp { get; }
 
-        public bool IsOutgoing => FromPeer == "local";
+        private readonly string _localPeerId;
+
+        public bool IsOutgoing => FromPeer == _localPeerId;
         public bool IsIncoming => !IsOutgoing;
 
-        public ChatMessage(string fromPeer, string toPeer, string content)
+        public ChatMessage(
+            string fromPeer,
+            string toPeer,
+            string content,
+            string localPeerId)
         {
             if (string.IsNullOrWhiteSpace(fromPeer))
                 throw new ArgumentException(nameof(fromPeer));
-
             if (string.IsNullOrWhiteSpace(toPeer))
                 throw new ArgumentException(nameof(toPeer));
-
             if (string.IsNullOrWhiteSpace(content))
                 throw new ArgumentException(nameof(content));
 
@@ -29,9 +33,11 @@ namespace ZCL.Services.Messaging
             ToPeer = toPeer;
             Content = content.Trim();
             Timestamp = DateTime.UtcNow;
+            _localPeerId = localPeerId;
         }
 
         public override string ToString()
             => $"[{Timestamp:HH:mm:ss}] {FromPeer} → {ToPeer}: {Content}";
     }
+
 }

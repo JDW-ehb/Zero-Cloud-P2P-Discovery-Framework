@@ -13,7 +13,7 @@ namespace ZCL.Protocol.ZCSP
     {
         private readonly string _peerId;
         private readonly SessionRegistry _sessions;
-
+        public string PeerId => _peerId;
         public ZcspPeer(string peerId, SessionRegistry sessions)
         {
             _peerId = peerId;

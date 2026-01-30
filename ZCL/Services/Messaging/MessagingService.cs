@@ -111,21 +111,23 @@ namespace ZCL.Services.Messaging
             }
 
 
-            // 2️⃣ Update UI immediately
+            // Update UI immediately
             MessageReceived?.Invoke(new ChatMessage(
-                "local",
+                _peer.PeerId,
                 _remotePeerId,
-                content
+                content,
+                _peer.PeerId
             ));
 
-            // 3️⃣ Send over ZCSP (already exists)
+
+            // Send over ZCSP (already exists)
             var data = BinaryCodec.Serialize(
                 ZcspMessageType.SessionData,
                 _currentSessionId,
                 w =>
                 {
-                    BinaryCodec.WriteString(w, "local");
-                    BinaryCodec.WriteString(w, _remotePeerId);
+                    BinaryCodec.WriteString(w, _peer.PeerId);   // sender
+                    BinaryCodec.WriteString(w, _remotePeerId);  // receiver
                     BinaryCodec.WriteString(w, content);
                 });
 
@@ -184,7 +186,12 @@ namespace ZCL.Services.Messaging
             }
 
 
-            var msg = Store(fromPeer, toPeer, content);
+            var msg = new ChatMessage(
+                fromPeer,
+                toPeer,
+                content,
+                _peer.PeerId
+            );
             Console.WriteLine(msg);
 
             MessageReceived?.Invoke(msg);
