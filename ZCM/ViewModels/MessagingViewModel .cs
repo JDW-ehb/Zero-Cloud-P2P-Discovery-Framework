@@ -182,10 +182,19 @@ public class MessagingViewModel : BindableObject
             .OrderByDescending(p => p.LastSeen)
             .ToList();
 
+        var previouslySelectedPeerId = SelectedPeer?.PeerId;
+
         AvailablePeers.Clear();
         foreach (var peer in peers)
             AvailablePeers.Add(peer);
+
+        if (previouslySelectedPeerId != null)
+        {
+            SelectedPeer = AvailablePeers
+                .FirstOrDefault(p => p.PeerId == previouslySelectedPeerId);
+        }
     }
+
 
     private async Task LoadChatHistoryAsync(PeerNode peer)
     {

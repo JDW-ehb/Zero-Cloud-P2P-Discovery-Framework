@@ -50,9 +50,10 @@
                 TextColor="#CCCCCC" />
 
             <Picker
+                Title="Select peer"
                 ItemsSource="{Binding AvailablePeers}"
-                ItemDisplayBinding="{Binding HostName}"
                 SelectedItem="{Binding SelectedPeer}"
+                ItemDisplayBinding="{Binding HostName}"
                 BackgroundColor="#2A2A2A"
                 TextColor="White" />
 
