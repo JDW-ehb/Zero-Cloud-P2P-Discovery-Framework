@@ -69,10 +69,11 @@ namespace ZCL.Services.Messaging
         /// <summary>
         /// Initiate a messaging session to a remote peer using ZCSP.
         /// </summary>
-        public Task ConnectToPeerAsync(string host, int port)
+        public Task ConnectToPeerAsync(string host, int port, string remotePeerId)
         {
-            return _peer.ConnectAsync(host, port, this);
+            return _peer.ConnectAsync(host, port, remotePeerId, this);
         }
+
 
         /// <summary>
         /// Send a chat message inside an active session.
@@ -147,11 +148,11 @@ namespace ZCL.Services.Messaging
         public Task OnSessionStartedAsync(Guid sessionId, string remotePeerId)
         {
             _currentSessionId = sessionId;
-            _remotePeerId = remotePeerId;
-
+            _remotePeerId = remotePeerId; 
             Console.WriteLine($"[Messaging] Session started with {remotePeerId}");
             return Task.CompletedTask;
         }
+
 
         public async Task OnSessionDataAsync(Guid sessionId, BinaryReader reader)
         {

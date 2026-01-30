@@ -80,19 +80,23 @@
                 <CollectionView.ItemTemplate>
                     <DataTemplate>
                         <Grid>
-                            <Frame
-                                Padding="12"
-                                CornerRadius="16"
-                                HasShadow="False"
-                                MaxWidthRequest="420"
-                                HorizontalOptions="{Binding IsOutgoing, Converter={StaticResource BoolToLayoutConverter}}"
-                                BackgroundColor="{Binding IsOutgoing, Converter={StaticResource BoolToColorConverter}}">
+                            <Grid
+                                        MaximumWidthRequest="420"
+                                        HorizontalOptions="{Binding IsOutgoing, Converter={StaticResource BoolToLayoutConverter}}">
 
-                                <Label
-                                    Text="{Binding Content}"
-                                    TextColor="White"
-                                    LineBreakMode="WordWrap" />
-                            </Frame>
+                                <Frame
+                                        Padding="12"
+                                        CornerRadius="16"
+                                        HasShadow="False"
+                                        BackgroundColor="{Binding IsOutgoing, Converter={StaticResource BoolToColorConverter}}">
+
+                                    <Label
+                                        Text="{Binding Content}"
+                                        TextColor="White"
+                                        LineBreakMode="WordWrap" />
+                                </Frame>
+                            </Grid>
+
                         </Grid>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>

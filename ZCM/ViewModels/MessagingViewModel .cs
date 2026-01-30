@@ -136,8 +136,10 @@ public class MessagingViewModel : BindableObject
 
                 await _messaging.ConnectToPeerAsync(
                     SelectedPeer.IpAddress,
-                    5555
-                );
+                    5555,
+                    SelectedPeer.ProtocolPeerId
+                 );
+
 
                 StatusMessage = $"Connected to {SelectedPeer.HostName}";
             }

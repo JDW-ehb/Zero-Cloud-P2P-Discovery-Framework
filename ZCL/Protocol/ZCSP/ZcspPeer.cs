@@ -98,6 +98,7 @@ namespace ZCL.Protocol.ZCSP
         public async Task ConnectAsync(
             string host,
             int port,
+            string remotePeerId,
             IZcspService service)
         {
             using var client = new TcpClient();
@@ -111,8 +112,8 @@ namespace ZCL.Protocol.ZCSP
                 w =>
                 {
                     w.Write(Guid.NewGuid().ToByteArray());
-                    BinaryCodec.WriteString(w, _peerId);
-                    BinaryCodec.WriteString(w, "remote");
+                    BinaryCodec.WriteString(w, _peerId);       // from
+                    BinaryCodec.WriteString(w, remotePeerId);  // to
                     BinaryCodec.WriteString(w, service.ServiceName);
                 });
 
