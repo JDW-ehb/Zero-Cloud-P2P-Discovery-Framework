@@ -1,45 +1,51 @@
 ﻿using System;
+using ZCL.Models;
 
 namespace ZCL.Services.Messaging
 {
-    public sealed class ChatMessage
+    using System;
+
+    namespace ZCL.Services.Messaging
     {
-        public Guid Id { get; }
-        public string FromPeer { get; }
-        public string ToPeer { get; }
-        public string Content { get; }
-        public DateTime Timestamp { get; }
-
-        public bool IsOutgoing { get; }
-        public bool IsIncoming => !IsOutgoing;
-
-        public ChatMessage(
-            string fromPeer,
-            string toPeer,
-            string content,
-            string localPeerId)
+        public sealed class ChatMessage
         {
-            if (string.IsNullOrWhiteSpace(fromPeer))
-                throw new ArgumentException(nameof(fromPeer));
-            if (string.IsNullOrWhiteSpace(toPeer))
-                throw new ArgumentException(nameof(toPeer));
-            if (string.IsNullOrWhiteSpace(content))
-                throw new ArgumentException(nameof(content));
-            if (string.IsNullOrWhiteSpace(localPeerId))
-                throw new ArgumentException(nameof(localPeerId));
+            public Guid Id { get; }
+            public string FromPeer { get; }
+            public string ToPeer { get; }
+            public string Content { get; }
+            public DateTime Timestamp { get; }
 
-            Id = Guid.NewGuid();
-            FromPeer = fromPeer;
-            ToPeer = toPeer;
-            Content = content.Trim();
-            Timestamp = DateTime.UtcNow;
+            public MessageDirection Direction { get; }
 
-            IsOutgoing = fromPeer == localPeerId;
+            public bool IsOutgoing => Direction == MessageDirection.Outgoing;
+            public bool IsIncoming => Direction == MessageDirection.Incoming;
+
+            public ChatMessage(
+                string fromPeer,
+                string toPeer,
+                string content,
+                MessageDirection direction)
+            {
+                if (string.IsNullOrWhiteSpace(fromPeer))
+                    throw new ArgumentException(nameof(fromPeer));
+                if (string.IsNullOrWhiteSpace(toPeer))
+                    throw new ArgumentException(nameof(toPeer));
+                if (string.IsNullOrWhiteSpace(content))
+                    throw new ArgumentException(nameof(content));
+
+                Id = Guid.NewGuid();
+                FromPeer = fromPeer;
+                ToPeer = toPeer;
+                Content = content.Trim();
+                Timestamp = DateTime.UtcNow;
+                Direction = direction;
+            }
+
+            public override string ToString()
+                => $"[{Timestamp:HH:mm:ss}] {FromPeer} → {ToPeer}: {Content}";
         }
-
-        public override string ToString()
-            => $"[{Timestamp:HH:mm:ss}] {FromPeer} → {ToPeer}: {Content}";
     }
+
 
 
 }

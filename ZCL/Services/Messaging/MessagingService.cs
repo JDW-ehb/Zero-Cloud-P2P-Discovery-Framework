@@ -9,6 +9,7 @@ using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Protocol.ZCSP.Protocol;
 using ZCL.Protocol.ZCSP.Transport;
+using ZCL.Services.Messaging.ZCL.Services.Messaging;
 
 namespace ZCL.Services.Messaging
 {
@@ -115,10 +116,11 @@ namespace ZCL.Services.Messaging
             // Update UI immediately
             MessageReceived?.Invoke(new ChatMessage(
                 _peer.PeerId,
-                _remotePeerId,
+                _remotePeerId!,
                 content,
-                _peer.PeerId
+                MessageDirection.Outgoing
             ));
+
 
 
             // Send over ZCSP (already exists)
@@ -191,8 +193,9 @@ namespace ZCL.Services.Messaging
                 fromPeer,
                 toPeer,
                 content,
-                _peer.PeerId
+                MessageDirection.Incoming
             );
+
             Console.WriteLine(msg);
 
             MessageReceived?.Invoke(msg);
@@ -264,26 +267,7 @@ namespace ZCL.Services.Messaging
         // Messaging logic
         // =====================
 
-        //already inserting messages in db so not needed
-        private ChatMessage Store(string fromPeer, string toPeer, string content)
-        {
-            var message = new ChatMessage(
-                fromPeer,
-                toPeer,
-                content,
-                _peer.PeerId
-            );
-
-            var key = BuildConversationKey(fromPeer, toPeer);
-
-            var conversation = _messages.GetOrAdd(key, _ => new List<ChatMessage>());
-            lock (conversation)
-            {
-                conversation.Add(message);
-            }
-
-            return message;
-        }
+        
 
 
         private static string BuildConversationKey(string a, string b)

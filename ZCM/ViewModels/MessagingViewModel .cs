@@ -1,11 +1,12 @@
-﻿using System.Collections.ObjectModel;
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Maui.Dispatching;
+using System.Collections.ObjectModel;
 using System.Net.Sockets;
 using System.Windows.Input;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Maui.Dispatching;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Services.Messaging;
+using ZCL.Services.Messaging.ZCL.Services.Messaging;
 
 namespace ZCM.ViewModels;
 
@@ -199,16 +200,18 @@ public class MessagingViewModel : BindableObject
         {
             Messages.Add(new ChatMessage(
                 msg.Direction == MessageDirection.Outgoing
-                    ? _peer.PeerId          // sender is local
-                    : peer.ProtocolPeerId,  // sender is remote
+                    ? _peer.PeerId
+                    : peer.ProtocolPeerId,
 
                 msg.Direction == MessageDirection.Outgoing
-                    ? peer.ProtocolPeerId  // receiver is remote
-                    : _peer.PeerId,        // receiver is local
+                    ? peer.ProtocolPeerId
+                    : _peer.PeerId,
 
                 msg.Content,
-                _peer.PeerId              
+                msg.Direction
             ));
+
+
 
         }
     }
