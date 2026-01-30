@@ -263,9 +263,16 @@ namespace ZCL.Services.Messaging
         // Messaging logic
         // =====================
 
+        //already inserting messages in db so not needed
         private ChatMessage Store(string fromPeer, string toPeer, string content)
         {
-            var message = new ChatMessage(fromPeer, toPeer, content);
+            var message = new ChatMessage(
+                fromPeer,
+                toPeer,
+                content,
+                _peer.PeerId
+            );
+
             var key = BuildConversationKey(fromPeer, toPeer);
 
             var conversation = _messages.GetOrAdd(key, _ => new List<ChatMessage>());
@@ -276,6 +283,7 @@ namespace ZCL.Services.Messaging
 
             return message;
         }
+
 
         private static string BuildConversationKey(string a, string b)
             => string.CompareOrdinal(a, b) < 0

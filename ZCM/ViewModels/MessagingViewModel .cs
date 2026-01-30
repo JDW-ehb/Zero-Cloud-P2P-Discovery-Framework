@@ -196,10 +196,18 @@ public class MessagingViewModel : BindableObject
         foreach (var msg in history)
         {
             Messages.Add(new ChatMessage(
-                msg.Direction == MessageDirection.Outgoing ? "local" : peer.HostName,
-                peer.HostName,
-                msg.Content
+                msg.Direction == MessageDirection.Outgoing
+                    ? _peer.PeerId          // sender is local
+                    : peer.ProtocolPeerId,  // sender is remote
+
+                msg.Direction == MessageDirection.Outgoing
+                    ? peer.ProtocolPeerId  // receiver is remote
+                    : _peer.PeerId,        // receiver is local
+
+                msg.Content,
+                _peer.PeerId              
             ));
+
         }
     }
 
