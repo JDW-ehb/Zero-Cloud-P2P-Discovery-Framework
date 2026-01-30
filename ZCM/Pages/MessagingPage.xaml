@@ -35,7 +35,8 @@
             <Label
                 Text="{Binding StatusMessage}"
                 FontSize="12"
-                TextColor="LightGray" />
+                TextColor="{Binding IsConnected, Converter={StaticResource BoolToColorConverter}}" />
+
 
             <Button
                 Text="Start Hosting"

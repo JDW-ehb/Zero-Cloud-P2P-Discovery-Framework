@@ -31,6 +31,18 @@ public class MessagingViewModel : BindableObject
         }
     }
 
+    private bool _isConnected;
+    public bool IsConnected
+    {
+        get => _isConnected;
+        set
+        {
+            _isConnected = value;
+            OnPropertyChanged();
+        }
+    }
+
+
     private string _statusMessage = "Idle";
     public string StatusMessage
     {
@@ -57,11 +69,13 @@ public class MessagingViewModel : BindableObject
             {
                 MainThread.BeginInvokeOnMainThread(async () =>
                 {
+                    Messages.Clear();              
                     await LoadChatHistoryAsync(value);
                 });
             }
         }
     }
+
 
 
 
@@ -128,31 +142,31 @@ public class MessagingViewModel : BindableObject
             if (SelectedPeer == null)
             {
                 StatusMessage = "No peer selected";
+                IsConnected = false;
                 return;
             }
 
             try
             {
                 StatusMessage = $"Connecting to {SelectedPeer.HostName} ({SelectedPeer.IpAddress})...";
+                IsConnected = false;
 
                 await _messaging.ConnectToPeerAsync(
                     SelectedPeer.IpAddress,
                     5555,
                     SelectedPeer.ProtocolPeerId
-                 );
-
+                );
 
                 StatusMessage = $"Connected to {SelectedPeer.HostName}";
-            }
-            catch (SocketException)
-            {
-                StatusMessage = $"Connection refused — {SelectedPeer.HostName} is not hosting";
+                IsConnected = true;   // 👈 THIS is the key line
             }
             catch (Exception ex)
             {
                 StatusMessage = $"Connection failed: {ex.Message}";
+                IsConnected = false;
             }
         });
+
 
         SendMessageCommand = new Command(async () =>
         {
@@ -170,6 +184,16 @@ public class MessagingViewModel : BindableObject
                 Messages.Add(msg);
             });
         };
+
+        _messaging.SessionClosed += () =>
+        {
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                IsConnected = false;
+                StatusMessage = "Disconnected";
+            });
+        };
+
     }
 
     // =====================

@@ -42,6 +42,8 @@ namespace ZCL.Services.Messaging
         // =====================
 
         public event Action<ChatMessage>? MessageReceived;
+        public event Action? SessionClosed;
+
 
         // =====================
         // DBContext
@@ -155,6 +157,9 @@ namespace ZCL.Services.Messaging
             return Task.CompletedTask;
         }
 
+        
+
+
 
         public async Task OnSessionDataAsync(Guid sessionId, BinaryReader reader)
         {
@@ -209,7 +214,7 @@ namespace ZCL.Services.Messaging
             _stream = null;
             _remotePeerId = null;
             _currentSessionId = Guid.Empty;
-
+            SessionClosed?.Invoke();
             return Task.CompletedTask;
         }
 
