@@ -195,12 +195,10 @@ public class MessagingViewModel : BindableObject
         Messages.Clear();
 
         var history = await _db.Messages
-            .Where(m =>
-                (m.Direction == MessageDirection.Outgoing && m.PeerId == peer.PeerId) ||
-                (m.Direction == MessageDirection.Incoming && m.PeerId == peer.PeerId)
-            )
+            .Where(m => m.PeerId == peer.PeerId)
             .OrderBy(m => m.Timestamp)
             .ToListAsync();
+
 
 
         foreach (var msg in history)
