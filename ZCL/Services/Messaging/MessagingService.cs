@@ -40,7 +40,7 @@ namespace ZCL.Services.Messaging
         // =====================
         // Events
         // =====================
-
+        public event Action<string>? SessionStarted;
         public event Action<ChatMessage>? MessageReceived;
         public event Action? SessionClosed;
 
@@ -154,7 +154,8 @@ namespace ZCL.Services.Messaging
         public Task OnSessionStartedAsync(Guid sessionId, string remotePeerId)
         {
             _currentSessionId = sessionId;
-            _remotePeerId = remotePeerId; 
+            _remotePeerId = remotePeerId;
+            SessionStarted?.Invoke(remotePeerId);
             Console.WriteLine($"[Messaging] Session started with {remotePeerId}");
             return Task.CompletedTask;
         }

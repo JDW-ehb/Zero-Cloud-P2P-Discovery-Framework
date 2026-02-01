@@ -185,24 +185,53 @@ public class MessagingViewModel : BindableObject
         {
             MainThread.BeginInvokeOnMainThread(() =>
             {
-                // No peer selected → ignore live messages
-                if (SelectedPeer == null)
+                // decide who "the other side" is for this message
+                var otherParty =
+                    msg.FromPeer == _peer.PeerId ? msg.ToPeer :
+                    msg.ToPeer == _peer.PeerId ? msg.FromPeer :
+                    msg.FromPeer; // fallback
+
+                // if we don't have an active session peer yet, adopt this one
+                _activeProtocolPeerId ??= otherParty;
+
+                // show only messages for the active session peer
+                if (otherParty != _activeProtocolPeerId)
                     return;
 
-                // Only show messages for the active conversation
-                var selectedProtocolPeerId = SelectedPeer.ProtocolPeerId;
-
-                var belongsToConversation =
-                    msg.FromPeer == selectedProtocolPeerId ||
-                    msg.ToPeer == selectedProtocolPeerId;
-
-                if (!belongsToConversation)
-                    return;
+                // ensure UI selection matches session (optional but nice)
+                if (SelectedPeer == null || SelectedPeer.ProtocolPeerId != _activeProtocolPeerId)
+                    SelectedPeer = AvailablePeers.FirstOrDefault(p => p.ProtocolPeerId == _activeProtocolPeerId);
 
                 Messages.Add(msg);
             });
         };
 
+
+        _activeProtocolPeerId = SelectedPeer.ProtocolPeerId;
+
+
+        _messaging.SessionStarted += remoteProtocolPeerId =>
+        {
+            MainThread.BeginInvokeOnMainThread(async () =>
+            {
+                _activeProtocolPeerId = remoteProtocolPeerId;
+
+                // refresh list (in case discovery just added them)
+                LoadPeers();
+
+                // auto-select the peer that matches the session
+                SelectedPeer = AvailablePeers.FirstOrDefault(p => p.ProtocolPeerId == remoteProtocolPeerId);
+
+                IsConnected = SelectedPeer != null;
+                StatusMessage = IsConnected
+                    ? $"Connected to {SelectedPeer!.HostName}"
+                    : $"Connected (unknown peer: {remoteProtocolPeerId})";
+
+                // optionally: load history immediately so session messages stack on top
+                if (SelectedPeer != null)
+                    await LoadChatHistoryAsync(SelectedPeer);
+            });
+        };
 
 
 
