@@ -222,36 +222,44 @@ public class MessagingViewModel : BindableObject
 
     private async Task LoadChatHistoryAsync(PeerNode peer)
     {
-        var localPeerId = _peer.PeerId;
-        var remotePeerProtocolId = peer.ProtocolPeerId;
+        var localPeerGuid = await _db.Peers
+            .Where(p => p.ProtocolPeerId == _peer.PeerId)
+            .Select(p => p.PeerId)
+            .FirstOrDefaultAsync();
 
-        Messages.Clear();
+        if (localPeerGuid == Guid.Empty)
+        {
+            // No local peer record yet, no history possible
+            Messages.Clear();
+            return;
+        }
+
+        var remotePeerGuid = peer.PeerId;
+
 
         var history = await _db.Messages
-            .Where(m => m.PeerId == peer.PeerId)
+            .Where(m =>
+                (m.FromPeerId == localPeerGuid && m.ToPeerId == remotePeerGuid) ||
+                (m.FromPeerId == remotePeerGuid && m.ToPeerId == localPeerGuid))
             .OrderBy(m => m.Timestamp)
             .ToListAsync();
 
-
+        Messages.Clear();
 
         foreach (var msg in history)
         {
+            var isOutgoing = msg.FromPeerId == localPeerGuid;
+
             Messages.Add(new ChatMessage(
-                msg.Direction == MessageDirection.Outgoing
-                    ? _peer.PeerId
-                    : peer.ProtocolPeerId,
-
-                msg.Direction == MessageDirection.Outgoing
-                    ? peer.ProtocolPeerId
-                    : _peer.PeerId,
-
-                msg.Content,
-                msg.Direction
+                fromPeer: isOutgoing ? _peer.PeerId : peer.ProtocolPeerId,
+                toPeer: isOutgoing ? peer.ProtocolPeerId : _peer.PeerId,
+                content: msg.Content,
+                direction: isOutgoing
+                    ? MessageDirection.Outgoing
+                    : MessageDirection.Incoming
             ));
-
-
-
         }
+
     }
 
 

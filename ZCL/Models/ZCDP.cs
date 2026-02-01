@@ -26,15 +26,28 @@ namespace ZCL.Models
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<MessageEntity>()
-                .HasIndex(m => new { m.PeerId, m.Timestamp });
+                .HasOne(m => m.FromPeer)
+                .WithMany()
+                .HasForeignKey(m => m.FromPeerId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<MessageEntity>()
-                .HasOne(m => m.Peer)
+                .HasOne(m => m.ToPeer)
                 .WithMany()
-                .HasForeignKey(m => m.PeerId);
+                .HasForeignKey(m => m.ToPeerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<MessageEntity>()
+                .HasIndex(m => new
+                {
+                    m.FromPeerId,
+                    m.ToPeerId,
+                    m.Timestamp
+                });
 
             base.OnModelCreating(modelBuilder);
         }
+
     }
 
     [Index(nameof(name), nameof(address), nameof(port), nameof(peerGuid), IsUnique = true)]

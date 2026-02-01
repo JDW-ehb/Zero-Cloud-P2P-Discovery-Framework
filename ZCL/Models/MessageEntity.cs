@@ -23,7 +23,10 @@ public class MessageEntity
     public Guid MessageId { get; set; }
 
     [Required]
-    public Guid PeerId { get; set; }
+    public Guid FromPeerId { get; set; }
+
+    [Required]
+    public Guid ToPeerId { get; set; }
 
     [Required]
     public Guid SessionId { get; set; }
@@ -33,10 +36,10 @@ public class MessageEntity
 
     public DateTime Timestamp { get; set; }
 
-    public MessageDirection Direction { get; set; }
-
     public MessageStatus Status { get; set; }
 
-    // Navigation (optional but future-proof)
-    public PeerNode? Peer { get; set; }
+    public PeerNode? FromPeer { get; set; }
+    public PeerNode? ToPeer { get; set; }
 }
+
+

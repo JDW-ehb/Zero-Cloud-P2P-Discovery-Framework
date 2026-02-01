@@ -101,9 +101,9 @@ namespace ZCL.Protocol.ZCSP
             string remotePeerId,
             IZcspService service)
         {
-            using var client = new TcpClient();
+            var client = new TcpClient();
             await client.ConnectAsync(host, port);
-            using var stream = client.GetStream();
+            var stream = client.GetStream();
 
             // ---- Send ServiceRequest ----
             var request = BinaryCodec.Serialize(
@@ -112,8 +112,8 @@ namespace ZCL.Protocol.ZCSP
                 w =>
                 {
                     w.Write(Guid.NewGuid().ToByteArray());
-                    BinaryCodec.WriteString(w, _peerId);       // from
-                    BinaryCodec.WriteString(w, remotePeerId);  // to
+                    BinaryCodec.WriteString(w, _peerId);
+                    BinaryCodec.WriteString(w, remotePeerId);
                     BinaryCodec.WriteString(w, service.ServiceName);
                 });
 
@@ -128,13 +128,24 @@ namespace ZCL.Protocol.ZCSP
             if (type != ZcspMessageType.ServiceResponse || sessionId == null)
                 return;
 
-            // ---- Activate service ----
             service.BindStream(stream);
             await service.OnSessionStartedAsync(sessionId.Value, host);
 
-            // ---- Run session ----
-            await RunSessionAsync(stream, sessionId.Value, service);
+            // 🔥 session loop owns the connection now
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await RunSessionAsync(stream, sessionId.Value, service);
+                }
+                finally
+                {
+                    stream.Dispose();
+                    client.Dispose();
+                }
+            });
         }
+
 
         // =====================
         // SESSION LOOP

@@ -89,18 +89,20 @@ namespace ZCL.Services.Messaging
             if (string.IsNullOrWhiteSpace(content))
                 return;
 
-            var peerGuid = await GetOrCreatePeerAsync(_remotePeerId);
+            var localPeerGuid = await GetOrCreatePeerAsync(_peer.PeerId);
+            var remotePeerGuid = await GetOrCreatePeerAsync(_remotePeerId);
 
             var entity = new MessageEntity
             {
                 MessageId = Guid.NewGuid(),
-                PeerId = peerGuid,
+                FromPeerId = localPeerGuid,
+                ToPeerId = remotePeerGuid,
                 SessionId = _currentSessionId,
                 Content = content,
                 Timestamp = DateTime.UtcNow,
-                Direction = MessageDirection.Outgoing,
                 Status = MessageStatus.Sent
             };
+
 
 
             await _dbLock.WaitAsync();
@@ -169,16 +171,17 @@ namespace ZCL.Services.Messaging
 
             Console.WriteLine($"[Messaging] DATA from {fromPeer}: {content}");
 
-            var peerGuid = await GetOrCreatePeerAsync(fromPeer);
+            var fromPeerGuid = await GetOrCreatePeerAsync(fromPeer);
+            var toPeerGuid = await GetOrCreatePeerAsync(_peer.PeerId);
 
             var entity = new MessageEntity
             {
                 MessageId = Guid.NewGuid(),
-                PeerId = peerGuid,
+                FromPeerId = fromPeerGuid,
+                ToPeerId = toPeerGuid,
                 SessionId = sessionId,
                 Content = content,
                 Timestamp = DateTime.UtcNow,
-                Direction = MessageDirection.Incoming,
                 Status = MessageStatus.Delivered
             };
 
