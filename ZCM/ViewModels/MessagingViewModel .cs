@@ -181,15 +181,18 @@ public class MessagingViewModel : BindableObject
         {
             MainThread.BeginInvokeOnMainThread(() =>
             {
-                if (SelectedPeer == null) return;
+                if (SelectedPeer == null)
+                    return;
 
-                var otherSide =
-                    msg.Direction == MessageDirection.Outgoing ? msg.ToPeer : msg.FromPeer;
+                var selectedId = SelectedPeer.ProtocolPeerId;
 
-                if (otherSide == SelectedPeer.ProtocolPeerId)
+                if (msg.FromPeer == selectedId || msg.ToPeer == selectedId)
+                {
                     Messages.Add(msg);
+                }
             });
         };
+
 
 
         _messaging.SessionClosed += () =>
