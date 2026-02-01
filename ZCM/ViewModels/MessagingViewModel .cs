@@ -15,6 +15,8 @@ public class MessagingViewModel : BindableObject
     private readonly ZcspPeer _peer;
     private readonly MessagingService _messaging;
     private readonly ServiceDBContext _db;
+    private string? _activeProtocolPeerId;
+
 
     // =====================
     // UI STATE
@@ -181,17 +183,25 @@ public class MessagingViewModel : BindableObject
         {
             MainThread.BeginInvokeOnMainThread(() =>
             {
+                // Lock conversation to the first peer of the session
+                if (_activeProtocolPeerId == null)
+                {
+                    _activeProtocolPeerId =
+                        msg.FromPeer == _peer.PeerId
+                            ? msg.ToPeer
+                            : msg.FromPeer;
+                }
+
                 if (SelectedPeer == null)
                     return;
 
-                var selectedId = SelectedPeer.ProtocolPeerId;
+                if (SelectedPeer.ProtocolPeerId != _activeProtocolPeerId)
+                    return;
 
-                if (msg.FromPeer == selectedId || msg.ToPeer == selectedId)
-                {
-                    Messages.Add(msg);
-                }
+                Messages.Add(msg);
             });
         };
+
 
 
 
@@ -199,10 +209,12 @@ public class MessagingViewModel : BindableObject
         {
             MainThread.BeginInvokeOnMainThread(() =>
             {
+                _activeProtocolPeerId = null;
                 IsConnected = false;
                 StatusMessage = "Disconnected";
             });
         };
+
 
     }
 
