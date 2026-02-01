@@ -129,7 +129,8 @@ namespace ZCL.Protocol.ZCSP
                 return;
 
             service.BindStream(stream);
-            await service.OnSessionStartedAsync(sessionId.Value, host);
+            // was: await service.OnSessionStartedAsync(sessionId.Value, host);
+            await service.OnSessionStartedAsync(sessionId.Value, remotePeerId);
 
             // 🔥 session loop owns the connection now
             _ = Task.Run(async () =>

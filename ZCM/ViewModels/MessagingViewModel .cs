@@ -181,9 +181,16 @@ public class MessagingViewModel : BindableObject
         {
             MainThread.BeginInvokeOnMainThread(() =>
             {
-                Messages.Add(msg);
+                if (SelectedPeer == null) return;
+
+                var otherSide =
+                    msg.Direction == MessageDirection.Outgoing ? msg.ToPeer : msg.FromPeer;
+
+                if (otherSide == SelectedPeer.ProtocolPeerId)
+                    Messages.Add(msg);
             });
         };
+
 
         _messaging.SessionClosed += () =>
         {
@@ -203,8 +210,10 @@ public class MessagingViewModel : BindableObject
     private void LoadPeers()
     {
         var peers = _db.Peers
+            .Where(p => p.ProtocolPeerId != _peer.PeerId) // exclude local
             .OrderByDescending(p => p.LastSeen)
             .ToList();
+
 
         var previouslySelectedPeerId = SelectedPeer?.PeerId;
 
