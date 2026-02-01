@@ -160,7 +160,9 @@ public class MessagingViewModel : BindableObject
                 );
 
                 StatusMessage = $"Connected to {SelectedPeer.HostName}";
-                IsConnected = true;   // 👈 THIS is the key line
+                IsConnected = true;   // THIS is the key line
+                SelectedPeer = SelectedPeer; // forces UI state sync
+
             }
             catch (Exception ex)
             {
@@ -183,24 +185,24 @@ public class MessagingViewModel : BindableObject
         {
             MainThread.BeginInvokeOnMainThread(() =>
             {
-                // Lock conversation to the first peer of the session
-                if (_activeProtocolPeerId == null)
-                {
-                    _activeProtocolPeerId =
-                        msg.FromPeer == _peer.PeerId
-                            ? msg.ToPeer
-                            : msg.FromPeer;
-                }
-
+                // No peer selected → ignore live messages
                 if (SelectedPeer == null)
                     return;
 
-                if (SelectedPeer.ProtocolPeerId != _activeProtocolPeerId)
+                // Only show messages for the active conversation
+                var selectedProtocolPeerId = SelectedPeer.ProtocolPeerId;
+
+                var belongsToConversation =
+                    msg.FromPeer == selectedProtocolPeerId ||
+                    msg.ToPeer == selectedProtocolPeerId;
+
+                if (!belongsToConversation)
                     return;
 
                 Messages.Add(msg);
             });
         };
+
 
 
 
