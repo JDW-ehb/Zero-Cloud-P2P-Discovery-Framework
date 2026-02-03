@@ -312,8 +312,10 @@ public class MessagingViewModel : BindableObject
                 content: msg.Content,
                 direction: isOutgoing
                     ? MessageDirection.Outgoing
-                    : MessageDirection.Incoming
+                    : MessageDirection.Incoming,
+                timestamp: msg.Timestamp
             ));
+
         }
 
     }

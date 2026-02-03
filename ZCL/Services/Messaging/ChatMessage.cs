@@ -24,7 +24,7 @@ namespace ZCL.Services.Messaging
                 string fromPeer,
                 string toPeer,
                 string content,
-                MessageDirection direction)
+                MessageDirection direction, DateTime timestamp)
             {
                 if (string.IsNullOrWhiteSpace(fromPeer))
                     throw new ArgumentException(nameof(fromPeer));
@@ -37,7 +37,7 @@ namespace ZCL.Services.Messaging
                 FromPeer = fromPeer;
                 ToPeer = toPeer;
                 Content = content.Trim();
-                Timestamp = DateTime.UtcNow;
+                Timestamp = timestamp;
                 Direction = direction;
             }
 

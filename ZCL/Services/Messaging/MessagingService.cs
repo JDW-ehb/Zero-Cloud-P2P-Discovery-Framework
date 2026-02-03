@@ -117,13 +117,15 @@ namespace ZCL.Services.Messaging
             }
 
 
-            // Update UI immediately
+            
             MessageReceived?.Invoke(new ChatMessage(
                 _peer.PeerId,
                 _remotePeerId!,
                 content,
-                MessageDirection.Outgoing
+                MessageDirection.Outgoing,
+                entity.Timestamp
             ));
+
 
 
 
@@ -202,8 +204,10 @@ namespace ZCL.Services.Messaging
                 fromPeer,
                 toPeer,
                 content,
-                MessageDirection.Incoming
+                MessageDirection.Incoming,
+                entity.Timestamp
             );
+
 
             Console.WriteLine(msg);
 

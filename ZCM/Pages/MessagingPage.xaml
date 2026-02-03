@@ -10,6 +10,8 @@
     <ContentPage.Resources>
         <ResourceDictionary>
             <conv:BoolToColorConverter x:Key="BoolToColorConverter" />
+            <conv:BoolToColorConverter x:Key="BoolToLayoutConverter" />
+            <conv:ChatTimestampConverter x:Key="ChatTimestampConverter" />
         </ResourceDictionary>
     </ContentPage.Resources>
 
@@ -51,7 +53,6 @@
                 TextColor="#CCCCCC" />
 
             <Picker
-                Title="Select peer"
                 ItemsSource="{Binding AvailablePeers}"
                 SelectedItem="{Binding SelectedPeer}"
                 ItemDisplayBinding="{Binding HostName}"
@@ -92,10 +93,19 @@
                                         HasShadow="False"
                                         BackgroundColor="{Binding IsOutgoing, Converter={StaticResource BoolToColorConverter}}">
 
-                                    <Label
-                                        Text="{Binding Content}"
-                                        TextColor="White"
-                                        LineBreakMode="WordWrap" />
+                                    <VerticalStackLayout Spacing="4">
+                                        <Label
+                                            Text="{Binding Content}"
+                                            TextColor="White"
+                                            LineBreakMode="WordWrap" />
+
+                                        <Label
+                                            Text="{Binding Timestamp, Converter={StaticResource ChatTimestampConverter}}"
+                                            FontSize="10"
+                                            TextColor="#AAAAAA"
+                                            HorizontalOptions="End" />
+                                    </VerticalStackLayout>
+
                                 </Frame>
                             </Grid>
 
