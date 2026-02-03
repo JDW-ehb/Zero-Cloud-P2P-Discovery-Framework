@@ -27,4 +27,6 @@ public class PeerNode
     public DateTime LastSeen { get; set; }
 
     public PeerOnlineStatus OnlineStatus { get; set; }
+    public bool IsLocal { get; set; }
+
 }

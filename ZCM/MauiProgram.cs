@@ -61,7 +61,7 @@ namespace ZCM
             builder.Services.AddSingleton(sp =>
             {
                 var sessions = new SessionRegistry();
-                return new ZcspPeer("peer-A", sessions);
+                return new ZcspPeer("Jimmy's desktop", sessions);
             });
 
             builder.Services.AddSingleton<MessagingService>();
@@ -74,7 +74,14 @@ namespace ZCM
 #endif
             var app = builder.Build();
 
-            
+            using (var scope = app.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+                var peer = scope.ServiceProvider.GetRequiredService<ZcspPeer>();
+
+                ServiceDbSeeder.Seed(db, peer.PeerId);
+            }
+
 
             ServiceHelper.Initialize(app.Services);
 

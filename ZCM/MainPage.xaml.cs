@@ -6,6 +6,7 @@ using System.Net;
 using ZCL.API;
 using ZCL.Models;
 using ZCM.Pages;
+using ZCL.Protocol.ZCSP;
 
 namespace ZCM
 {
@@ -28,7 +29,8 @@ namespace ZCM
             InitializeComponent();
 
             var db = ServiceHelper.GetService<ServiceDBContext>();
-            ServiceDbSeeder.Seed(db);
+            var peer = ServiceHelper.GetService<ZcspPeer>();
+            ServiceDbSeeder.Seed(db, peer.PeerId);
 
             BindingContext = new MainViewModel(db);
 

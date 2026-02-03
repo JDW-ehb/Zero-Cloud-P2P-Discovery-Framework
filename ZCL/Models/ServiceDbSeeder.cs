@@ -2,50 +2,61 @@
 
 public static class ServiceDbSeeder
 {
-    public static void Seed(ServiceDBContext db)
+    public static void Seed(ServiceDBContext db, string localProtocolPeerId)
     {
-        // Create DB + tables if missing
         db.Database.EnsureCreated();
-
-        // Prevent duplicate seeding
-        if (db.Peers.Any())
-            return;
 
         var now = DateTime.UtcNow;
 
-        db.Peers.AddRange(
-            new PeerNode
+        // =====================
+        // Ensure LOCAL peer
+        // =====================
+        if (!db.Peers.Any(p => p.IsLocal))
+        {
+            db.Peers.Add(new PeerNode
             {
                 PeerId = Guid.NewGuid(),
-                ProtocolPeerId = "peer-alpha",
-                IpAddress = "192.168.1.10",
-                HostName = "Alpha",
+                ProtocolPeerId = localProtocolPeerId,
+                HostName = localProtocolPeerId,
+                IpAddress = "127.0.0.1",      // no static IP
                 FirstSeen = now,
                 LastSeen = now,
-                OnlineStatus = PeerOnlineStatus.Online
-            },
-            new PeerNode
-            {
-                PeerId = Guid.NewGuid(),
-                ProtocolPeerId = "peer-beta",
-                IpAddress = "192.168.1.22",
-                HostName = "Beta",
-                FirstSeen = now,
-                LastSeen = now,
-                OnlineStatus = PeerOnlineStatus.Online
-            },
-            new PeerNode
-            {
-                PeerId = Guid.NewGuid(),
-                ProtocolPeerId = "peer-gamma",
-                IpAddress = "192.168.1.42",
-                HostName = "Gamma",
-                FirstSeen = now,
-                LastSeen = now,
-                OnlineStatus = PeerOnlineStatus.Offline
-            }
-        );
+                OnlineStatus = PeerOnlineStatus.Online,
+                IsLocal = true
+            });
+        }
+
+        // =====================
+        // Ensure DEMO peers
+        // =====================
+        EnsurePeer(db, now, "peer-alpha", "Alpha", "192.168.1.10", PeerOnlineStatus.Online);
+        EnsurePeer(db, now, "peer-beta", "Beta", "192.168.1.48", PeerOnlineStatus.Online);
+        EnsurePeer(db, now, "peer-gamma", "Gamma", "192.168.1.42", PeerOnlineStatus.Offline);
 
         db.SaveChanges();
+    }
+
+    private static void EnsurePeer(
+        ServiceDBContext db,
+        DateTime now,
+        string protocolPeerId,
+        string hostName,
+        string ipAddress,
+        PeerOnlineStatus status)
+    {
+        if (db.Peers.Any(p => p.ProtocolPeerId == protocolPeerId))
+            return;
+
+        db.Peers.Add(new PeerNode
+        {
+            PeerId = Guid.NewGuid(),
+            ProtocolPeerId = protocolPeerId,
+            HostName = hostName,
+            IpAddress = ipAddress,
+            FirstSeen = now,
+            LastSeen = now,
+            OnlineStatus = status,
+            IsLocal = false
+        });
     }
 }

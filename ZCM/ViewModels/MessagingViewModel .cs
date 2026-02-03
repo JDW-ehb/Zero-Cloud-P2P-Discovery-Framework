@@ -207,7 +207,6 @@ public class MessagingViewModel : BindableObject
         };
 
 
-        _activeProtocolPeerId = SelectedPeer.ProtocolPeerId;
 
 
         _messaging.SessionStarted += remoteProtocolPeerId =>
@@ -256,9 +255,10 @@ public class MessagingViewModel : BindableObject
     private void LoadPeers()
     {
         var peers = _db.Peers
-            .Where(p => p.ProtocolPeerId != _peer.PeerId) // exclude local
+            .Where(p => true)
             .OrderByDescending(p => p.LastSeen)
             .ToList();
+
 
 
         var previouslySelectedPeerId = SelectedPeer?.PeerId;
@@ -278,9 +278,10 @@ public class MessagingViewModel : BindableObject
     private async Task LoadChatHistoryAsync(PeerNode peer)
     {
         var localPeerGuid = await _db.Peers
-            .Where(p => p.ProtocolPeerId == _peer.PeerId)
+            .Where(p => p.IsLocal)
             .Select(p => p.PeerId)
-            .FirstOrDefaultAsync();
+            .SingleAsync();
+
 
         if (localPeerGuid == Guid.Empty)
         {
