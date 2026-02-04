@@ -24,9 +24,8 @@ namespace ZCL.Protocol.ZCSP
         // HOSTING (SERVER SIDE)
         // =====================
 
-        public async Task StartHostingAsync(
-            int port,
-            Func<string, IZcspService?> serviceResolver)
+        public async Task StartHostingAsync(int port,
+         Func<string, IZcspService?> serviceResolver)
         {
             var listener = new TcpListener(IPAddress.Any, port);
             listener.Start();
@@ -36,60 +35,88 @@ namespace ZCL.Protocol.ZCSP
             while (true)
             {
                 var client = await listener.AcceptTcpClientAsync();
-                _ = Task.Run(() => HandleClientAsync(client, serviceResolver));
+
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await HandleClientAsync(client, serviceResolver);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[{_peerId}] Client handler crashed:");
+                        Console.WriteLine(ex);
+                    }
+                });
             }
         }
+
 
         private async Task HandleClientAsync(
-            TcpClient client,
-            Func<string, IZcspService?> serviceResolver)
+    TcpClient client,
+    Func<string, IZcspService?> serviceResolver)
         {
-            using (client)
-            using (var stream = client.GetStream())
+            try
             {
-                // ---- Expect ServiceRequest ----
-                var frame = await Framing.ReadAsync(stream);
-                if (frame == null)
-                    return;
+                using (client)
+                using (var stream = client.GetStream())
+                {
+                    var frame = await Framing.ReadAsync(stream);
+                    if (frame == null)
+                        return;
 
-                var (type, _, _, reader) = BinaryCodec.Deserialize(frame);
-                if (type != ZcspMessageType.ServiceRequest)
-                    return;
+                    var (type, _, _, reader) = BinaryCodec.Deserialize(frame);
+                    if (type != ZcspMessageType.ServiceRequest)
+                        return;
 
-                // ---- Parse request ----
-                reader.ReadBytes(16); // requestId
-                var fromPeer = BinaryCodec.ReadString(reader);
-                BinaryCodec.ReadString(reader); // toPeer (ignored)
-                var serviceName = BinaryCodec.ReadString(reader);
+                    reader.ReadBytes(16); // requestId
+                    var fromPeer = BinaryCodec.ReadString(reader);
+                    BinaryCodec.ReadString(reader); // toPeer
+                    var serviceName = BinaryCodec.ReadString(reader);
 
-                // ---- Resolve service externally ----
-                var service = serviceResolver(serviceName);
-                if (service == null)
-                    return;
-
-                // ---- Create session ----
-                var session = _sessions.Create(fromPeer, TimeSpan.FromMinutes(30));
-
-                // ---- Respond ----
-                var response = BinaryCodec.Serialize(
-                    ZcspMessageType.ServiceResponse,
-                    session.Id,
-                    w =>
+                    var service = serviceResolver(serviceName);
+                    if (service == null)
                     {
-                        w.Write(true);
-                        w.Write(session.ExpiresAt.Ticks);
-                    });
+                        var reject = BinaryCodec.Serialize(
+                            ZcspMessageType.ServiceResponse,
+                            Guid.Empty,
+                            w =>
+                            {
+                                w.Write(false);
+                                w.Write(0L);
+                            });
 
-                await Framing.WriteAsync(stream, response);
+                        await Framing.WriteAsync(stream, reject);
+                        return;
+                    }
 
-                // ---- Activate service ----
-                service.BindStream(stream);
-                await service.OnSessionStartedAsync(session.Id, fromPeer);
+                    var session = _sessions.Create(fromPeer, TimeSpan.FromMinutes(30));
 
-                // ---- Run session ----
-                await RunSessionAsync(stream, session.Id, service);
+                    var accept = BinaryCodec.Serialize(
+                        ZcspMessageType.ServiceResponse,
+                        session.Id,
+                        w =>
+                        {
+                            w.Write(true);
+                            w.Write(session.ExpiresAt.Ticks);
+                        });
+
+                    await Framing.WriteAsync(stream, accept);
+
+                    service.BindStream(stream);
+                    await service.OnSessionStartedAsync(session.Id, fromPeer);
+
+                    await RunSessionAsync(stream, session.Id, service);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[{_peerId}] HandleClientAsync failed:");
+                Console.WriteLine(ex);
             }
         }
+
+
 
         // =====================
         // CONNECTING (CLIENT SIDE)

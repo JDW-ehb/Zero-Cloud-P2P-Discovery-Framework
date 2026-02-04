@@ -10,7 +10,7 @@
     <ContentPage.Resources>
         <ResourceDictionary>
             <conv:BoolToColorConverter x:Key="BoolToColorConverter" />
-            <conv:BoolToColorConverter x:Key="BoolToLayoutConverter" />
+            <conv:BoolToLayoutConverter x:Key="BoolToLayoutConverter" />
             <conv:ChatTimestampConverter x:Key="ChatTimestampConverter" />
         </ResourceDictionary>
     </ContentPage.Resources>
@@ -82,36 +82,36 @@
 
                 <CollectionView.ItemTemplate>
                     <DataTemplate>
-                        <Grid>
-                            <Grid
-                                        MaximumWidthRequest="420"
-                                        HorizontalOptions="{Binding IsOutgoing, Converter={StaticResource BoolToLayoutConverter}}">
+                        <Grid Margin="0,6">
+                            <Frame
+                                Padding="12"
+                                CornerRadius="16"
+                                HasShadow="False"
+                                MaximumWidthRequest="420"
+                                HorizontalOptions="{Binding IsOutgoing, Converter={StaticResource BoolToLayoutConverter}}"
+                                BackgroundColor="{Binding IsOutgoing, Converter={StaticResource BoolToColorConverter}}">
 
-                                <Frame
-                                        Padding="12"
-                                        CornerRadius="16"
-                                        HasShadow="False"
-                                        BackgroundColor="{Binding IsOutgoing, Converter={StaticResource BoolToColorConverter}}">
+                                <VerticalStackLayout Spacing="4">
 
-                                    <VerticalStackLayout Spacing="4">
-                                        <Label
-                                            Text="{Binding Content}"
-                                            TextColor="White"
-                                            LineBreakMode="WordWrap" />
+                                    <!-- Message text -->
+                                    <Label
+                                        Text="{Binding Content}"
+                                        TextColor="White"
+                                        LineBreakMode="WordWrap" />
 
-                                        <Label
-                                            Text="{Binding Timestamp, Converter={StaticResource ChatTimestampConverter}}"
-                                            FontSize="10"
-                                            TextColor="#AAAAAA"
-                                            HorizontalOptions="End" />
-                                    </VerticalStackLayout>
+                                    <!-- Timestamp -->
+                                    <Label
+                                        Text="{Binding Timestamp, Converter={StaticResource ChatTimestampConverter}}"
+                                        FontSize="10"
+                                        TextColor="#CCCCCC"
+                                        HorizontalOptions="End" />
 
-                                </Frame>
-                            </Grid>
-
+                                </VerticalStackLayout>
+                            </Frame>
                         </Grid>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
+
             </CollectionView>
 
 

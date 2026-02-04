@@ -13,12 +13,12 @@ public class ChatTimestampConverter : IValueConverter
         var now = DateTime.Now;
 
         if (local.Date == now.Date)
-            return local.ToString("HH:mm:ss");
+            return local.ToString("HH:mm");
 
         if (local.Date == now.Date.AddDays(-1))
-            return $"Yesterday at {local:HH:mm:ss}";
+            return $"Yesterday at {local:HH:mm}";
 
-        return local.ToString("dd:MM:yyyy 'at' HH:mm:ss");
+        return local.ToString("dd:MM:yyyy 'at' HH:mm");
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

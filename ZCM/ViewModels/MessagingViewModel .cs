@@ -71,7 +71,7 @@ public class MessagingViewModel : BindableObject
             {
                 MainThread.BeginInvokeOnMainThread(async () =>
                 {
-                    Messages.Clear();              
+                    Messages.Clear();
                     await LoadChatHistoryAsync(value);
                 });
             }
@@ -127,10 +127,13 @@ public class MessagingViewModel : BindableObject
                 IsHosting = true;
                 StatusMessage = "Hosting started on port 5555";
 
-                await _peer.StartHostingAsync(
-                    5555,
-                    name => name == _messaging.ServiceName ? _messaging : null
-                );
+                _ = Task.Run(() =>
+                        _peer.StartHostingAsync(
+                            5555,
+                            name => name == _messaging.ServiceName ? _messaging : null
+                        )
+                    );
+
             }
             catch (Exception ex)
             {
@@ -315,8 +318,8 @@ public class MessagingViewModel : BindableObject
                     : MessageDirection.Incoming,
                 timestamp: msg.Timestamp
             ));
-
         }
+
 
     }
 
