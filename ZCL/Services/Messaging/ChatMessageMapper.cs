@@ -8,25 +8,31 @@ public static class ChatMessageMapper
         string localProtocolPeerId,
         string remoteProtocolPeerId,
         MessageEntity entity)
-        => new(
+    {
+        return new ChatMessage(
+            id: entity.MessageId,
             fromPeer: localProtocolPeerId,
             toPeer: remoteProtocolPeerId,
             content: entity.Content,
             direction: MessageDirection.Outgoing,
             timestamp: entity.Timestamp
         );
+    }
 
     public static ChatMessage Incoming(
         string fromProtocolPeerId,
         string toProtocolPeerId,
         MessageEntity entity)
-        => new(
+    {
+        return new ChatMessage(
+            id: entity.MessageId,
             fromPeer: fromProtocolPeerId,
             toPeer: toProtocolPeerId,
             content: entity.Content,
             direction: MessageDirection.Incoming,
             timestamp: entity.Timestamp
         );
+    }
 
     public static ChatMessage FromHistory(
         MessageEntity entity,
