@@ -2,10 +2,6 @@
 using ZCL.Models;
 
 namespace ZCL.Services.Messaging
-{
-    using System;
-
-    namespace ZCL.Services.Messaging
     {
         public sealed class ChatMessage
         {
@@ -44,8 +40,8 @@ namespace ZCL.Services.Messaging
             public override string ToString()
                 => $"[{Timestamp:HH:mm:ss}] {FromPeer} → {ToPeer}: {Content}";
         }
-    }
-
-
-
 }
+
+
+
+

@@ -6,7 +6,6 @@ using System.Windows.Input;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Services.Messaging;
-using ZCL.Services.Messaging.ZCL.Services.Messaging;
 
 namespace ZCM.ViewModels;
 
@@ -309,15 +308,18 @@ public class MessagingViewModel : BindableObject
         {
             var isOutgoing = msg.FromPeerId == localPeerGuid;
 
-            Messages.Add(new ChatMessage(
-                fromPeer: isOutgoing ? _peer.PeerId : peer.ProtocolPeerId,
-                toPeer: isOutgoing ? peer.ProtocolPeerId : _peer.PeerId,
-                content: msg.Content,
-                direction: isOutgoing
-                    ? MessageDirection.Outgoing
-                    : MessageDirection.Incoming,
-                timestamp: msg.Timestamp
-            ));
+            var chatMessage = isOutgoing
+            ? ChatMessageMapper.Outgoing(
+                _peer.PeerId,
+                peer.ProtocolPeerId,
+                msg)
+            : ChatMessageMapper.Incoming(
+                peer.ProtocolPeerId,
+                _peer.PeerId,
+                msg);
+
+            Messages.Add(chatMessage);
+
         }
 
 

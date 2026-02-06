@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using ZCL.Services.Messaging;
-using ZCL.Services.Messaging.ZCL.Services.Messaging;
 
 namespace ZCL.Services.Messaging
 {

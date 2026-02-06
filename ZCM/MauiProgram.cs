@@ -8,7 +8,10 @@ using ZCL.API;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Protocol.ZCSP.Sessions;
+using ZCL.Repositories.Messages;
+using ZCL.Repositories.Peers;
 using ZCL.Services.Messaging;
+
 
 namespace ZCM
 {
@@ -58,13 +61,17 @@ namespace ZCM
                         b => b.MigrationsAssembly("ZCM"));
             });
 
+            builder.Services.AddScoped<IMessageRepository, MessageRepository>();
+            builder.Services.AddScoped<IPeerRepository, PeerRepository>();
+
+
             builder.Services.AddSingleton(sp =>
             {
                 var sessions = new SessionRegistry();
                 return new ZcspPeer("Jimmy's desktop", sessions);
             });
 
-            builder.Services.AddSingleton<MessagingService>();
+            builder.Services.AddScoped<MessagingService>();
 
 
 
@@ -77,10 +84,19 @@ namespace ZCM
             using (var scope = app.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+                var peers = scope.ServiceProvider.GetRequiredService<IPeerRepository>();
                 var peer = scope.ServiceProvider.GetRequiredService<ZcspPeer>();
 
-                ServiceDbSeeder.Seed(db, peer.PeerId);
+                db.Database.EnsureCreated();
+
+                ServiceDbSeeder
+                    .SeedAsync(peers, peer.PeerId)
+                    .GetAwaiter()
+                    .GetResult();
             }
+
+
+
 
 
             ServiceHelper.Initialize(app.Services);

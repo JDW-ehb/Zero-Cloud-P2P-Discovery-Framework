@@ -9,15 +9,24 @@ using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Protocol.ZCSP.Protocol;
 using ZCL.Protocol.ZCSP.Transport;
-using ZCL.Services.Messaging.ZCL.Services.Messaging;
+using ZCL.Repositories.Peers;
+using ZCL.Repositories.Messages;
 
 namespace ZCL.Services.Messaging
 {
     public sealed class MessagingService : IZcspService
     {
         // =====================
+        // Loading Repositories
+        // =====================
+
+        private readonly IPeerRepository _peers;
+        private readonly IMessageRepository _messages;
+
+        // =====================
         // Protocol identity
         // =====================
+
 
         public string ServiceName => "Messaging";
 
@@ -35,8 +44,6 @@ namespace ZCL.Services.Messaging
         private Guid _currentSessionId;
         private string? _remotePeerId;
 
-        private readonly ConcurrentDictionary<string, List<ChatMessage>> _messages = new();
-
         // =====================
         // Events
         // =====================
@@ -46,23 +53,16 @@ namespace ZCL.Services.Messaging
 
 
         // =====================
-        // DBContext
-        // =====================
-
-        private readonly ServiceDBContext _db;
-
-        private static readonly SemaphoreSlim _dbLock = new(1, 1);
-
-
-        // =====================
         // Constructor
         // =====================
 
-        public MessagingService(ZcspPeer peer, ServiceDBContext db)
+        public MessagingService(ZcspPeer peer, IPeerRepository peers, IMessageRepository messages)
         {
             _peer = peer;
-            _db = db;
+            _peers = peers;
+            _messages = messages;
         }
+
 
 
         // =====================
@@ -89,42 +89,26 @@ namespace ZCL.Services.Messaging
             if (string.IsNullOrWhiteSpace(content))
                 return;
 
-            var localPeerGuid = await GetOrCreatePeerAsync(_peer.PeerId);
-            var remotePeerGuid = await GetOrCreatePeerAsync(_remotePeerId);
+            var localPeer = await _peers.GetOrCreateAsync(_peer.PeerId);
+            var remotePeer = await _peers.GetOrCreateAsync(_remotePeerId);
 
-            var entity = new MessageEntity
-            {
-                MessageId = Guid.NewGuid(),
-                FromPeerId = localPeerGuid,
-                ToPeerId = remotePeerGuid,
-                SessionId = _currentSessionId,
-                Content = content,
-                Timestamp = DateTime.UtcNow,
-                Status = MessageStatus.Sent
-            };
+            var entity = await _messages.StoreOutgoingAsync(
+            _currentSessionId,
+            localPeer.PeerId,
+            remotePeer.PeerId,
+            content);
 
 
 
-            await _dbLock.WaitAsync();
-            try
-            {
-                _db.Messages.Add(entity);
-                await _db.SaveChangesAsync();
-            }
-            finally
-            {
-                _dbLock.Release();
-            }
 
+            MessageReceived?.Invoke(
+                ChatMessageMapper.Outgoing(
+                    _peer.PeerId,
+                    _remotePeerId!,
+                    entity
+                )
+            );
 
-            
-            MessageReceived?.Invoke(new ChatMessage(
-                _peer.PeerId,
-                _remotePeerId!,
-                content,
-                MessageDirection.Outgoing,
-                entity.Timestamp
-            ));
 
 
 
@@ -174,40 +158,23 @@ namespace ZCL.Services.Messaging
 
             Console.WriteLine($"[Messaging] DATA from {fromPeer}: {content}");
 
-            var fromPeerGuid = await GetOrCreatePeerAsync(fromPeer);
-            var toPeerGuid = await GetOrCreatePeerAsync(_peer.PeerId);
-
-            var entity = new MessageEntity
-            {
-                MessageId = Guid.NewGuid(),
-                FromPeerId = fromPeerGuid,
-                ToPeerId = toPeerGuid,
-                SessionId = sessionId,
-                Content = content,
-                Timestamp = DateTime.UtcNow,
-                Status = MessageStatus.Delivered
-            };
-
-            await _dbLock.WaitAsync();
-            try
-            {
-                _db.Messages.Add(entity);
-                await _db.SaveChangesAsync();
-            }
-            finally
-            {
-                _dbLock.Release();
-            }
+            var fromPeerEntity = await _peers.GetOrCreateAsync(fromPeer);
+            var toPeerEntity = await _peers.GetOrCreateAsync(_peer.PeerId);
 
 
-            var msg = new ChatMessage(
+            var entity = await _messages.StoreIncomingAsync(
+            sessionId,
+            fromPeerEntity.PeerId,
+            toPeerEntity.PeerId,
+            content);
+
+
+
+            var msg = ChatMessageMapper.Incoming(
                 fromPeer,
                 toPeer,
-                content,
-                MessageDirection.Incoming,
-                entity.Timestamp
+                entity
             );
-
 
             Console.WriteLine(msg);
 
@@ -234,58 +201,6 @@ namespace ZCL.Services.Messaging
             );
         }
 
-        // =====================
-        // usingdb ir creating peers
-        // =====================
-
-        private async Task<Guid> GetOrCreatePeerAsync(string protocolPeerId)
-        {
-            await _dbLock.WaitAsync();
-            try
-            {
-                var peer = await _db.Peers
-                    .FirstOrDefaultAsync(p => p.ProtocolPeerId == protocolPeerId);
-
-                if (peer != null)
-                {
-                    peer.LastSeen = DateTime.UtcNow;
-                    await _db.SaveChangesAsync();
-                    return peer.PeerId;
-                }
-
-                peer = new PeerNode
-                {
-                    PeerId = Guid.NewGuid(),
-                    ProtocolPeerId = protocolPeerId,
-                    IpAddress = "unknown",
-                    FirstSeen = DateTime.UtcNow,
-                    LastSeen = DateTime.UtcNow,
-                    OnlineStatus = PeerOnlineStatus.Unknown
-                };
-
-                _db.Peers.Add(peer);
-                await _db.SaveChangesAsync();
-
-                return peer.PeerId;
-            }
-            finally
-            {
-                _dbLock.Release();
-            }
-        }
-
-
-
-        // =====================
-        // Messaging logic
-        // =====================
-
         
-
-
-        private static string BuildConversationKey(string a, string b)
-            => string.CompareOrdinal(a, b) < 0
-                ? $"{a}|{b}"
-                : $"{b}|{a}";
     }
 }

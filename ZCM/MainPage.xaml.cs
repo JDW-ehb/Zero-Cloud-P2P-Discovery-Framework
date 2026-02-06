@@ -30,7 +30,6 @@ namespace ZCM
 
             var db = ServiceHelper.GetService<ServiceDBContext>();
             var peer = ServiceHelper.GetService<ZcspPeer>();
-            ServiceDbSeeder.Seed(db, peer.PeerId);
 
             BindingContext = new MainViewModel(db);
 
