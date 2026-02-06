@@ -1,7 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.Maui.Dispatching;
+﻿using Microsoft.Maui.Dispatching;
 using System.Collections.ObjectModel;
-using System.Net.Sockets;
 using System.Windows.Input;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
@@ -13,9 +11,9 @@ public class MessagingViewModel : BindableObject
 {
     private readonly ZcspPeer _peer;
     private readonly MessagingService _messaging;
-    private readonly ServiceDBContext _db;
-    private string? _activeProtocolPeerId;
+    private readonly IChatQueryService _chatQueries;
 
+    private string? _activeProtocolPeerId;
 
     // =====================
     // UI STATE
@@ -25,34 +23,21 @@ public class MessagingViewModel : BindableObject
     public bool IsHosting
     {
         get => _isHosting;
-        set
-        {
-            _isHosting = value;
-            OnPropertyChanged();
-        }
+        set { _isHosting = value; OnPropertyChanged(); }
     }
 
     private bool _isConnected;
     public bool IsConnected
     {
         get => _isConnected;
-        set
-        {
-            _isConnected = value;
-            OnPropertyChanged();
-        }
+        set { _isConnected = value; OnPropertyChanged(); }
     }
-
 
     private string _statusMessage = "Idle";
     public string StatusMessage
     {
         get => _statusMessage;
-        set
-        {
-            _statusMessage = value;
-            OnPropertyChanged();
-        }
+        set { _statusMessage = value; OnPropertyChanged(); }
     }
 
     public ObservableCollection<PeerNode> AvailablePeers { get; } = new();
@@ -77,20 +62,13 @@ public class MessagingViewModel : BindableObject
         }
     }
 
-
-
-
     public ObservableCollection<ChatMessage> Messages { get; } = new();
 
     private string _outgoingMessage = string.Empty;
     public string OutgoingMessage
     {
         get => _outgoingMessage;
-        set
-        {
-            _outgoingMessage = value;
-            OnPropertyChanged();
-        }
+        set { _outgoingMessage = value; OnPropertyChanged(); }
     }
 
     // =====================
@@ -108,13 +86,11 @@ public class MessagingViewModel : BindableObject
     public MessagingViewModel(
         ZcspPeer peer,
         MessagingService messaging,
-        ServiceDBContext db)
+        IChatQueryService chatQueries)
     {
         _peer = peer;
         _messaging = messaging;
-        _db = db;
-
-        LoadPeers();
+        _chatQueries = chatQueries;
 
         HostCommand = new Command(async () =>
         {
@@ -127,12 +103,11 @@ public class MessagingViewModel : BindableObject
                 StatusMessage = "Hosting started on port 5555";
 
                 _ = Task.Run(() =>
-                        _peer.StartHostingAsync(
-                            5555,
-                            name => name == _messaging.ServiceName ? _messaging : null
-                        )
-                    );
-
+                    _peer.StartHostingAsync(
+                        5555,
+                        name => name == _messaging.ServiceName ? _messaging : null
+                    )
+                );
             }
             catch (Exception ex)
             {
@@ -162,9 +137,10 @@ public class MessagingViewModel : BindableObject
                 );
 
                 StatusMessage = $"Connected to {SelectedPeer.HostName}";
-                IsConnected = true;   // THIS is the key line
-                SelectedPeer = SelectedPeer; // forces UI state sync
+                IsConnected = true;
 
+                // Keep the "active session peer" consistent
+                _activeProtocolPeerId = SelectedPeer.ProtocolPeerId;
             }
             catch (Exception ex)
             {
@@ -172,7 +148,6 @@ public class MessagingViewModel : BindableObject
                 IsConnected = false;
             }
         });
-
 
         SendMessageCommand = new Command(async () =>
         {
@@ -187,29 +162,21 @@ public class MessagingViewModel : BindableObject
         {
             MainThread.BeginInvokeOnMainThread(() =>
             {
-                // decide who "the other side" is for this message
-                var otherParty =
-                    msg.FromPeer == _peer.PeerId ? msg.ToPeer :
-                    msg.ToPeer == _peer.PeerId ? msg.FromPeer :
-                    msg.FromPeer; // fallback
-
-                // if we don't have an active session peer yet, adopt this one
-                _activeProtocolPeerId ??= otherParty;
-
-                // show only messages for the active session peer
-                if (otherParty != _activeProtocolPeerId)
+                if (_activeProtocolPeerId == null)
                     return;
 
-                // ensure UI selection matches session (optional but nice)
+                // Only show messages for the currently active conversation
+                if (msg.FromPeer != _activeProtocolPeerId &&
+                    msg.ToPeer != _activeProtocolPeerId)
+                    return;
+
+                // Ensure UI selection matches session (optional but nice)
                 if (SelectedPeer == null || SelectedPeer.ProtocolPeerId != _activeProtocolPeerId)
                     SelectedPeer = AvailablePeers.FirstOrDefault(p => p.ProtocolPeerId == _activeProtocolPeerId);
 
                 Messages.Add(msg);
             });
         };
-
-
-
 
         _messaging.SessionStarted += remoteProtocolPeerId =>
         {
@@ -218,7 +185,7 @@ public class MessagingViewModel : BindableObject
                 _activeProtocolPeerId = remoteProtocolPeerId;
 
                 // refresh list (in case discovery just added them)
-                LoadPeers();
+                await LoadPeersAsync();
 
                 // auto-select the peer that matches the session
                 SelectedPeer = AvailablePeers.FirstOrDefault(p => p.ProtocolPeerId == remoteProtocolPeerId);
@@ -228,14 +195,11 @@ public class MessagingViewModel : BindableObject
                     ? $"Connected to {SelectedPeer!.HostName}"
                     : $"Connected (unknown peer: {remoteProtocolPeerId})";
 
-                // optionally: load history immediately so session messages stack on top
+                // load history so session messages stack on top
                 if (SelectedPeer != null)
                     await LoadChatHistoryAsync(SelectedPeer);
             });
         };
-
-
-
 
         _messaging.SessionClosed += () =>
         {
@@ -247,22 +211,17 @@ public class MessagingViewModel : BindableObject
             });
         };
 
-
+        // Initial load
+        _ = LoadPeersAsync();
     }
 
     // =====================
     // HELPERS
     // =====================
 
-    private void LoadPeers()
+    private async Task LoadPeersAsync()
     {
-        var peers = _db.Peers
-            .Where(p => true)
-            .OrderByDescending(p => p.LastSeen)
-            .ToList();
-
-
-
+        var peers = await _chatQueries.GetPeersAsync();
         var previouslySelectedPeerId = SelectedPeer?.PeerId;
 
         AvailablePeers.Clear();
@@ -270,60 +229,29 @@ public class MessagingViewModel : BindableObject
             AvailablePeers.Add(peer);
 
         if (previouslySelectedPeerId != null)
-        {
-            SelectedPeer = AvailablePeers
-                .FirstOrDefault(p => p.PeerId == previouslySelectedPeerId);
-        }
+            SelectedPeer = AvailablePeers.FirstOrDefault(p => p.PeerId == previouslySelectedPeerId);
     }
-
 
     private async Task LoadChatHistoryAsync(PeerNode peer)
     {
-        var localPeerGuid = await _db.Peers
-            .Where(p => p.IsLocal)
-            .Select(p => p.PeerId)
-            .SingleAsync();
-
-
-        if (localPeerGuid == Guid.Empty)
+        var localPeerId = await _chatQueries.GetLocalPeerIdAsync();
+        if (localPeerId is null)
         {
-            // No local peer record yet, no history possible
             Messages.Clear();
             return;
         }
 
-        var remotePeerGuid = peer.PeerId;
-
-
-        var history = await _db.Messages
-            .Where(m =>
-                (m.FromPeerId == localPeerGuid && m.ToPeerId == remotePeerGuid) ||
-                (m.FromPeerId == remotePeerGuid && m.ToPeerId == localPeerGuid))
-            .OrderBy(m => m.Timestamp)
-            .ToListAsync();
+        var history = await _chatQueries.GetHistoryAsync(localPeerId.Value, peer.PeerId);
 
         Messages.Clear();
 
-        foreach (var msg in history)
+        foreach (var chatMessage in ChatMessageMapper.FromHistoryList(
+                     history,
+                     localPeerId.Value,
+                     _peer.PeerId,
+                     peer.ProtocolPeerId))
         {
-            var isOutgoing = msg.FromPeerId == localPeerGuid;
-
-            var chatMessage = isOutgoing
-            ? ChatMessageMapper.Outgoing(
-                _peer.PeerId,
-                peer.ProtocolPeerId,
-                msg)
-            : ChatMessageMapper.Incoming(
-                peer.ProtocolPeerId,
-                _peer.PeerId,
-                msg);
-
             Messages.Add(chatMessage);
-
         }
-
-
     }
-
-
 }

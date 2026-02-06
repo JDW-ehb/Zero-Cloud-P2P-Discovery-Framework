@@ -63,4 +63,15 @@ public sealed class MessageRepository : IMessageRepository
 
         return entity;
     }
+
+    public async Task<List<MessageEntity>> GetConversationAsync(Guid localPeerId, Guid remotePeerId)
+    {
+        return await _db.Messages
+            .Where(m =>
+                (m.FromPeerId == localPeerId && m.ToPeerId == remotePeerId) ||
+                (m.FromPeerId == remotePeerId && m.ToPeerId == localPeerId))
+            .OrderBy(m => m.Timestamp)
+            .ToListAsync();
+    }
+
 }

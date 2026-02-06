@@ -8,50 +8,46 @@ public static class ChatMessageMapper
         string localProtocolPeerId,
         string remoteProtocolPeerId,
         MessageEntity entity)
-    {
-        return new ChatMessage(
+        => new(
             fromPeer: localProtocolPeerId,
             toPeer: remoteProtocolPeerId,
             content: entity.Content,
             direction: MessageDirection.Outgoing,
             timestamp: entity.Timestamp
         );
-    }
 
     public static ChatMessage Incoming(
         string fromProtocolPeerId,
         string toProtocolPeerId,
         MessageEntity entity)
-    {
-        return new ChatMessage(
+        => new(
             fromPeer: fromProtocolPeerId,
             toPeer: toProtocolPeerId,
             content: entity.Content,
             direction: MessageDirection.Incoming,
             timestamp: entity.Timestamp
         );
-    }
 
     public static ChatMessage FromHistory(
         MessageEntity entity,
+        Guid localPeerGuid,
         string localProtocolPeerId,
         string remoteProtocolPeerId)
     {
-        var isOutgoing = entity.FromPeerId != Guid.Empty &&
-                         entity.FromPeerId == entity.ToPeerId
-            ? false
-            : false; // placeholder, real logic lives in ViewModel
+        var isOutgoing = entity.FromPeerId == localPeerGuid;
 
-        // This method assumes the caller already knows
-        // which peer is local vs remote.
-        // That keeps protocol concerns out of the mapper.
+        return isOutgoing
+            ? Outgoing(localProtocolPeerId, remoteProtocolPeerId, entity)
+            : Incoming(remoteProtocolPeerId, localProtocolPeerId, entity);
+    }
 
-        return new ChatMessage(
-            fromPeer: localProtocolPeerId,
-            toPeer: remoteProtocolPeerId,
-            content: entity.Content,
-            direction: MessageDirection.Outgoing,
-            timestamp: entity.Timestamp
-        );
+    public static IEnumerable<ChatMessage> FromHistoryList(
+        IEnumerable<MessageEntity> history,
+        Guid localPeerGuid,
+        string localProtocolPeerId,
+        string remoteProtocolPeerId)
+    {
+        foreach (var msg in history)
+            yield return FromHistory(msg, localPeerGuid, localProtocolPeerId, remoteProtocolPeerId);
     }
 }

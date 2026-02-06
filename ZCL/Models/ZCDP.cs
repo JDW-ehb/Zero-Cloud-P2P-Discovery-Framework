@@ -44,6 +44,11 @@ namespace ZCL.Models
                     m.ToPeerId,
                     m.Timestamp
                 });
+            modelBuilder.Entity<PeerNode>()
+            .HasIndex(p => p.IsLocal)
+            .IsUnique()
+            .HasFilter("\"IsLocal\" = 1");
+
 
             base.OnModelCreating(modelBuilder);
         }

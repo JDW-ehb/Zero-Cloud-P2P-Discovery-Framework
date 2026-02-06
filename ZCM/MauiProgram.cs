@@ -11,6 +11,8 @@ using ZCL.Protocol.ZCSP.Sessions;
 using ZCL.Repositories.Messages;
 using ZCL.Repositories.Peers;
 using ZCL.Services.Messaging;
+using ZCM.Pages;
+using ZCM.ViewModels;
 
 
 namespace ZCM
@@ -63,6 +65,10 @@ namespace ZCM
 
             builder.Services.AddScoped<IMessageRepository, MessageRepository>();
             builder.Services.AddScoped<IPeerRepository, PeerRepository>();
+            builder.Services.AddScoped<IChatQueryService, ChatQueryService>();
+            builder.Services.AddTransient<MessagingViewModel>();
+            builder.Services.AddTransient<MessagingPage>();
+
 
 
             builder.Services.AddSingleton(sp =>

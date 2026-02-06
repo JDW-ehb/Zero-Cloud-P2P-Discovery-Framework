@@ -11,8 +11,9 @@ public interface IPeerRepository
         bool isLocal = false);
     Task<PeerNode> GetOrCreateAsync(string protocolPeerId);
 
+    Task<Guid?> GetLocalPeerIdAsync(); Task<PeerNode?>
 
-    Task<PeerNode?> GetByProtocolIdAsync(string protocolPeerId);
+    GetByProtocolIdAsync(string protocolPeerId);
 
     Task<PeerNode> GetLocalPeerAsync();
 

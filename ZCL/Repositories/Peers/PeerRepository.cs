@@ -123,23 +123,62 @@ public sealed class PeerRepository : IPeerRepository
 
     public async Task EnsureLocalPeerAsync(string localProtocolPeerId)
     {
-        if (await _db.Peers.AnyAsync(p => p.IsLocal))
-            return;
-
-        var now = DateTime.UtcNow;
-
-        _db.Peers.Add(new PeerNode
+        await _lock.WaitAsync();
+        try
         {
-            PeerId = Guid.NewGuid(),
-            ProtocolPeerId = localProtocolPeerId,
-            HostName = localProtocolPeerId,
-            IpAddress = "127.0.0.1",
-            FirstSeen = now,
-            LastSeen = now,
-            OnlineStatus = PeerOnlineStatus.Online,
-            IsLocal = true
-        });
+            var locals = await _db.Peers
+                .Where(p => p.IsLocal)
+                .OrderByDescending(p => p.LastSeen)
+                .ToListAsync();
 
-        await _db.SaveChangesAsync();
+            if (locals.Count == 0)
+            {
+                var now = DateTime.UtcNow;
+
+                _db.Peers.Add(new PeerNode
+                {
+                    PeerId = Guid.NewGuid(),
+                    ProtocolPeerId = localProtocolPeerId,
+                    HostName = localProtocolPeerId,
+                    IpAddress = "127.0.0.1",
+                    FirstSeen = now,
+                    LastSeen = now,
+                    OnlineStatus = PeerOnlineStatus.Online,
+                    IsLocal = true
+                });
+
+                await _db.SaveChangesAsync();
+                return;
+            }
+
+            // Ensure the newest remains local, all others are demoted.
+            var keep = locals[0];
+            if (keep.ProtocolPeerId != localProtocolPeerId)
+            {
+                keep.ProtocolPeerId = localProtocolPeerId;
+                keep.HostName = localProtocolPeerId;
+            }
+
+            foreach (var extra in locals.Skip(1))
+                extra.IsLocal = false;
+
+            await _db.SaveChangesAsync();
+        }
+        finally
+        {
+            _lock.Release();
+        }
     }
+
+
+    public async Task<Guid?> GetLocalPeerIdAsync()
+    {
+        return await _db.Peers
+            .Where(p => p.IsLocal)
+            .OrderByDescending(p => p.LastSeen)
+            .Select(p => (Guid?)p.PeerId)
+            .FirstOrDefaultAsync();
+    }
+
+
 }
