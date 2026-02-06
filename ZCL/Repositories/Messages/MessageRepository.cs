@@ -37,15 +37,25 @@ public sealed class MessageRepository : IMessageRepository
             fromPeerId,
             toPeerId,
             content,
-            MessageStatus.Delivered);
+            MessageStatus.Received);
     }
 
-    private async Task<MessageEntity> StoreAsync(
-        Guid sessionId,
-        Guid fromPeerId,
-        Guid toPeerId,
-        string content,
-        MessageStatus status)
+    public Task<MessageEntity> StoreAsync(
+    Guid sessionId,
+    Guid fromPeerId,
+    Guid toPeerId,
+    string content,
+    MessageStatus status)
+    {
+        return StoreInternalAsync(sessionId, fromPeerId, toPeerId, content, status);
+    }
+
+    private async Task<MessageEntity> StoreInternalAsync(
+    Guid sessionId,
+    Guid fromPeerId,
+    Guid toPeerId,
+    string content,
+    MessageStatus status)
     {
         var entity = new MessageEntity
         {
@@ -64,14 +74,14 @@ public sealed class MessageRepository : IMessageRepository
         return entity;
     }
 
-    public async Task<List<MessageEntity>> GetConversationAsync(Guid localPeerId, Guid remotePeerId)
+    public async Task UpdateStatusAsync(Guid messageId, MessageStatus status)
     {
-        return await _db.Messages
-            .Where(m =>
-                (m.FromPeerId == localPeerId && m.ToPeerId == remotePeerId) ||
-                (m.FromPeerId == remotePeerId && m.ToPeerId == localPeerId))
-            .OrderBy(m => m.Timestamp)
-            .ToListAsync();
+        var msg = await _db.Messages.FirstOrDefaultAsync(m => m.MessageId == messageId);
+        if (msg == null)
+            return;
+
+        msg.Status = status;
+        await _db.SaveChangesAsync();
     }
 
 }

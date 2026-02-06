@@ -15,7 +15,13 @@ public interface IMessageRepository
         Guid toPeerId,
         string content);
 
-    Task<List<MessageEntity>> GetConversationAsync(
-        Guid localPeerId,
-        Guid remotePeerId);
+    Task<MessageEntity> StoreAsync(
+    Guid sessionId,
+    Guid fromPeerId,
+    Guid toPeerId,
+    string content,
+    MessageStatus status);
+
+    Task UpdateStatusAsync(Guid messageId, MessageStatus status);
+
 }

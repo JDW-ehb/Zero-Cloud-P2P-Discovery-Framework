@@ -13,7 +13,7 @@ public enum MessageDirection
 public enum MessageStatus
 {
     Sent = 0,
-    Delivered = 1,
+    Received = 1,
     Failed = 2
 }
 
