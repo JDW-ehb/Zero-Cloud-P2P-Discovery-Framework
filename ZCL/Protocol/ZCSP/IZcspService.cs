@@ -3,7 +3,7 @@ using System.IO;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 
-namespace ZCL.Protocols.ZCSP
+namespace ZCL.Protocol.ZCSP
 {
     public interface IZcspService
     {

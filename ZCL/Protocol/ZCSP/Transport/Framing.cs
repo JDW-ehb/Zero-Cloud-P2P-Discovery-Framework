@@ -2,7 +2,7 @@
 using System.Net.Sockets;
 using System.Threading.Tasks;
 
-namespace ZCL.Protocols.ZCSP.Transport
+namespace ZCL.Protocol.ZCSP.Transport
 {
     internal static class Framing
     {

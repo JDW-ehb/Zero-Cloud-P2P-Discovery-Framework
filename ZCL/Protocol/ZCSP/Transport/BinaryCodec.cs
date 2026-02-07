@@ -2,7 +2,7 @@
 using System.IO;
 using System.Text;
 
-namespace ZCL.Protocols.ZCSP.Protocol
+namespace ZCL.Protocol.ZCSP.Protocol
 {
     internal static class BinaryCodec
     {

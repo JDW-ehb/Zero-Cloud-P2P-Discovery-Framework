@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 
-namespace ZCL.Protocols.ZCSP.Sessions
+namespace ZCL.Protocol.ZCSP.Sessions
 {
     public sealed class SessionRegistry
     {

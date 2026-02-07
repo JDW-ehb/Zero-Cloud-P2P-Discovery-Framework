@@ -5,9 +5,16 @@ using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using System.Net;
-
 using ZCL.API;
 using ZCL.Models;
+using ZCL.Protocol.ZCSP;
+using ZCL.Protocol.ZCSP.Sessions;
+using ZCL.Repositories.Messages;
+using ZCL.Repositories.Peers;
+using ZCL.Services.Messaging;
+using ZCM.Pages;
+using ZCM.ViewModels;
+
 
 namespace ZCM
 {
@@ -63,6 +70,24 @@ namespace ZCM
             builder.Logging.AddDebug();
 #endif
             var app = builder.Build();
+
+            using (var scope = app.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+                var peers = scope.ServiceProvider.GetRequiredService<IPeerRepository>();
+                var peer = scope.ServiceProvider.GetRequiredService<ZcspPeer>();
+
+                db.Database.EnsureCreated();
+
+                ServiceDbSeeder
+                    .SeedAsync(peers, peer.PeerId)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+
+
+
+
 
             ServiceHelper.Initialize(app.Services);
 

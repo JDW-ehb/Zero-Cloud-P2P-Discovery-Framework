@@ -266,10 +266,10 @@ namespace ZCL.API
 
                                             Service service = new Service
                                             {
-                                                Name = reader.ReadString(),
-                                                Address = reader.ReadString(),
-                                                Port = reader.ReadUInt16(),
-                                                PeerRefId = peer.PeerId,
+                                                name = reader.ReadString(),
+                                                address = reader.ReadString(),
+                                                port = reader.ReadUInt16(),
+                                                peerGuid = header.peerGuid,
                                             };
 
                                             // TODO(luca): This is really annoying, what I would want is that the dbContext does not fail when
