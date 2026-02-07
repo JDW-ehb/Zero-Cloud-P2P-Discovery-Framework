@@ -68,22 +68,54 @@ namespace ZCL.API
 
         public static ServiceDBContext CreateDBContext(string dbPath)
         {
-            ServiceDBContext result;
-
             var optionsBuilder = new DbContextOptionsBuilder<ServiceDBContext>();
             optionsBuilder.UseSqlite($"Data Source={dbPath}");
-            result = new ServiceDBContext(optionsBuilder.Options);
 
-            result.Database.EnsureCreated();
+            var db = new ServiceDBContext(optionsBuilder.Options);
+            db.Database.EnsureCreated();
 
-            return result;
+            return db;
+        }
+
+        // NOTE(luca): ZCL is a class library, so we can't use Microsoft.Maui.Storage.Preferences here.
+        // Persist a stable peer guid using a small file stored next to the DB file.
+        private static Guid GetOrCreateLocalPeerGuid(string dbPath)
+        {
+            try
+            {
+                var dbDir = Path.GetDirectoryName(dbPath);
+                if (string.IsNullOrWhiteSpace(dbDir))
+                    dbDir = AppContext.BaseDirectory;
+
+                var guidPath = Path.Combine(dbDir, "zc_peer_guid.txt");
+
+                if (File.Exists(guidPath))
+                {
+                    var text = File.ReadAllText(guidPath).Trim();
+                    if (Guid.TryParse(text, out var existing))
+                        return existing;
+                }
+
+                var created = Guid.NewGuid();
+                Directory.CreateDirectory(dbDir);
+                File.WriteAllText(guidPath, created.ToString());
+                return created;
+            }
+            catch
+            {
+                // Worst case fallback: still run, but peer id will change each launch
+                return Guid.NewGuid();
+            }
         }
 
         public static void StartAndRun(IPAddress multicastAddress, int port, string dbPath, DataStore store)
         {
             ulong MessageID = 0;
             ushort ZCDPProtocolVersion = Config.ZCDPProtocolVersion;
-            Guid peerGuid = Guid.Parse("2c0dbe0c-91c4-46cf-92e4-cf43a614a914");
+
+            // NOTE(luca): If you hardcode the same Guid on multiple machines, they will appear as ONE peer.
+            // Persist a unique id per installation so each PC is discoverable.
+            Guid peerGuid = GetOrCreateLocalPeerGuid(dbPath);
 
             Socket? sender;
             // Create sender
@@ -112,47 +144,50 @@ namespace ZCL.API
                     // NOTE(luca): We should not receive messages from ourself.
                     listener.MulticastLoopback = false;
 
-                    IPAddress? defaultInterfaceAddress = null;
-                    // NOTE(luca): The default interface which we bind to might be wrong, therefore we must
-                    // find the correct one i.e., the one used for the computer to access remote networks.
+                    // NOTE(luca): The default interface which we bind to might be wrong.
+                    // On Windows you often have multiple "Up" interfaces (Wi-Fi, Ethernet, VPN, Hyper-V, VMware, WSL, ...).
+                    // If we join multicast on the wrong one, we will NEVER receive other peers.
+                    // So we join the multicast group on ALL IPv4 interfaces that are up (except loopback).
                     {
-                        var defaultInterface = NetworkInterface.GetAllNetworkInterfaces()
-                            .Where(networkInterface => networkInterface.OperationalStatus == OperationalStatus.Up)
-                            .Where(networkInterface => networkInterface.NetworkInterfaceType != NetworkInterfaceType.Loopback)
-                            .OrderBy(networkInterface =>
-                            {
-                                var props = networkInterface.GetIPProperties();
-                                return ((props.GatewayAddresses.Count == 0) ? 1 : 0);
-                            })
-                            .FirstOrDefault();
+                        var joinedAtLeastOne = false;
 
-                        if (defaultInterface != null)
+                        foreach (var ni in NetworkInterface.GetAllNetworkInterfaces()
+                            .Where(n => n.OperationalStatus == OperationalStatus.Up)
+                            .Where(n => n.NetworkInterfaceType != NetworkInterfaceType.Loopback))
                         {
-                            var ipProps = defaultInterface.GetIPProperties();
-                            foreach (UnicastIPAddressInformation unicastAddress in ipProps.UnicastAddresses)
+                            var ipProps = ni.GetIPProperties();
+
+                            foreach (var ua in ipProps.UnicastAddresses)
                             {
-                                if (unicastAddress.Address.AddressFamily == AddressFamily.InterNetwork)
+                                if (ua.Address.AddressFamily == AddressFamily.InterNetwork)
                                 {
-                                    defaultInterfaceAddress = unicastAddress.Address;
+                                    try
+                                    {
+                                        listener.JoinMulticastGroup(multicastAddress, ua.Address);
+                                        Debug.WriteLine($"Joined multicast on {ni.Name} ({ua.Address})");
+                                        joinedAtLeastOne = true;
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Debug.WriteLine($"Failed join on {ni.Name} ({ua.Address}): {ex.Message}");
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    if (defaultInterfaceAddress != null)
-                    {
-                        listener.JoinMulticastGroup(multicastAddress, defaultInterfaceAddress);
-                    }
-                    else
-                    {
-                        // TODO(luca): Log this.
-                        listener.JoinMulticastGroup(multicastAddress);
+                        if (!joinedAtLeastOne)
+                        {
+                            // Fallback: join without specifying interface (may still work on simple setups)
+                            Debug.WriteLine("No IPv4 interfaces joined multicast explicitly; falling back to default join.");
+                            listener.JoinMulticastGroup(multicastAddress);
+                        }
                     }
 
                     listener.Client.Bind(new IPEndPoint(IPAddress.Any, port));
 
                     Debug.WriteLine($"Listening for multicast on {multicastAddress}:{port}");
                     Debug.WriteLine($"Local endpoint: {listener.Client.LocalEndPoint}");
+                    Debug.WriteLine($"Local PeerGuid: {peerGuid}");
                 }
                 catch (Exception e)
                 {
@@ -200,6 +235,14 @@ namespace ZCL.API
                                 header.PeerGuid = new Guid(guidBytes);
                             }
 
+                            // NOTE(luca): We shouldn't receive our own multicast if MulticastLoopback is false,
+                            // but some stacks still behave weird. Ignore self just in case.
+                            if (header.PeerGuid == peerGuid)
+                            {
+                                Debug.WriteLine(">>> Ignored self announce.");
+                                goto AfterReceive;
+                            }
+
                             Debug.WriteLine($"\n>>> Received from {remoteEndPoint} ({header.PeerGuid}):");
                             Debug.WriteLine($">>> Length: {bytes.Length} bytes");
 
@@ -242,6 +285,11 @@ namespace ZCL.API
                                                 memoryPeer.IpAddress = peer.IpAddress;
                                                 memoryPeer.LastSeen = now;
                                                 memoryPeer.OnlineStatus = peer.OnlineStatus;
+                                            }
+                                            else
+                                            {
+                                                // NOTE(luca): If it exists in DB but not yet in memory, add it now.
+                                                store.Peers.Add(peer);
                                             }
                                         }
                                         else
@@ -317,6 +365,9 @@ namespace ZCL.API
                                         break;
                                     }
                             }
+
+                        AfterReceive:
+                            ;
                         }
                         else
                         {

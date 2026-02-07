@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using ZCL.API;
 using ZCL.Models;
 
@@ -6,10 +8,6 @@ namespace ZCM;
 
 public partial class DiscoveryPage : ContentPage
 {
-    private readonly DataStore _store;
-
-    private IDispatcherTimer? _timer;
-
     public static string ToTimeAgo(DateTime utcTime)
     {
         var diff = DateTime.UtcNow - utcTime;
@@ -36,10 +34,10 @@ public partial class DiscoveryPage : ContentPage
     }
 
     // UI-friendly wrapper: keeps PeerNode clean (EF entity) and still gives you "LastSeenSeconds"
-    public sealed class PeerNodeView
+    // + implements INotifyPropertyChanged so the UI can update without rebuilding the list.
+    public sealed class PeerNodeView : INotifyPropertyChanged
     {
         public PeerNode Peer { get; }
-        public string LastSeenSeconds => ToTimeAgo(Peer.LastSeen);
 
         // Convenience properties for XAML bindings if you used old names
         public string HostName => Peer.HostName;
@@ -47,10 +45,35 @@ public partial class DiscoveryPage : ContentPage
         public DateTime LastSeen => Peer.LastSeen;
         public string ProtocolPeerId => Peer.ProtocolPeerId;
 
+        public string LastSeenSeconds => ToTimeAgo(Peer.LastSeen);
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
         public PeerNodeView(PeerNode peer) => Peer = peer;
+
+        public void RefreshTimeAgo()
+            => OnPropertyChanged(nameof(LastSeenSeconds));
+
+        public void RefreshAll()
+        {
+            OnPropertyChanged(nameof(HostName));
+            OnPropertyChanged(nameof(IpAddress));
+            OnPropertyChanged(nameof(LastSeen));
+            OnPropertyChanged(nameof(LastSeenSeconds));
+        }
+
+        private void OnPropertyChanged([CallerMemberName] string? name = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 
+    private readonly DataStore _store;
+    private IDispatcherTimer? _timer;
+
+    // This is what your CollectionView binds to.
     public ObservableCollection<PeerNodeView> Peers { get; } = new();
+
+    // Index by ProtocolPeerId so we can update items in-place (no flicker).
+    private readonly Dictionary<string, PeerNodeView> _index = new();
 
     public DiscoveryPage()
     {
@@ -61,17 +84,24 @@ public partial class DiscoveryPage : ContentPage
         BindingContext = this;
 
         // Initial fill
-        RefreshPeers();
+        SyncFromStore();
     }
 
     protected override void OnAppearing()
     {
         base.OnAppearing();
 
-        // Refresh every second so "time ago" updates + new peers appear
+        // Tick: update time-ago labels + sync with discovery changes.
         _timer = Dispatcher.CreateTimer();
         _timer.Interval = TimeSpan.FromSeconds(1);
-        _timer.Tick += (_, __) => RefreshPeers();
+        _timer.Tick += (_, __) =>
+        {
+            SyncFromStore();
+
+            // Only refresh the derived "time ago" text (no list rebuild).
+            foreach (var v in Peers)
+                v.RefreshTimeAgo();
+        };
         _timer.Start();
     }
 
@@ -86,14 +116,40 @@ public partial class DiscoveryPage : ContentPage
         }
     }
 
-    private void RefreshPeers()
+    private void SyncFromStore()
     {
-        // Run on UI thread (timer already is, but safe)
+        // Ensure we're on UI thread (timer already is, but safe).
         MainThread.BeginInvokeOnMainThread(() =>
         {
-            Peers.Clear();
-            foreach (var p in _store.Peers.OrderByDescending(p => p.LastSeen))
-                Peers.Add(new PeerNodeView(p));
+            // Add/update
+            foreach (var peer in _store.Peers.OrderByDescending(p => p.LastSeen))
+            {
+                var key = peer.ProtocolPeerId;
+
+                if (_index.TryGetValue(key, out var existing))
+                {
+                    // PeerNode is a reference type; discovery updates fields on the same instance.
+                    // We just need to tell the UI to refresh the displayed fields.
+                    existing.RefreshAll();
+                }
+                else
+                {
+                    var view = new PeerNodeView(peer);
+                    _index[key] = view;
+                    Peers.Add(view);
+                }
+            }
+
+            // Remove peers that disappeared (optional, but keeps UI clean)
+            for (int i = Peers.Count - 1; i >= 0; i--)
+            {
+                var key = Peers[i].ProtocolPeerId;
+                if (_store.Peers.All(p => p.ProtocolPeerId != key))
+                {
+                    _index.Remove(key);
+                    Peers.RemoveAt(i);
+                }
+            }
         });
     }
 
