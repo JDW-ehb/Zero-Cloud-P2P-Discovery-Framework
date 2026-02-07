@@ -1,7 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Logging;
-using System;
 using System.Net;
 using ZCL.API;
 using ZCL.Models;
@@ -13,14 +12,14 @@ using ZCL.Services.Messaging;
 
 namespace ZCM
 {
-    // NOTE(luca): Helper to access services from the builder 
+    // NOTE(luca): Helper to access services from the builder
     public static class ServiceHelper
     {
-        public static IServiceProvider Services { get; private set; }
+        public static IServiceProvider Services { get; private set; } = default!;
 
         public static void Initialize(IServiceProvider serviceProvider) => Services = serviceProvider;
 
-        public static T GetService<T>() => Services.GetService<T>();
+        public static T GetService<T>() => Services.GetService<T>()!;
     }
 
     public class ServiceDBContextFactory : IDesignTimeDbContextFactory<ServiceDBContext>
@@ -71,15 +70,8 @@ namespace ZCM
             // ZCSP peer + sessions
             builder.Services.AddSingleton<SessionRegistry>();
 
-            builder.Services.AddSingleton(sp =>
-            {
-                var sessions = sp.GetRequiredService<SessionRegistry>();
-
-                // IMPORTANT:
-                // If you want discovery + chat to share identity, prefer a GUID string here.
-                // For now this keeps your original behavior.
-                return new ZcspPeer(Config.peerName, sessions);
-            });
+            // ZcspPeer is singleton and resolves repo via IServiceScopeFactory internally
+            builder.Services.AddSingleton<ZcspPeer>();
 
             builder.Services.AddScoped<MessagingService>();
 
@@ -88,21 +80,11 @@ namespace ZCM
 #endif
             var app = builder.Build();
 
-            // Seed / ensure DB structure once at startup
+            // Ensure DB exists (NO SEEDING, NO POLLUTION)
             using (var scope = app.Services.CreateScope())
             {
                 var scopedDb = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
-                var peersRepo = scope.ServiceProvider.GetRequiredService<IPeerRepository>();
-                var zcspPeer = scope.ServiceProvider.GetRequiredService<ZcspPeer>();
-
                 scopedDb.Database.EnsureCreated();
-
-                peersRepo.EnsureLocalPeerAsync(zcspPeer.PeerId).GetAwaiter().GetResult();
-
-                ServiceDbSeeder
-                    .SeedAsync(peersRepo, zcspPeer.PeerId)
-                    .GetAwaiter()
-                    .GetResult();
             }
 
             ServiceHelper.Initialize(app.Services);
@@ -112,7 +94,7 @@ namespace ZCM
 
             var store = ServiceHelper.GetService<DataStore>();
 
-            // Initialize store
+            // Initialize store (load any existing peers)
             {
                 var peersFromDb = db.PeerNodes.ToList();
                 foreach (PeerNode peer in peersFromDb)

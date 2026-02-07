@@ -1,4 +1,7 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿// ===========================
+// ZCL/API/ZCDP.cs (CORRECTED)
+// ===========================
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
@@ -9,6 +12,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 using ZCL.Models;
+using ZCL.Repositories.Peers;
 
 namespace ZCL.API
 {
@@ -81,31 +85,15 @@ namespace ZCL.API
         // Persist a stable peer guid using a small file stored next to the DB file.
         private static Guid GetOrCreateLocalPeerGuid(string dbPath)
         {
-            try
-            {
-                var dbDir = Path.GetDirectoryName(dbPath);
-                if (string.IsNullOrWhiteSpace(dbDir))
-                    dbDir = AppContext.BaseDirectory;
+            using var db = CreateDBContext(dbPath);
+            var peersRepo = new PeerRepository(db);
 
-                var guidPath = Path.Combine(dbDir, "zc_peer_guid.txt");
+            var localProtocolPeerId = peersRepo
+                .GetOrCreateLocalProtocolPeerIdAsync(Config.peerName, "127.0.0.1")
+                .GetAwaiter()
+                .GetResult();
 
-                if (File.Exists(guidPath))
-                {
-                    var text = File.ReadAllText(guidPath).Trim();
-                    if (Guid.TryParse(text, out var existing))
-                        return existing;
-                }
-
-                var created = Guid.NewGuid();
-                Directory.CreateDirectory(dbDir);
-                File.WriteAllText(guidPath, created.ToString());
-                return created;
-            }
-            catch
-            {
-                // Worst case fallback: still run, but peer id will change each launch
-                return Guid.NewGuid();
-            }
+            return Guid.Parse(localProtocolPeerId);
         }
 
         public static void StartAndRun(IPAddress multicastAddress, int port, string dbPath, DataStore store)
