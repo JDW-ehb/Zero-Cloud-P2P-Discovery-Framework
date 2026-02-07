@@ -1,21 +1,112 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             x:Class="ZCM.MainPage">
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="ZCM.MainPage"
+    Title="Zero-Cloud"
+    BackgroundColor="#1e1e1e">
 
-    <ScrollView>
+    <Grid ColumnDefinitions="260,*"
+          RowDefinitions="*"
+          Padding="0">
+
+        <!-- ===================== -->
+        <!-- LEFT SIDEBAR -->
+        <!-- ===================== -->
         <VerticalStackLayout
-            Padding="30,0"
-            Spacing="25">
+            Grid.Column="0"
+            Padding="16"
+            Spacing="14"
+            BackgroundColor="#151515">
+
+            <Label
+                Text="Zero-Cloud"
+                FontSize="20"
+                TextColor="White"
+                FontAttributes="Bold" />
 
             <Button
-                x:Name="DiscoveryPageButton"
-                Text="Discovery Page" 
-                SemanticProperties.Hint="Goes to the discovery page"
-                Clicked="DiscoveryPageButton_Clicked"
-                HorizontalOptions="Fill" />
+                Text="LLM"
+                Clicked="LlmButton_Clicked"
+                BackgroundColor="#C9B037"
+                TextColor="Black"
+                CornerRadius="10" />
 
+            <Button
+                Text="MSG"
+                Clicked="MessagingButton_Clicked"
+                BackgroundColor="#2D6CDF"
+                TextColor="White"
+                CornerRadius="10" />
+
+            <Button
+                Text="Share"
+                Clicked="ShareButton_Clicked"
+                BackgroundColor="#27AE60"
+                TextColor="White"
+                CornerRadius="10" />
         </VerticalStackLayout>
-    </ScrollView>
 
+        <!-- ===================== -->
+        <!-- MAIN CONTENT -->
+        <!-- ===================== -->
+        <Grid Grid.Column="1"
+              RowDefinitions="Auto,*"
+              Padding="16">
+
+            <Label
+                Text="Discover"
+                FontSize="18"
+                TextColor="White"
+                FontAttributes="Bold"
+                Margin="0,0,0,12" />
+
+            <CollectionView
+                Grid.Row="1"
+                ItemsSource="{Binding Peers}"
+                SelectionMode="None">
+
+                <CollectionView.ItemsLayout>
+                    <GridItemsLayout Orientation="Vertical" Span="4" />
+                </CollectionView.ItemsLayout>
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Border
+                            Stroke="#2b2b2b"
+                            StrokeThickness="1"
+                            Padding="14"
+                            Margin="8"
+                            BackgroundColor="#212121">
+
+                            <Border.StrokeShape>
+                                <RoundRectangle CornerRadius="14" />
+                            </Border.StrokeShape>
+
+                            <VerticalStackLayout Spacing="10">
+                                <Label
+                                    Text="{Binding HostName}"
+                                    FontSize="16"
+                                    TextColor="White"
+                                    FontAttributes="Bold" />
+
+                                <Label
+                                    Text="{Binding StatusText}"
+                                    FontSize="12"
+                                    TextColor="#CCCCCC" />
+
+                                <Label
+                                    Text="{Binding LastSeenText}"
+                                    FontSize="12"
+                                    TextColor="#999999" />
+                            </VerticalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+
+            </CollectionView>
+
+        </Grid>
+
+    </Grid>
 </ContentPage>
