@@ -31,7 +31,8 @@ public sealed class PeerRepository : IPeerRepository
         {
             var now = DateTime.UtcNow;
 
-            var peer = await _db.Peers
+            // NOTE: DbSet is PeerNodes (not Peers) after replacing Peer -> PeerNode
+            var peer = await _db.PeerNodes
                 .FirstOrDefaultAsync(p => p.ProtocolPeerId == protocolPeerId, ct);
 
             if (peer != null)
@@ -67,7 +68,7 @@ public sealed class PeerRepository : IPeerRepository
                 IsLocal = isLocal
             };
 
-            _db.Peers.Add(peer);
+            _db.PeerNodes.Add(peer);
             await _db.SaveChangesAsync(ct);
 
             return peer;
@@ -80,19 +81,19 @@ public sealed class PeerRepository : IPeerRepository
 
     public Task<PeerNode?> GetByProtocolIdAsync(string protocolPeerId, CancellationToken ct = default)
     {
-        return _db.Peers.FirstOrDefaultAsync(p => p.ProtocolPeerId == protocolPeerId, ct);
+        return _db.PeerNodes.FirstOrDefaultAsync(p => p.ProtocolPeerId == protocolPeerId, ct);
     }
 
     public Task<PeerNode> GetLocalPeerAsync(CancellationToken ct = default)
     {
         // If duplicates exist, this throws. That’s OK if DB constraint exists.
         // Otherwise use OrderByDescending(...).FirstAsync(...) similar to GetLocalPeerIdAsync.
-        return _db.Peers.SingleAsync(p => p.IsLocal, ct);
+        return _db.PeerNodes.SingleAsync(p => p.IsLocal, ct);
     }
 
     public Task<List<PeerNode>> GetAllAsync(CancellationToken ct = default)
     {
-        return _db.Peers
+        return _db.PeerNodes
             .OrderByDescending(p => p.LastSeen)
             .ToListAsync(ct);
     }
@@ -105,7 +106,7 @@ public sealed class PeerRepository : IPeerRepository
         await _lock.WaitAsync(ct);
         try
         {
-            var locals = await _db.Peers
+            var locals = await _db.PeerNodes
                 .Where(p => p.IsLocal)
                 .OrderByDescending(p => p.LastSeen)
                 .ToListAsync(ct);
@@ -114,7 +115,7 @@ public sealed class PeerRepository : IPeerRepository
             {
                 var now = DateTime.UtcNow;
 
-                _db.Peers.Add(new PeerNode
+                _db.PeerNodes.Add(new PeerNode
                 {
                     PeerId = Guid.NewGuid(),
                     ProtocolPeerId = localProtocolPeerId,
@@ -152,7 +153,7 @@ public sealed class PeerRepository : IPeerRepository
 
     public Task<Guid?> GetLocalPeerIdAsync(CancellationToken ct = default)
     {
-        return _db.Peers
+        return _db.PeerNodes
             .Where(p => p.IsLocal)
             .OrderByDescending(p => p.LastSeen)
             .Select(p => (Guid?)p.PeerId)

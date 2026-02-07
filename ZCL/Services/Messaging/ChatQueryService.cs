@@ -14,15 +14,16 @@ public sealed class ChatQueryService : IChatQueryService
 
     public Task<List<PeerNode>> GetPeersAsync()
     {
-        return _db.Peers
+        // NOTE: DbSet is PeerNodes (not Peers) after replacing Peer -> PeerNode
+        return _db.PeerNodes
             .OrderByDescending(p => p.LastSeen)
             .ToListAsync();
     }
 
     public async Task<Guid?> GetLocalPeerIdAsync()
     {
-        // Safe even if there are multiple "local" rows (shouldn't happen, but you've seen it)
-        return await _db.Peers
+        // Safe even if there are multiple "local" rows 
+        return await _db.PeerNodes
             .Where(p => p.IsLocal)
             .OrderByDescending(p => p.LastSeen)
             .Select(p => (Guid?)p.PeerId)

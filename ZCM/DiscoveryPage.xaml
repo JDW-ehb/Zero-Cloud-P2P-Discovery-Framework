@@ -3,24 +3,23 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="ZCM.DiscoveryPage"
              Title="DiscoveryPage">
+
     <VerticalStackLayout>
         <Label 
             Text="Discover"
             FontAttributes="Bold"
             FontSize="40"
-            
-            VerticalOptions="Center" 
-            
+            VerticalOptions="Center"
             HorizontalOptions="Center" />
+
         <Button
-    x:Name="BackButton"
-    Text="Back" 
-    SemanticProperties.Hint="Goes back to the previous page"
-    Clicked="BackButton_Clicked"
-    HorizontalOptions="Fill" />
-        
+            x:Name="BackButton"
+            Text="Back"
+            SemanticProperties.Hint="Goes back to the previous page"
+            Clicked="BackButton_Clicked"
+            HorizontalOptions="Fill" />
+
         <CollectionView ItemsSource="{Binding Peers}">
-            <!-- Grid layout: 4 items per row -->
             <CollectionView.ItemsLayout>
                 <GridItemsLayout Orientation="Vertical" Span="4" />
             </CollectionView.ItemsLayout>
@@ -32,17 +31,14 @@
                             <RoundRectangle CornerRadius="5" />
                         </Border.StrokeShape>
                         <VerticalStackLayout>
-
                             <!-- Peer info -->
-                            <Label Text="{Binding Name}" FontSize="16" FontAttributes="Bold" />
-                            <Label Text="{Binding Address}" FontSize="14" TextColor="Gray" />
+                            <Label Text="{Binding HostName}" FontSize="16" FontAttributes="Bold" />
+                            <Label Text="{Binding IpAddress}" FontSize="14" TextColor="Gray" />
                             <Label Text="{Binding LastSeenSeconds}" FontSize="12" TextColor="DarkGray" />
-
                         </VerticalStackLayout>
                     </Border>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
-
     </VerticalStackLayout>
 </ContentPage>

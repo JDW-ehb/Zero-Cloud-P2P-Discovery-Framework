@@ -1,6 +1,5 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace ZCL.Models;
 
@@ -41,5 +40,3 @@ public class MessageEntity
     public PeerNode? FromPeer { get; set; }
     public PeerNode? ToPeer { get; set; }
 }
-
-

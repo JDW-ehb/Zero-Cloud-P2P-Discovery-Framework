@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
+using Microsoft.EntityFrameworkCore;
 
 namespace ZCL.Models;
 
@@ -10,6 +11,7 @@ public enum PeerOnlineStatus
     Unknown = 2
 }
 
+[Index(nameof(ProtocolPeerId), IsUnique = true)]
 public class PeerNode
 {
     [Key]
@@ -28,5 +30,4 @@ public class PeerNode
 
     public PeerOnlineStatus OnlineStatus { get; set; }
     public bool IsLocal { get; set; }
-
 }
