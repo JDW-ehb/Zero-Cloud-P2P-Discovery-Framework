@@ -79,28 +79,32 @@
                             Margin="8"
                             BackgroundColor="#212121">
 
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer
+                                        Tapped="OnPeerTapped"
+                                        CommandParameter="{Binding .}" />
+                            </Border.GestureRecognizers>
+
                             <Border.StrokeShape>
                                 <RoundRectangle CornerRadius="14" />
                             </Border.StrokeShape>
 
                             <VerticalStackLayout Spacing="10">
-                                <Label
-                                    Text="{Binding HostName}"
-                                    FontSize="16"
-                                    TextColor="White"
-                                    FontAttributes="Bold" />
+                                <Label Text="{Binding HostName}"
+                                       FontSize="16"
+                                       TextColor="White"
+                                       FontAttributes="Bold" />
 
-                                <Label
-                                    Text="{Binding StatusText}"
-                                    FontSize="12"
-                                    TextColor="#CCCCCC" />
+                                <Label Text="{Binding StatusText}"
+                                       FontSize="12"
+                                       TextColor="#CCCCCC" />
 
-                                <Label
-                                    Text="{Binding LastSeenText}"
-                                    FontSize="12"
-                                    TextColor="#999999" />
+                                <Label Text="{Binding LastSeenText}"
+                                       FontSize="12"
+                                       TextColor="#999999" />
                             </VerticalStackLayout>
                         </Border>
+
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
 

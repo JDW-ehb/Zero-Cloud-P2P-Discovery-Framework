@@ -1,3 +1,4 @@
+using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Services.Messaging;
 using ZCM.ViewModels;
@@ -8,18 +9,36 @@ public partial class MessagingPage : ContentPage
 {
     private bool _userNearBottom = true;
 
-    public MessagingPage()
+    private readonly MessagingViewModel _vm;
+
+    public MessagingPage(PeerNode? openWithPeer = null)
     {
         InitializeComponent();
 
-        var vm = new MessagingViewModel(
+        _vm = new MessagingViewModel(
             ServiceHelper.GetService<ZcspPeer>(),
             ServiceHelper.GetService<MessagingService>(),
             ServiceHelper.GetService<IChatQueryService>());
 
-        vm.MessagesChanged += ScrollToBottomIfAllowed;
+        _vm.MessagesChanged += ScrollToBottomIfAllowed;
+        BindingContext = _vm;
 
-        BindingContext = vm;
+        if (openWithPeer != null)
+        {
+            Dispatcher.Dispatch(async () =>
+            {
+                var convo = _vm.Conversations
+                    .FirstOrDefault(c => c.Peer.ProtocolPeerId == openWithPeer.ProtocolPeerId);
+
+                if (convo == null)
+                {
+                    convo = new ConversationItem(openWithPeer);
+                    _vm.Conversations.Insert(0, convo);
+                }
+
+                await _vm.ActivateConversationFromUIAsync(convo);
+            });
+        }
     }
 
     private async void OnConversationSelectionChanged(

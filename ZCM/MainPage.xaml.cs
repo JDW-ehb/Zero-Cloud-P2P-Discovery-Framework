@@ -50,21 +50,24 @@ public partial class MainPage : ContentPage
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
-            // add/update from store
+            using var db = ZCDPPeer.CreateDBContext(
+                Path.Combine(FileSystem.AppDataDirectory, Config.DBFileName)
+            );
+
             foreach (var p in _store.Peers)
             {
                 var existing = Peers.FirstOrDefault(x => x.ProtocolPeerId == p.ProtocolPeerId);
+
                 if (existing == null)
                 {
-                    Peers.Add(new PeerNodeCard(p));
+                    Peers.Add(new PeerNodeCard(p, db));
                 }
                 else
                 {
-                    existing.UpdateFrom(p);
+                    existing.UpdateFrom(p, db);
                 }
             }
 
-            // remove peers not in store anymore (usually never happens, but keeps it clean)
             for (int i = Peers.Count - 1; i >= 0; i--)
             {
                 var card = Peers[i];
@@ -73,6 +76,7 @@ public partial class MainPage : ContentPage
             }
         });
     }
+
 
     // ---------------------------
     // Navigation buttons
@@ -91,6 +95,14 @@ public partial class MainPage : ContentPage
     {
         await DisplayAlert("Share", "Navigate to Share page here.", "OK");
     }
+    private async void OnPeerTapped(object sender, TappedEventArgs e)
+    {
+        if (e.Parameter is not PeerNodeCard card)
+            return;
+
+        // modal "popup-like" page
+        await Navigation.PushModalAsync(new PeerDetailsPage(card));
+    }
 
     // ---------------------------
     // UI model (not EF entity)
@@ -101,8 +113,15 @@ public partial class MainPage : ContentPage
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
+        // Basic identifiers
+        public Guid PeerId => _peer.PeerId;
         public string ProtocolPeerId => _peer.ProtocolPeerId;
         public string HostName => _peer.HostName;
+        public string IpAddress => _peer.IpAddress;
+
+        public DateTime FirstSeen => _peer.FirstSeen;
+        public DateTime LastSeen => _peer.LastSeen;
+        public PeerOnlineStatus OnlineStatus => _peer.OnlineStatus;
 
         // Working rule: UP if seen in last 10 seconds
         public bool IsUp => (DateTime.UtcNow - _peer.LastSeen).TotalSeconds <= 10;
@@ -110,24 +129,62 @@ public partial class MainPage : ContentPage
         public string StatusText => $"Status: {(IsUp ? "UP" : "Down")}";
         public string LastSeenText => $"Lastseen: {ToTimeAgo(_peer.LastSeen)}";
 
-        public PeerNodeCard(PeerNode peer)
+        // ✅ Services
+        public ObservableCollection<string> Services { get; } = new();
+        public bool HasServices => Services.Count > 0;
+
+        public PeerNodeCard(PeerNode peer, ServiceDBContext db)
         {
             _peer = peer;
+            LoadServices(db);
         }
 
-        public void UpdateFrom(PeerNode peer)
+        private void LoadServices(ServiceDBContext db)
+        {
+            Services.Clear();
+
+            var services = db.Services
+                .Where(s => s.PeerRefId == _peer.PeerId)
+                .Select(s => s.Name)
+                .Distinct()
+                .ToList();
+
+            foreach (var s in services)
+                Services.Add(s);
+
+            OnPropertyChanged(nameof(HasServices));
+        }
+        public PeerNode ToPeerNode() => _peer;
+
+
+        public void UpdateFrom(PeerNode peer, ServiceDBContext db)
         {
             _peer = peer;
 
-            // Underlying data changed, notify
+            LoadServices(db);
+
             OnPropertyChanged(nameof(HostName));
+            OnPropertyChanged(nameof(IpAddress));
+            OnPropertyChanged(nameof(FirstSeen));
+            OnPropertyChanged(nameof(LastSeen));
+            OnPropertyChanged(nameof(OnlineStatus));
             OnPropertyChanged(nameof(StatusText));
             OnPropertyChanged(nameof(LastSeenText));
         }
 
+
+        // Call this from your discovery layer whenever services change
+        public void UpdateServices(IEnumerable<string> services)
+        {
+            Services.Clear();
+            foreach (var s in services.Distinct())
+                Services.Add(s);
+
+            OnPropertyChanged(nameof(HasServices));
+        }
+
         public void RefreshComputedText()
         {
-            // Computed values depend on current time, so raise changes
             OnPropertyChanged(nameof(StatusText));
             OnPropertyChanged(nameof(LastSeenText));
         }
@@ -139,25 +196,14 @@ public partial class MainPage : ContentPage
         {
             var diff = DateTime.UtcNow - utcTime;
 
-            if (diff.TotalSeconds < 60)
-                return $"{Math.Max(1, (int)diff.TotalSeconds)}s ago";
-
-            if (diff.TotalMinutes < 60)
-                return $"{(int)Math.Round(diff.TotalMinutes)}m ago";
-
-            if (diff.TotalHours < 24)
-                return $"{(int)Math.Round(diff.TotalHours)}h ago";
-
-            if (diff.TotalDays < 7)
-                return $"{(int)Math.Round(diff.TotalDays)}d ago";
-
-            if (diff.TotalDays < 30)
-                return $"{(int)Math.Round(diff.TotalDays / 7)}w ago";
-
-            if (diff.TotalDays < 365)
-                return $"{(int)Math.Round(diff.TotalDays / 30)}mo ago";
-
+            if (diff.TotalSeconds < 60) return $"{Math.Max(1, (int)diff.TotalSeconds)}s ago";
+            if (diff.TotalMinutes < 60) return $"{(int)Math.Round(diff.TotalMinutes)}m ago";
+            if (diff.TotalHours < 24) return $"{(int)Math.Round(diff.TotalHours)}h ago";
+            if (diff.TotalDays < 7) return $"{(int)Math.Round(diff.TotalDays)}d ago";
+            if (diff.TotalDays < 30) return $"{(int)Math.Round(diff.TotalDays / 7)}w ago";
+            if (diff.TotalDays < 365) return $"{(int)Math.Round(diff.TotalDays / 30)}mo ago";
             return $"{(int)Math.Round(diff.TotalDays / 365)}y ago";
         }
     }
+
 }
