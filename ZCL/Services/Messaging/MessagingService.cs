@@ -153,8 +153,12 @@ public sealed class MessagingService : IZcspService
             var peers = sp.GetRequiredService<IPeerRepository>();
             var messages = sp.GetRequiredService<IMessageRepository>();
 
-            var localPeer = await peers.GetOrCreateAsync(_peer.PeerId, isLocal: true, ct: ct);
-            var remotePeer = await peers.GetOrCreateAsync(remoteProtocolPeerId, ipAddress: remoteIp, ct: ct);
+            var localPeer = await peers.GetLocalPeerAsync(ct);
+            var remotePeer = await peers.GetOrCreateAsync(
+                remoteProtocolPeerId,
+                ipAddress: remoteIp,
+                ct: ct);
+
 
             entity = await messages.StoreOutgoingAsync(
                 _currentSessionId,
@@ -203,7 +207,8 @@ public sealed class MessagingService : IZcspService
             var messages = sp.GetRequiredService<IMessageRepository>();
 
             var fromPeerEntity = await peers.GetOrCreateAsync(fromPeer);
-            var toPeerEntity = await peers.GetOrCreateAsync(_peer.PeerId, isLocal: true);
+            var toPeerEntity = await peers.GetLocalPeerAsync();
+
 
             entity = await messages.StoreIncomingAsync(
                 sessionId,

@@ -85,7 +85,6 @@ public sealed class PeerRepository : IPeerRepository
         string protocolPeerId,
         string? ipAddress = null,
         string? hostName = null,
-        bool isLocal = false,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(protocolPeerId))
@@ -96,7 +95,6 @@ public sealed class PeerRepository : IPeerRepository
         {
             var now = DateTime.UtcNow;
 
-            // NOTE: DbSet is PeerNodes (not Peers) after replacing Peer -> PeerNode
             var peer = await _db.PeerNodes
                 .FirstOrDefaultAsync(p => p.ProtocolPeerId == protocolPeerId, ct);
 
@@ -110,13 +108,6 @@ public sealed class PeerRepository : IPeerRepository
                 if (!string.IsNullOrWhiteSpace(hostName))
                     peer.HostName = hostName;
 
-                // If caller says it's local, upgrade it (but be careful: local uniqueness is enforced elsewhere)
-                if (isLocal && !peer.IsLocal)
-                {
-                    peer.IsLocal = true;
-                    peer.OnlineStatus = PeerOnlineStatus.Online;
-                }
-
                 await _db.SaveChangesAsync(ct);
                 return peer;
             }
@@ -129,8 +120,8 @@ public sealed class PeerRepository : IPeerRepository
                 HostName = string.IsNullOrWhiteSpace(hostName) ? protocolPeerId : hostName!,
                 FirstSeen = now,
                 LastSeen = now,
-                OnlineStatus = isLocal ? PeerOnlineStatus.Online : PeerOnlineStatus.Unknown,
-                IsLocal = isLocal
+                OnlineStatus = PeerOnlineStatus.Unknown,
+                IsLocal = false
             };
 
             _db.PeerNodes.Add(peer);
@@ -143,6 +134,7 @@ public sealed class PeerRepository : IPeerRepository
             _lock.Release();
         }
     }
+
 
     public Task<PeerNode?> GetByProtocolIdAsync(string protocolPeerId, CancellationToken ct = default)
     {
