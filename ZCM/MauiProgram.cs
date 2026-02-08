@@ -12,7 +12,6 @@ using ZCL.Services.Messaging;
 
 namespace ZCM
 {
-    // NOTE(luca): Helper to access services from the builder
     public static class ServiceHelper
     {
         public static IServiceProvider Services { get; private set; } = default!;
@@ -22,8 +21,6 @@ namespace ZCM
 
     public class ServiceDBContextFactory : IDesignTimeDbContextFactory<ServiceDBContext>
     {
-        // dotnet ef migrations add InitialCreate --framework net10.0-windows10.0.19041.0 --no-build
-        // dotnet ef database update --framework net10.0-windows10.0.19041.0 --no-build
         public ServiceDBContext CreateDbContext(string[] args)
         {
             var optionsBuilder = new DbContextOptionsBuilder<ServiceDBContext>();
@@ -38,10 +35,6 @@ namespace ZCM
 
     public static class MauiProgram
     {
-        // IMPORTANT: keep this scope alive for the whole app lifetime,
-        // otherwise MessagingService (Scoped) gets disposed and hosting stops.
-        private static IServiceScope? _messagingScope;
-
         public static MauiApp CreateMauiApp()
         {
             var builder = MauiApp.CreateBuilder();
@@ -62,20 +55,17 @@ namespace ZCM
 
             builder.Services.AddSingleton<DataStore>();
 
-            // Repositories / query services
+            // scoped repos (EF)
             builder.Services.AddScoped<IPeerRepository, PeerRepository>();
             builder.Services.AddScoped<IMessageRepository, MessageRepository>();
             builder.Services.AddScoped<IChatQueryService, ChatQueryService>();
 
-            // ZCSP peer + sessions
+            // ZCSP
             builder.Services.AddSingleton<SessionRegistry>();
-
-            // ZcspPeer is singleton and resolves repo via IServiceScopeFactory internally
             builder.Services.AddSingleton<ZcspPeer>();
 
-            // MessagingService is scoped (uses DbContext-scoped repos), but we will keep one scope alive
-            // so it hosts even when MessagingPage is never opened.
-            builder.Services.AddScoped<MessagingService>();
+            // IMPORTANT: singleton so UI + background share ONE instance
+            builder.Services.AddSingleton<MessagingService>();
 
 #if DEBUG
             builder.Logging.AddDebug();
@@ -85,42 +75,38 @@ namespace ZCM
             // Ensure DB exists
             using (var scope = app.Services.CreateScope())
             {
-                var scopedDb = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
-                scopedDb.Database.EnsureCreated();
+                var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+                db.Database.EnsureCreated();
             }
 
             ServiceHelper.Initialize(app.Services);
 
-            // Load peers into in-memory store (optional / UI)
+            // Init store from DB (optional / UI)
+            using (var scope = app.Services.CreateScope())
             {
-                using var scope = app.Services.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
                 var store = scope.ServiceProvider.GetRequiredService<DataStore>();
 
-                var peersFromDb = db.PeerNodes.ToList();
-                foreach (PeerNode peer in peersFromDb)
+                foreach (var peer in db.PeerNodes.ToList())
                     store.Peers.Add(peer);
             }
 
-            // Run discovery service (kept as your existing pattern)
+            // Start discovery
+            using (var scope = app.Services.CreateScope())
             {
-                using var scope = app.Services.CreateScope();
                 var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
                 var store = scope.ServiceProvider.GetRequiredService<DataStore>();
 
-                int port = Config.Port;
                 var multicastAddress = IPAddress.Parse(Config.MulticastAddress);
                 string dbPath = db.Database.GetDbConnection().DataSource;
 
                 Task.Run(() =>
-                {
-                    ZCDPPeer.StartAndRun(multicastAddress, port, dbPath, store);
-                });
+                    ZCDPPeer.StartAndRun(multicastAddress, Config.Port, dbPath, store)
+                );
             }
 
-            // Keep the scope alive so the service + its scoped dependencies aren't disposed.
-            _messagingScope = app.Services.CreateScope();
-            _ = _messagingScope.ServiceProvider.GetRequiredService<MessagingService>();
+            // Force MessagingService creation at startup -> starts hosting even if MessagingPage never opened
+            _ = app.Services.GetRequiredService<MessagingService>();
 
             return app;
         }

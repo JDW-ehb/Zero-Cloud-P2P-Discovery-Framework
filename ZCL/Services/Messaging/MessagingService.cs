@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using System.Net.Sockets;
+using Microsoft.Extensions.DependencyInjection;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Protocol.ZCSP.Protocol;
@@ -14,36 +15,49 @@ public sealed class MessagingService : IZcspService
     public string ServiceName => "Messaging";
 
     private readonly ZcspPeer _peer;
-    private readonly IPeerRepository _peers;
-    private readonly IMessageRepository _messages;
+    private readonly IServiceScopeFactory _scopeFactory;
 
     private readonly SemaphoreSlim _sessionLock = new(1, 1);
-
     private Task? _hostingTask;
 
     private NetworkStream? _stream;
     private Guid _currentSessionId;
-    private string? _remotePeerId; // protocol GUID string
+    private string? _remotePeerId;
 
     public event Action<string>? SessionStarted;
     public event Action<ChatMessage>? MessageReceived;
     public event Action? SessionClosed;
 
-    public MessagingService(ZcspPeer peer, IPeerRepository peers, IMessageRepository messages)
+    public MessagingService(ZcspPeer peer, IServiceScopeFactory scopeFactory)
     {
         _peer = peer;
-        _peers = peers;
-        _messages = messages;
+        _scopeFactory = scopeFactory;
 
-        // No UI button. Host silently.
         EnsureHostingStarted(5555);
+    }
+
+    private (IPeerRepository peers, IMessageRepository messages) GetRepos()
+    {
+        var scope = _scopeFactory.CreateScope();
+        // caller must Dispose -> easiest: use it inside a "using var scope"
+        throw new NotSupportedException("Use the overload below that keeps scope alive.");
+    }
+
+    private T UseScope<T>(Func<IServiceProvider, T> action)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        return action(scope.ServiceProvider);
+    }
+
+    private async Task UseScopeAsync(Func<IServiceProvider, Task> action)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        await action(scope.ServiceProvider);
     }
 
     public void EnsureHostingStarted(int port)
     {
-        // idempotent: only starts once
-        if (_hostingTask != null)
-            return;
+        if (_hostingTask != null) return;
 
         _hostingTask = Task.Run(() =>
             _peer.StartHostingAsync(
@@ -58,57 +72,37 @@ public sealed class MessagingService : IZcspService
            _currentSessionId != Guid.Empty &&
            _remotePeerId == remoteProtocolPeerId;
 
-    public async Task EnsureSessionAsync(
-        string remoteProtocolPeerId,
-        string remoteIp,
-        int port,
-        CancellationToken ct = default)
+    public async Task EnsureSessionAsync(string remoteProtocolPeerId, string remoteIp, int port, CancellationToken ct = default)
     {
-        // Fast path (already connected to that peer)
-        if (IsSessionActiveWith(remoteProtocolPeerId))
-            return;
+        if (IsSessionActiveWith(remoteProtocolPeerId)) return;
 
         await _sessionLock.WaitAsync(ct);
         try
         {
-            // Re-check after acquiring lock
-            if (IsSessionActiveWith(remoteProtocolPeerId))
-                return;
+            if (IsSessionActiveWith(remoteProtocolPeerId)) return;
 
-            // Make sure we can receive incoming connections regardless
             EnsureHostingStarted(port);
 
-            // Attempt connect with a small retry window.
-            // This handles the “both peers started at the same time” case.
-            var attempts = 4;
-            var delayMs = 250;
-
             Exception? last = null;
-
-            for (int i = 0; i < attempts; i++)
+            for (var i = 0; i < 4; i++)
             {
                 ct.ThrowIfCancellationRequested();
-
                 try
                 {
                     await _peer.ConnectAsync(remoteIp, port, remoteProtocolPeerId, this);
-                    // OnSessionStartedAsync will set _stream/_currentSessionId/_remotePeerId
                     if (IsSessionActiveWith(remoteProtocolPeerId))
                         return;
 
-                    // If ConnectAsync returned but we’re not active, treat as failure
                     throw new InvalidOperationException("Connect completed but session is not active.");
                 }
                 catch (Exception ex)
                 {
                     last = ex;
-                    await Task.Delay(delayMs, ct);
+                    await Task.Delay(250, ct);
                 }
             }
 
-            throw new InvalidOperationException(
-                $"Could not establish session to {remoteProtocolPeerId} @ {remoteIp}:{port}",
-                last);
+            throw new InvalidOperationException($"Could not establish session to {remoteProtocolPeerId} @ {remoteIp}:{port}", last);
         }
         finally
         {
@@ -116,29 +110,31 @@ public sealed class MessagingService : IZcspService
         }
     }
 
-    public async Task SendMessageAsync(
-        string remoteProtocolPeerId,
-        string remoteIp,
-        int port,
-        string content,
-        CancellationToken ct = default)
+    public async Task SendMessageAsync(string remoteProtocolPeerId, string remoteIp, int port, string content, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(content))
-            return;
+        if (string.IsNullOrWhiteSpace(content)) return;
 
         await EnsureSessionAsync(remoteProtocolPeerId, remoteIp, port, ct);
 
-        if (_stream == null || _remotePeerId == null)
+        if (_stream == null)
             throw new InvalidOperationException("Messaging session is not active.");
 
-        var localPeer = await _peers.GetOrCreateAsync(_peer.PeerId, isLocal: true, ct: ct);
-        var remotePeer = await _peers.GetOrCreateAsync(remoteProtocolPeerId, ipAddress: remoteIp, ct: ct);
+        // DB work in a scope
+        MessageEntity entity = default!;
+        await UseScopeAsync(async sp =>
+        {
+            var peers = sp.GetRequiredService<IPeerRepository>();
+            var messages = sp.GetRequiredService<IMessageRepository>();
 
-        var entity = await _messages.StoreOutgoingAsync(
-            _currentSessionId,
-            localPeer.PeerId,
-            remotePeer.PeerId,
-            content);
+            var localPeer = await peers.GetOrCreateAsync(_peer.PeerId, isLocal: true, ct: ct);
+            var remotePeer = await peers.GetOrCreateAsync(remoteProtocolPeerId, ipAddress: remoteIp, ct: ct);
+
+            entity = await messages.StoreOutgoingAsync(
+                _currentSessionId,
+                localPeer.PeerId,
+                remotePeer.PeerId,
+                content);
+        });
 
         MessageReceived?.Invoke(ChatMessageMapper.Outgoing(_peer.PeerId, remoteProtocolPeerId, entity));
 
@@ -155,17 +151,13 @@ public sealed class MessagingService : IZcspService
         await Framing.WriteAsync(_stream, data);
     }
 
-    // =====================
     // IZcspService
-    // =====================
-
     public void BindStream(NetworkStream stream) => _stream = stream;
 
     public Task OnSessionStartedAsync(Guid sessionId, string remotePeerId)
     {
         _currentSessionId = sessionId;
         _remotePeerId = remotePeerId;
-
         SessionStarted?.Invoke(remotePeerId);
         return Task.CompletedTask;
     }
@@ -176,14 +168,22 @@ public sealed class MessagingService : IZcspService
         var toPeer = BinaryCodec.ReadString(reader);
         var content = BinaryCodec.ReadString(reader);
 
-        var fromPeerEntity = await _peers.GetOrCreateAsync(fromPeer);
-        var toPeerEntity = await _peers.GetOrCreateAsync(_peer.PeerId, isLocal: true);
+        MessageEntity entity = default!;
 
-        var entity = await _messages.StoreIncomingAsync(
-            sessionId,
-            fromPeerEntity.PeerId,
-            toPeerEntity.PeerId,
-            content);
+        await UseScopeAsync(async sp =>
+        {
+            var peers = sp.GetRequiredService<IPeerRepository>();
+            var messages = sp.GetRequiredService<IMessageRepository>();
+
+            var fromPeerEntity = await peers.GetOrCreateAsync(fromPeer);
+            var toPeerEntity = await peers.GetOrCreateAsync(_peer.PeerId, isLocal: true);
+
+            entity = await messages.StoreIncomingAsync(
+                sessionId,
+                fromPeerEntity.PeerId,
+                toPeerEntity.PeerId,
+                content);
+        });
 
         MessageReceived?.Invoke(ChatMessageMapper.Incoming(fromPeer, toPeer, entity));
     }
