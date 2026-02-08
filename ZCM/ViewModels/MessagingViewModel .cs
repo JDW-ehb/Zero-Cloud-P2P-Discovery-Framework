@@ -18,6 +18,7 @@ public sealed class MessagingViewModel : BindableObject
     private Guid? _localPeerDbId;
     private ConversationItem? _activeConversation;
     private string? _activeProtocolPeerId;
+    private bool _sessionReady;
 
     private const int MessagingPort = 5555;
 
@@ -28,14 +29,14 @@ public sealed class MessagingViewModel : BindableObject
     public bool IsConnected
     {
         get => _isConnected;
-        set { _isConnected = value; OnPropertyChanged(); }
+        private set { _isConnected = value; OnPropertyChanged(); }
     }
 
     private string _statusMessage = "Idle";
     public string StatusMessage
     {
         get => _statusMessage;
-        set { _statusMessage = value; OnPropertyChanged(); }
+        private set { _statusMessage = value; OnPropertyChanged(); }
     }
 
     private string _outgoingMessage = string.Empty;
@@ -56,45 +57,75 @@ public sealed class MessagingViewModel : BindableObject
         _messaging = messaging;
         _chatQueries = chatQueries;
 
-        SendMessageCommand = new Command(async () => await SendAsync());
+        SendMessageCommand = new Command(async () => await SendAsync(), () => _sessionReady);
 
         _messaging.MessageReceived += OnMessageReceived;
 
         _ = InitAsync();
     }
 
-    public void ActivateConversationFromUI(ConversationItem convo)
+    // 🔹 IMPORTANT: async Task, NOT async void
+    public async Task ActivateConversationFromUIAsync(ConversationItem convo)
     {
         if (_activeConversation == convo)
             return;
 
         _activeConversation = convo;
         _activeProtocolPeerId = convo.Peer.ProtocolPeerId;
+        _sessionReady = false;
+        IsConnected = false;
 
-        _ = LoadChatHistoryAsync(convo.Peer);
+        StatusMessage = $"Connecting to {convo.DisplayName}…";
+
+        await _messaging.EnsureSessionAsync(
+            convo.Peer.ProtocolPeerId,
+            convo.Peer.IpAddress,
+            MessagingPort);
+
+        _sessionReady = true;
+        IsConnected = true;
+        StatusMessage = $"Chatting with {convo.DisplayName}";
+        ((Command)SendMessageCommand).ChangeCanExecute();
+
+        await LoadChatHistoryAsync(convo.Peer);
     }
 
     private async Task SendAsync()
     {
-        if (_activeConversation == null)
+        if (!_sessionReady || _activeConversation == null)
             return;
 
         var text = OutgoingMessage.Trim();
         if (string.IsNullOrWhiteSpace(text))
             return;
 
+        var msg = new ChatMessage(
+            id: Guid.NewGuid(), // temporary UI ID
+            fromPeer: _peer.PeerId, // STRING
+            toPeer: _activeProtocolPeerId!, // STRING
+            content: text,
+            direction: MessageDirection.Outgoing,
+            timestamp: DateTime.UtcNow);
+
+        // Optimistic UI update
+        Messages.Add(msg);
+        MessagesChanged?.Invoke();
+
+        OutgoingMessage = string.Empty;
+
         await _messaging.SendMessageAsync(
             _activeConversation.Peer.ProtocolPeerId,
             _activeConversation.Peer.IpAddress,
             MessagingPort,
             text);
-
-        OutgoingMessage = string.Empty;
-        // If MessagingService echoes back, scrolling will happen via MessageReceived
     }
+
 
     private void OnMessageReceived(ChatMessage msg)
     {
+        if (msg.FromPeer == _peer.PeerId)
+            return;
+
         MainThread.BeginInvokeOnMainThread(() =>
         {
             var other = msg.FromPeer == _peer.PeerId
@@ -115,6 +146,7 @@ public sealed class MessagingViewModel : BindableObject
         });
     }
 
+
     private async Task InitAsync()
     {
         _localPeerDbId = await _chatQueries.GetLocalPeerIdAsync();
@@ -124,11 +156,33 @@ public sealed class MessagingViewModel : BindableObject
 
     private async Task LoadConversationsAsync()
     {
+        if (_localPeerDbId is null)
+            return;
+
+        Conversations.Clear();
+
         var peers = (await _chatQueries.GetPeersAsync())
-            .Where(p => !p.IsLocal);
+            .Where(p => !p.IsLocal)
+            .ToList();
 
         foreach (var peer in peers)
-            Conversations.Add(new ConversationItem(peer));
+        {
+            var item = new ConversationItem(peer);
+
+            var last = await _chatQueries.GetLastMessageBetweenAsync(
+                _localPeerDbId.Value,
+                peer.PeerId);
+
+            if (last != null)
+            {
+                item.LastMessage = last.Content;
+                item.LastTimestamp = last.Timestamp;
+            }
+
+            Conversations.Add(item);
+        }
+
+        ResortConversations();
     }
 
     private async Task LoadChatHistoryAsync(PeerNode peer)
@@ -151,18 +205,35 @@ public sealed class MessagingViewModel : BindableObject
         MessagesChanged?.Invoke();
     }
 
-    private void UpdateConversationPreview(
-        string protocolPeerId,
-        string lastMessage,
-        DateTime ts)
+    private void UpdateConversationPreview(string protocolPeerId, string lastMessage, DateTime ts)
     {
-        var convo = Conversations.FirstOrDefault(c =>
-            c.Peer.ProtocolPeerId == protocolPeerId);
-
+        var convo = Conversations.FirstOrDefault(c => c.Peer.ProtocolPeerId == protocolPeerId);
         if (convo == null)
             return;
 
         convo.LastMessage = lastMessage;
         convo.LastTimestamp = ts;
+
+        var idx = Conversations.IndexOf(convo);
+        if (idx > 0)
+            Conversations.Move(idx, 0);
+    }
+
+    private void ResortConversations()
+    {
+        if (Conversations.Count <= 1)
+            return;
+
+        var ordered = Conversations
+            .OrderByDescending(c => c.LastTimestamp ?? DateTime.MinValue)
+            .ToList();
+
+        for (int i = 0; i < ordered.Count; i++)
+        {
+            var item = ordered[i];
+            var currentIndex = Conversations.IndexOf(item);
+            if (currentIndex != i)
+                Conversations.Move(currentIndex, i);
+        }
     }
 }

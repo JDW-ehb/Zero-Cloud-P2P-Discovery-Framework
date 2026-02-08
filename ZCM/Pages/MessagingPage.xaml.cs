@@ -17,12 +17,12 @@ public partial class MessagingPage : ContentPage
             ServiceHelper.GetService<MessagingService>(),
             ServiceHelper.GetService<IChatQueryService>());
 
-        vm.MessagesChanged += OnMessagesChanged;
+        vm.MessagesChanged += ScrollToBottomIfAllowed;
 
         BindingContext = vm;
     }
 
-    private void OnConversationSelectionChanged(
+    private async void OnConversationSelectionChanged(
         object sender,
         SelectionChangedEventArgs e)
     {
@@ -35,19 +35,13 @@ public partial class MessagingPage : ContentPage
         if (e.CurrentSelection[0] is not ConversationItem convo)
             return;
 
-        vm.ActivateConversationFromUI(convo);
-
         ((CollectionView)sender).SelectedItem = null;
 
-        // Scroll to bottom after history load
+        await vm.ActivateConversationFromUIAsync(convo);
+
         Dispatcher.DispatchDelayed(
             TimeSpan.FromMilliseconds(50),
             ScrollToBottomIfAllowed);
-    }
-
-    private void OnMessagesChanged()
-    {
-        ScrollToBottomIfAllowed();
     }
 
     private void ScrollToBottomIfAllowed()
@@ -79,8 +73,6 @@ public partial class MessagingPage : ContentPage
             return;
 
         var remaining = vm.Messages.Count - (e.LastVisibleItemIndex + 1);
-
-        // Near bottom if last 2 items are visible
         _userNearBottom = remaining <= 2;
     }
 }

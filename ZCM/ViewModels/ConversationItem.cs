@@ -1,11 +1,13 @@
-﻿using System;
-using ZCL.Models;
+﻿using ZCL.Models;
 
 namespace ZCM.ViewModels;
 
 public sealed class ConversationItem : BindableObject
 {
     public PeerNode Peer { get; }
+    public string DisplayName => Peer.HostName ?? Peer.ProtocolPeerId ?? Peer.PeerId.ToString();
+
+    public bool IsOnline => Peer.OnlineStatus == PeerOnlineStatus.Online;
 
     private string _lastMessage = "No messages yet";
     public string LastMessage
@@ -20,10 +22,6 @@ public sealed class ConversationItem : BindableObject
         get => _lastTimestamp;
         set { _lastTimestamp = value; OnPropertyChanged(); }
     }
-
-    public string DisplayName => string.IsNullOrWhiteSpace(Peer.HostName) ? Peer.ProtocolPeerId : Peer.HostName;
-
-    public bool IsOnline => Peer.OnlineStatus == PeerOnlineStatus.Online;
 
     public ConversationItem(PeerNode peer)
     {
