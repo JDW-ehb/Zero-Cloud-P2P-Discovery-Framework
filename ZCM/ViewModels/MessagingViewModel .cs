@@ -123,9 +123,6 @@ public sealed class MessagingViewModel : BindableObject
 
     private void OnMessageReceived(ChatMessage msg)
     {
-        if (msg.FromPeer == _peer.PeerId)
-            return;
-
         MainThread.BeginInvokeOnMainThread(() =>
         {
             var other = msg.FromPeer == _peer.PeerId
@@ -145,6 +142,7 @@ public sealed class MessagingViewModel : BindableObject
             MessagesChanged?.Invoke();
         });
     }
+
 
 
     private async Task InitAsync()

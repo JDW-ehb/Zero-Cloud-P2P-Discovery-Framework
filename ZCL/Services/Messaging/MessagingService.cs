@@ -72,28 +72,52 @@ public sealed class MessagingService : IZcspService
            _currentSessionId != Guid.Empty &&
            _remotePeerId == remoteProtocolPeerId;
 
-    public async Task EnsureSessionAsync(string remoteProtocolPeerId, string remoteIp, int port, CancellationToken ct = default)
+    public async Task EnsureSessionAsync(
+        string remoteProtocolPeerId,
+        string remoteIp,
+        int port,
+        CancellationToken ct = default)
     {
-        if (IsSessionActiveWith(remoteProtocolPeerId)) return;
+        if (IsSessionActiveWith(remoteProtocolPeerId))
+            return;
 
         await _sessionLock.WaitAsync(ct);
         try
         {
-            if (IsSessionActiveWith(remoteProtocolPeerId)) return;
+            if (IsSessionActiveWith(remoteProtocolPeerId))
+                return;
 
             EnsureHostingStarted(port);
 
+            if (!ShouldInitiate(remoteProtocolPeerId))
+            {
+                for (int i = 0; i < 20; i++)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    if (IsSessionActiveWith(remoteProtocolPeerId))
+                        return;
+
+                    await Task.Delay(150, ct);
+                }
+
+                throw new TimeoutException(
+                    $"Timed out waiting for inbound messaging session from {remoteProtocolPeerId}");
+            }
+
             Exception? last = null;
-            for (var i = 0; i < 4; i++)
+
+            for (int i = 0; i < 4; i++)
             {
                 ct.ThrowIfCancellationRequested();
                 try
                 {
                     await _peer.ConnectAsync(remoteIp, port, remoteProtocolPeerId, this);
+
                     if (IsSessionActiveWith(remoteProtocolPeerId))
                         return;
 
-                    throw new InvalidOperationException("Connect completed but session is not active.");
+                    throw new InvalidOperationException("Connect completed but session not active.");
                 }
                 catch (Exception ex)
                 {
@@ -102,13 +126,16 @@ public sealed class MessagingService : IZcspService
                 }
             }
 
-            throw new InvalidOperationException($"Could not establish session to {remoteProtocolPeerId} @ {remoteIp}:{port}", last);
+            throw new InvalidOperationException(
+                $"Could not establish messaging session to {remoteProtocolPeerId} @ {remoteIp}:{port}",
+                last);
         }
         finally
         {
             _sessionLock.Release();
         }
     }
+
 
     public async Task SendMessageAsync(string remoteProtocolPeerId, string remoteIp, int port, string content, CancellationToken ct = default)
     {
@@ -187,9 +214,23 @@ public sealed class MessagingService : IZcspService
 
         MessageReceived?.Invoke(ChatMessageMapper.Incoming(fromPeer, toPeer, entity));
     }
+    private bool ShouldInitiate(string remoteProtocolPeerId)
+    {
+        return string.Compare(_peer.PeerId, remoteProtocolPeerId, StringComparison.Ordinal) < 0;
+    }
+
 
     public Task OnSessionClosedAsync(Guid sessionId)
     {
+        try
+        {
+            _stream?.Dispose();
+        }
+        catch
+        {
+            // ignore cleanup errors
+        }
+
         _stream = null;
         _remotePeerId = null;
         _currentSessionId = Guid.Empty;
@@ -197,4 +238,5 @@ public sealed class MessagingService : IZcspService
         SessionClosed?.Invoke();
         return Task.CompletedTask;
     }
+
 }
