@@ -30,27 +30,21 @@
                 FontSize="22"
                 TextColor="White" />
 
-            <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,10,0,10">
+            <Grid Grid.Row="1" ColumnDefinitions="*" Margin="0,10,0,10">
                 <Label
                     Text="{Binding StatusMessage}"
                     FontSize="12"
                     TextColor="{Binding IsConnected, Converter={StaticResource BoolToColorConverter}}"
                     VerticalOptions="Center" />
-
-                <Button Grid.Column="1"
-                        Text="Host"
-                        Command="{Binding HostCommand}"
-                        BackgroundColor="{Binding IsHosting, Converter={StaticResource BoolToColorConverter}}"
-                        TextColor="White"
-                        CornerRadius="10"
-                        HeightRequest="36"
-                        Padding="14,0" />
             </Grid>
 
             <CollectionView Grid.Row="2"
                             ItemsSource="{Binding Conversations}"
                             SelectionMode="Single"
-                            SelectedItem="{Binding SelectedConversation}">
+                            SelectedItem="{Binding SelectedConversation}"
+                            VerticalScrollBarVisibility="Never"
+                            HorizontalScrollBarVisibility="Never"
+                            >
                 <CollectionView.ItemTemplate>
                     <DataTemplate>
                         <Frame Padding="12"
@@ -101,7 +95,10 @@
             <CollectionView
                 ItemsSource="{Binding Messages}"
                 VerticalOptions="FillAndExpand"
-                Margin="12">
+                Margin="12"
+                ItemsUpdatingScrollMode="KeepLastItemInView"
+                VerticalScrollBarVisibility="Never"
+                HorizontalScrollBarVisibility="Never">
 
                 <CollectionView.ItemTemplate>
                     <DataTemplate>

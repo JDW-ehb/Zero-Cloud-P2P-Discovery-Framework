@@ -18,10 +18,6 @@ public sealed class MessagingViewModel : BindableObject
 
     private const int MessagingPort = 5555;
 
-    // =====================
-    // UI STATE
-    // =====================
-
     private bool _isConnected;
     public bool IsConnected
     {
@@ -40,31 +36,48 @@ public sealed class MessagingViewModel : BindableObject
     public ObservableCollection<ChatMessage> Messages { get; } = new();
 
     private ConversationItem? _selectedConversation;
+    private bool _suppressSelection;
+
     public ConversationItem? SelectedConversation
     {
         get => _selectedConversation;
         set
         {
-            if (_selectedConversation == value)
+            // During reorder/restore selection: do NOT reload history
+            if (_suppressSelection)
+            {
+                _selectedConversation = value;
+                OnPropertyChanged();
+                return;
+            }
+
+            // IMPORTANT: ignore transient null deselection caused by CollectionView refresh/reorder
+            // (otherwise you clear Messages and it "reload flashes")
+            if (value == null)
+            {
+                // If we already have a conversation selected, this null is almost certainly a UI glitch.
+                if (_selectedConversation != null)
+                    return;
+
+                // Only allow a real "clear chat" if we truly had nothing selected.
+                _activeProtocolPeerId = null;
+                IsConnected = false;
+                StatusMessage = "Idle";
+                Messages.Clear();
+                _selectedConversation = null;
+                OnPropertyChanged();
+                return;
+            }
+
+            var oldId = _selectedConversation?.Peer.ProtocolPeerId;
+            var newId = value.Peer.ProtocolPeerId;
+            if (oldId == newId)
                 return;
 
             _selectedConversation = value;
             OnPropertyChanged();
 
-            if (value != null)
-            {
-                MainThread.BeginInvokeOnMainThread(async () =>
-                {
-                    await OpenConversationAsync(value);
-                });
-            }
-            else
-            {
-                _activeProtocolPeerId = null;
-                IsConnected = false;
-                StatusMessage = "Idle";
-                Messages.Clear();
-            }
+            MainThread.BeginInvokeOnMainThread(async () => await OpenConversationAsync(value));
         }
     }
 
@@ -75,16 +88,8 @@ public sealed class MessagingViewModel : BindableObject
         set { _outgoingMessage = value; OnPropertyChanged(); }
     }
 
-    // =====================
-    // COMMANDS
-    // =====================
-
     public ICommand SendMessageCommand { get; }
     public ICommand RefreshCommand { get; }
-
-    // =====================
-    // CONSTRUCTOR
-    // =====================
 
     public MessagingViewModel(
         ZcspPeer peer,
@@ -98,17 +103,18 @@ public sealed class MessagingViewModel : BindableObject
         SendMessageCommand = new Command(async () =>
         {
             var convo = SelectedConversation;
-            if (convo == null)
-                return;
+            if (convo == null) return;
 
             var text = OutgoingMessage?.Trim();
-            if (string.IsNullOrWhiteSpace(text))
-                return;
+            if (string.IsNullOrWhiteSpace(text)) return;
 
             try
             {
+                //  Set this FIRST so SessionStarted won't think you're "not in a chat"
+                _activeProtocolPeerId = convo.Peer.ProtocolPeerId;
+
                 StatusMessage = $"Sending to {convo.DisplayName}...";
-                // Core: auto-connect (if needed) + send
+
                 await _messaging.SendMessageAsync(
                     remoteProtocolPeerId: convo.Peer.ProtocolPeerId,
                     remoteIp: convo.Peer.IpAddress,
@@ -118,7 +124,6 @@ public sealed class MessagingViewModel : BindableObject
                 OutgoingMessage = string.Empty;
                 IsConnected = true;
                 StatusMessage = $"Chatting with {convo.DisplayName}";
-                _activeProtocolPeerId = convo.Peer.ProtocolPeerId;
             }
             catch (Exception ex)
             {
@@ -127,18 +132,19 @@ public sealed class MessagingViewModel : BindableObject
             }
         });
 
+
         RefreshCommand = new Command(async () => await LoadConversationsAsync());
 
-        // Incoming + outgoing events both come through here
         _messaging.MessageReceived += msg =>
         {
             MainThread.BeginInvokeOnMainThread(() =>
             {
-                // Update left list preview & order
+                System.Diagnostics.Debug.WriteLine($">>> MessageReceived: {msg.Timestamp:HH:mm:ss} <<<");
+                // Update preview + reorder left list
                 var otherId = msg.FromPeer == _peer.PeerId ? msg.ToPeer : msg.FromPeer;
                 UpdateConversationPreview(otherId, msg.Content, msg.Timestamp);
 
-                // Only show in the open chat
+                // Only append to open chat
                 if (_activeProtocolPeerId == null)
                     return;
 
@@ -152,25 +158,25 @@ public sealed class MessagingViewModel : BindableObject
 
         _messaging.SessionStarted += remoteProtocolPeerId =>
         {
-            MainThread.BeginInvokeOnMainThread(async () =>
+            MainThread.BeginInvokeOnMainThread(() =>
             {
-                _activeProtocolPeerId = remoteProtocolPeerId;
                 IsConnected = true;
 
-                // Make sure the peer exists in list (discovery might have just added it)
-                await LoadConversationsAsync();
-
-                SelectedConversation = Conversations
-                    .FirstOrDefault(c => c.Peer.ProtocolPeerId == remoteProtocolPeerId);
-
-                StatusMessage = SelectedConversation != null
-                    ? $"Chatting with {SelectedConversation.DisplayName}"
-                    : $"Connected (unknown peer: {remoteProtocolPeerId})";
-
-                if (SelectedConversation != null)
-                    await LoadChatHistoryAsync(SelectedConversation.Peer);
+                // Just update status if this is the current chat.
+                if (_activeProtocolPeerId == remoteProtocolPeerId)
+                {
+                    var current = SelectedConversation;
+                    StatusMessage = current != null
+                        ? $"Chatting with {current.DisplayName}"
+                        : $"Connected ({remoteProtocolPeerId})";
+                }
+                else
+                {
+                    // StatusMessage = "Session started in background", maybe we don't want that
+                }
             });
         };
+
 
         _messaging.SessionClosed += () =>
         {
@@ -178,8 +184,6 @@ public sealed class MessagingViewModel : BindableObject
             {
                 IsConnected = false;
                 StatusMessage = "Disconnected";
-                // Keep _activeProtocolPeerId so UI can still show history;
-                // if you want to “close chat”, set it to null.
             });
         };
 
@@ -193,14 +197,11 @@ public sealed class MessagingViewModel : BindableObject
         StatusMessage = "Ready";
     }
 
-    // =====================
-    // HELPERS
-    // =====================
-
     private async Task OpenConversationAsync(ConversationItem convo)
     {
+        System.Diagnostics.Debug.WriteLine($">>> OpenConversationAsync: {convo.Peer.ProtocolPeerId} <<<");
         _activeProtocolPeerId = convo.Peer.ProtocolPeerId;
-        IsConnected = false; // we only know after we try sending or session starts
+        IsConnected = false;
         StatusMessage = $"Opened {convo.DisplayName}";
 
         await LoadChatHistoryAsync(convo.Peer);
@@ -209,8 +210,6 @@ public sealed class MessagingViewModel : BindableObject
     private async Task LoadConversationsAsync()
     {
         var peers = await _chatQueries.GetPeersAsync();
-
-        // Hide local peer from list
         peers = peers.Where(p => !p.IsLocal).ToList();
 
         Conversations.Clear();
@@ -225,7 +224,6 @@ public sealed class MessagingViewModel : BindableObject
         {
             var row = new ConversationItem(peer);
 
-            // last message preview (you said you want this)
             var last = await _chatQueries.GetLastMessageBetweenAsync(_localPeerDbId.Value, peer.PeerId);
             if (last != null)
             {
@@ -238,16 +236,21 @@ public sealed class MessagingViewModel : BindableObject
 
         ResortConversations();
 
-        // Keep selection stable
         if (_activeProtocolPeerId != null)
         {
-            SelectedConversation = Conversations
-                .FirstOrDefault(c => c.Peer.ProtocolPeerId == _activeProtocolPeerId);
+            var keep = Conversations.FirstOrDefault(c => c.Peer.ProtocolPeerId == _activeProtocolPeerId);
+            if (keep != null)
+            {
+                _suppressSelection = true;
+                SelectedConversation = keep;
+                _suppressSelection = false;
+            }
         }
     }
 
     private async Task LoadChatHistoryAsync(PeerNode peer)
     {
+        System.Diagnostics.Debug.WriteLine(">>> LoadChatHistoryAsync CALLED <<<");
         if (_localPeerDbId is null)
         {
             Messages.Clear();
@@ -257,12 +260,11 @@ public sealed class MessagingViewModel : BindableObject
         var history = await _chatQueries.GetHistoryAsync(_localPeerDbId.Value, peer.PeerId);
 
         Messages.Clear();
-
         foreach (var chatMessage in ChatMessageMapper.FromHistoryList(
                      history,
-                     _localPeerDbId.Value,   // local DB peer guid (PeerId)
-                     _peer.PeerId,           // local protocol GUID string
-                     peer.ProtocolPeerId))   // remote protocol GUID string
+                     _localPeerDbId.Value,
+                     _peer.PeerId,
+                     peer.ProtocolPeerId))
         {
             Messages.Add(chatMessage);
         }
@@ -277,18 +279,44 @@ public sealed class MessagingViewModel : BindableObject
         convo.LastMessage = lastMessage;
         convo.LastTimestamp = ts;
 
-        ResortConversations();
+        var idx = Conversations.IndexOf(convo);
+        if (idx > 0)
+        {
+            _suppressSelection = true;
+            Conversations.Move(idx, 0);
+            _suppressSelection = false;
+        }
     }
 
     private void ResortConversations()
     {
+        if (Conversations.Count <= 1) return;
+
+        var selectedId = _selectedConversation?.Peer.ProtocolPeerId;
+
         var ordered = Conversations
             .OrderByDescending(c => c.LastTimestamp ?? DateTime.MinValue)
             .ThenByDescending(c => c.Peer.LastSeen)
             .ToList();
 
-        Conversations.Clear();
-        foreach (var c in ordered)
-            Conversations.Add(c);
+        _suppressSelection = true;
+
+        for (int targetIndex = 0; targetIndex < ordered.Count; targetIndex++)
+        {
+            var item = ordered[targetIndex];
+            var currentIndex = Conversations.IndexOf(item);
+            if (currentIndex >= 0 && currentIndex != targetIndex)
+                Conversations.Move(currentIndex, targetIndex);
+        }
+
+        // Restore selection *safely* (prevents UI null-blink from clearing Messages)
+        if (selectedId != null)
+        {
+            var restored = Conversations.FirstOrDefault(c => c.Peer.ProtocolPeerId == selectedId);
+            if (restored != null)
+                SelectedConversation = restored;
+        }
+
+        _suppressSelection = false;
     }
 }
