@@ -13,6 +13,8 @@ public sealed class MessagingViewModel : BindableObject
     private readonly MessagingService _messaging;
     private readonly IChatQueryService _chatQueries;
 
+    public event Action? MessagesChanged;
+
     private Guid? _localPeerDbId;
     private ConversationItem? _activeConversation;
     private string? _activeProtocolPeerId;
@@ -78,7 +80,7 @@ public sealed class MessagingViewModel : BindableObject
             return;
 
         var text = OutgoingMessage.Trim();
-        if (string.IsNullOrEmpty(text))
+        if (string.IsNullOrWhiteSpace(text))
             return;
 
         await _messaging.SendMessageAsync(
@@ -88,13 +90,17 @@ public sealed class MessagingViewModel : BindableObject
             text);
 
         OutgoingMessage = string.Empty;
+        // If MessagingService echoes back, scrolling will happen via MessageReceived
     }
 
     private void OnMessageReceived(ChatMessage msg)
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
-            var other = msg.FromPeer == _peer.PeerId ? msg.ToPeer : msg.FromPeer;
+            var other = msg.FromPeer == _peer.PeerId
+                ? msg.ToPeer
+                : msg.FromPeer;
+
             UpdateConversationPreview(other, msg.Content, msg.Timestamp);
 
             if (_activeProtocolPeerId == null)
@@ -105,6 +111,7 @@ public sealed class MessagingViewModel : BindableObject
                 return;
 
             Messages.Add(msg);
+            MessagesChanged?.Invoke();
         });
     }
 
@@ -129,14 +136,25 @@ public sealed class MessagingViewModel : BindableObject
         Messages.Clear();
 
         var history = await _chatQueries.GetHistoryAsync(
-            _localPeerDbId!.Value, peer.PeerId);
+            _localPeerDbId!.Value,
+            peer.PeerId);
 
         foreach (var msg in ChatMessageMapper.FromHistoryList(
-                     history, _localPeerDbId.Value, _peer.PeerId, peer.ProtocolPeerId))
+                     history,
+                     _localPeerDbId.Value,
+                     _peer.PeerId,
+                     peer.ProtocolPeerId))
+        {
             Messages.Add(msg);
+        }
+
+        MessagesChanged?.Invoke();
     }
 
-    private void UpdateConversationPreview(string protocolPeerId, string lastMessage, DateTime ts)
+    private void UpdateConversationPreview(
+        string protocolPeerId,
+        string lastMessage,
+        DateTime ts)
     {
         var convo = Conversations.FirstOrDefault(c =>
             c.Peer.ProtocolPeerId == protocolPeerId);

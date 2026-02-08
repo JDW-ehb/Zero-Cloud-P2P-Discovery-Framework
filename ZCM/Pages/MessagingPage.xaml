@@ -84,11 +84,12 @@
               Padding="16">
 
             <CollectionView
-                x:Name="MessagesView"
-                ItemsSource="{Binding Messages}"
-                ItemsUpdatingScrollMode="KeepScrollOffset"
-                VerticalScrollBarVisibility="Never"
-                HorizontalScrollBarVisibility="Never">
+                    x:Name="MessagesView"
+                    ItemsSource="{Binding Messages}"
+                    ItemsUpdatingScrollMode="KeepScrollOffset"
+                    Scrolled="OnMessagesScrolled"
+                    VerticalScrollBarVisibility="Never"
+                    HorizontalScrollBarVisibility="Never">
 
 
                 <CollectionView.ItemTemplate>
