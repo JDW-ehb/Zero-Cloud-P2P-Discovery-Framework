@@ -74,10 +74,16 @@
 	  <Compile Update="DiscoveryPage.xaml.cs">
 	    <DependentUpon>DiscoveryPage.xaml</DependentUpon>
 	  </Compile>
+	  <Compile Update="Pages\PeerDetailsPage.xaml.cs">
+	    <DependentUpon>PeerDetailsPage.xaml</DependentUpon>
+	  </Compile>
 	</ItemGroup>
 
 	<ItemGroup>
 	  <MauiXaml Update="DiscoveryPage.xaml">
+	    <Generator>MSBuild:Compile</Generator>
+	  </MauiXaml>
+	  <MauiXaml Update="Pages\PeerDetailsPage.xaml">
 	    <Generator>MSBuild:Compile</Generator>
 	  </MauiXaml>
 	</ItemGroup>

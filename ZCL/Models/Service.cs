@@ -19,7 +19,6 @@ public class Service
 
     public ushort Port { get; set; }
 
-    // ✅ Now points to PeerNode (Guid), not old Peer (int)
     public Guid PeerRefId { get; set; }
 
     [ForeignKey(nameof(PeerRefId))]

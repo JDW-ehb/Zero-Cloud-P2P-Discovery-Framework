@@ -1,6 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-
-namespace ZCM
+﻿namespace ZCM
 {
     public partial class App : Application
     {
@@ -10,16 +8,12 @@ namespace ZCM
 
             AppDomain.CurrentDomain.UnhandledException += (s, e) =>
             {
-                System.Diagnostics.Debug.WriteLine(
-                    $"[UNHANDLED] {e.ExceptionObject}"
-                );
+                System.Diagnostics.Debug.WriteLine($"[UNHANDLED] {e.ExceptionObject}");
             };
 
             TaskScheduler.UnobservedTaskException += (s, e) =>
             {
-                System.Diagnostics.Debug.WriteLine(
-                    $"[TASK] {e.Exception}"
-                );
+                System.Diagnostics.Debug.WriteLine($"[TASK] {e.Exception}");
                 e.SetObserved();
             };
         }
@@ -28,8 +22,5 @@ namespace ZCM
         {
             return new Window(new AppShell());
         }
-
-
-
     }
 }

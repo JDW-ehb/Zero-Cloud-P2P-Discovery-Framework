@@ -4,6 +4,11 @@ namespace ZCL.Repositories.Peers;
 
 public interface IPeerRepository
 {
+    Task<string> GetOrCreateLocalProtocolPeerIdAsync(
+        string hostName,
+        string ipAddress = "127.0.0.1",
+        CancellationToken ct = default);
+
     Task<PeerNode> GetOrCreateAsync(
         string protocolPeerId,
         string? ipAddress = null,

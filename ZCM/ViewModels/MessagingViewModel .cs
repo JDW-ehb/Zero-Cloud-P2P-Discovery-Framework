@@ -7,62 +7,37 @@ using ZCL.Services.Messaging;
 
 namespace ZCM.ViewModels;
 
-public class MessagingViewModel : BindableObject
+public sealed class MessagingViewModel : BindableObject
 {
     private readonly ZcspPeer _peer;
     private readonly MessagingService _messaging;
     private readonly IChatQueryService _chatQueries;
 
+    public event Action? MessagesChanged;
+
+    private Guid? _localPeerDbId;
+    private ConversationItem? _activeConversation;
     private string? _activeProtocolPeerId;
+    private bool _sessionReady;
 
-    // =====================
-    // UI STATE
-    // =====================
+    private const int MessagingPort = 5555;
 
-    private bool _isHosting;
-    public bool IsHosting
-    {
-        get => _isHosting;
-        set { _isHosting = value; OnPropertyChanged(); }
-    }
+    public ObservableCollection<ConversationItem> Conversations { get; } = new();
+    public ObservableCollection<ChatMessage> Messages { get; } = new();
 
     private bool _isConnected;
     public bool IsConnected
     {
         get => _isConnected;
-        set { _isConnected = value; OnPropertyChanged(); }
+        private set { _isConnected = value; OnPropertyChanged(); }
     }
 
     private string _statusMessage = "Idle";
     public string StatusMessage
     {
         get => _statusMessage;
-        set { _statusMessage = value; OnPropertyChanged(); }
+        private set { _statusMessage = value; OnPropertyChanged(); }
     }
-
-    public ObservableCollection<PeerNode> AvailablePeers { get; } = new();
-
-    private PeerNode? _selectedPeer;
-    public PeerNode? SelectedPeer
-    {
-        get => _selectedPeer;
-        set
-        {
-            _selectedPeer = value;
-            OnPropertyChanged();
-
-            if (value != null)
-            {
-                MainThread.BeginInvokeOnMainThread(async () =>
-                {
-                    Messages.Clear();
-                    await LoadChatHistoryAsync(value);
-                });
-            }
-        }
-    }
-
-    public ObservableCollection<ChatMessage> Messages { get; } = new();
 
     private string _outgoingMessage = string.Empty;
     public string OutgoingMessage
@@ -71,17 +46,7 @@ public class MessagingViewModel : BindableObject
         set { _outgoingMessage = value; OnPropertyChanged(); }
     }
 
-    // =====================
-    // COMMANDS
-    // =====================
-
-    public ICommand HostCommand { get; }
-    public ICommand ConnectCommand { get; }
     public ICommand SendMessageCommand { get; }
-
-    // =====================
-    // CONSTRUCTOR
-    // =====================
 
     public MessagingViewModel(
         ZcspPeer peer,
@@ -92,166 +57,185 @@ public class MessagingViewModel : BindableObject
         _messaging = messaging;
         _chatQueries = chatQueries;
 
-        HostCommand = new Command(async () =>
-        {
-            if (IsHosting)
-                return;
+        SendMessageCommand = new Command(async () => await SendAsync(), () => _sessionReady);
 
-            try
-            {
-                IsHosting = true;
-                StatusMessage = "Hosting started on port 5555";
+        _messaging.MessageReceived += OnMessageReceived;
 
-                _ = Task.Run(() =>
-                    _peer.StartHostingAsync(
-                        5555,
-                        name => name == _messaging.ServiceName ? _messaging : null
-                    )
-                );
-            }
-            catch (Exception ex)
-            {
-                IsHosting = false;
-                StatusMessage = $"Hosting failed: {ex.Message}";
-            }
-        });
-
-        ConnectCommand = new Command(async () =>
-        {
-            if (SelectedPeer == null)
-            {
-                StatusMessage = "No peer selected";
-                IsConnected = false;
-                return;
-            }
-
-            try
-            {
-                StatusMessage = $"Connecting to {SelectedPeer.HostName} ({SelectedPeer.IpAddress})...";
-                IsConnected = false;
-
-                await _messaging.ConnectToPeerAsync(
-                    SelectedPeer.IpAddress,
-                    5555,
-                    SelectedPeer.ProtocolPeerId
-                );
-
-                StatusMessage = $"Connected to {SelectedPeer.HostName}";
-                IsConnected = true;
-
-                // Keep the "active session peer" consistent
-                _activeProtocolPeerId = SelectedPeer.ProtocolPeerId;
-            }
-            catch (Exception ex)
-            {
-                StatusMessage = $"Connection failed: {ex.Message}";
-                IsConnected = false;
-            }
-        });
-
-        SendMessageCommand = new Command(async () =>
-        {
-            if (string.IsNullOrWhiteSpace(OutgoingMessage))
-                return;
-
-            await _messaging.SendMessageAsync(OutgoingMessage);
-            OutgoingMessage = string.Empty;
-        });
-
-        _messaging.MessageReceived += msg =>
-        {
-            MainThread.BeginInvokeOnMainThread(() =>
-            {
-                if (_activeProtocolPeerId == null)
-                    return;
-
-                // Only show messages for the currently active conversation
-                if (msg.FromPeer != _activeProtocolPeerId &&
-                    msg.ToPeer != _activeProtocolPeerId)
-                    return;
-
-                // Ensure UI selection matches session (optional but nice)
-                if (SelectedPeer == null || SelectedPeer.ProtocolPeerId != _activeProtocolPeerId)
-                    SelectedPeer = AvailablePeers.FirstOrDefault(p => p.ProtocolPeerId == _activeProtocolPeerId);
-
-                Messages.Add(msg);
-            });
-        };
-
-        _messaging.SessionStarted += remoteProtocolPeerId =>
-        {
-            MainThread.BeginInvokeOnMainThread(async () =>
-            {
-                _activeProtocolPeerId = remoteProtocolPeerId;
-
-                // refresh list (in case discovery just added them)
-                await LoadPeersAsync();
-
-                // auto-select the peer that matches the session
-                SelectedPeer = AvailablePeers.FirstOrDefault(p => p.ProtocolPeerId == remoteProtocolPeerId);
-
-                IsConnected = SelectedPeer != null;
-                StatusMessage = IsConnected
-                    ? $"Connected to {SelectedPeer!.HostName}"
-                    : $"Connected (unknown peer: {remoteProtocolPeerId})";
-
-                // load history so session messages stack on top
-                if (SelectedPeer != null)
-                    await LoadChatHistoryAsync(SelectedPeer);
-            });
-        };
-
-        _messaging.SessionClosed += () =>
-        {
-            MainThread.BeginInvokeOnMainThread(() =>
-            {
-                _activeProtocolPeerId = null;
-                IsConnected = false;
-                StatusMessage = "Disconnected";
-            });
-        };
-
-        // Initial load
-        _ = LoadPeersAsync();
+        _ = InitAsync();
     }
 
-    // =====================
-    // HELPERS
-    // =====================
-
-    private async Task LoadPeersAsync()
+    // 🔹 IMPORTANT: async Task, NOT async void
+    public async Task ActivateConversationFromUIAsync(ConversationItem convo)
     {
-        var peers = await _chatQueries.GetPeersAsync();
-        var previouslySelectedPeerId = SelectedPeer?.PeerId;
+        if (_activeConversation == convo)
+            return;
 
-        AvailablePeers.Clear();
+        _activeConversation = convo;
+        _activeProtocolPeerId = convo.Peer.ProtocolPeerId;
+        _sessionReady = false;
+        IsConnected = false;
+
+        StatusMessage = $"Connecting to {convo.DisplayName}…";
+
+        await _messaging.EnsureSessionAsync(
+            convo.Peer.ProtocolPeerId,
+            convo.Peer.IpAddress,
+            MessagingPort);
+
+        _sessionReady = true;
+        IsConnected = true;
+        StatusMessage = $"Chatting with {convo.DisplayName}";
+        ((Command)SendMessageCommand).ChangeCanExecute();
+
+        await LoadChatHistoryAsync(convo.Peer);
+    }
+
+    private async Task SendAsync()
+    {
+        if (!_sessionReady || _activeConversation == null)
+            return;
+
+        var text = OutgoingMessage.Trim();
+        if (string.IsNullOrWhiteSpace(text))
+            return;
+
+        var msg = new ChatMessage(
+            id: Guid.NewGuid(), // temporary UI ID
+            fromPeer: _peer.PeerId, // STRING
+            toPeer: _activeProtocolPeerId!, // STRING
+            content: text,
+            direction: MessageDirection.Outgoing,
+            timestamp: DateTime.UtcNow);
+
+        // Optimistic UI update
+        Messages.Add(msg);
+        MessagesChanged?.Invoke();
+
+        OutgoingMessage = string.Empty;
+
+        await _messaging.SendMessageAsync(
+            _activeConversation.Peer.ProtocolPeerId,
+            _activeConversation.Peer.IpAddress,
+            MessagingPort,
+            text);
+    }
+
+
+    private void OnMessageReceived(ChatMessage msg)
+    {
+        if (msg.Direction == MessageDirection.Outgoing &&
+            msg.FromPeer == _peer.PeerId)
+            return;
+
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            var other = msg.FromPeer == _peer.PeerId
+                ? msg.ToPeer
+                : msg.FromPeer;
+
+            UpdateConversationPreview(other, msg.Content, msg.Timestamp);
+
+            if (_activeProtocolPeerId == null)
+                return;
+
+            if (msg.FromPeer != _activeProtocolPeerId &&
+                msg.ToPeer != _activeProtocolPeerId)
+                return;
+
+            Messages.Add(msg);
+            MessagesChanged?.Invoke();
+        });
+    }
+
+
+
+    private async Task InitAsync()
+    {
+        _localPeerDbId = await _chatQueries.GetLocalPeerIdAsync();
+        await LoadConversationsAsync();
+        StatusMessage = "Ready";
+    }
+
+    private async Task LoadConversationsAsync()
+    {
+        if (_localPeerDbId is null)
+            return;
+
+        Conversations.Clear();
+
+        var peers = (await _chatQueries.GetPeersAsync())
+            .Where(p => !p.IsLocal)
+            .ToList();
+
         foreach (var peer in peers)
-            AvailablePeers.Add(peer);
+        {
+            var item = new ConversationItem(peer);
 
-        if (previouslySelectedPeerId != null)
-            SelectedPeer = AvailablePeers.FirstOrDefault(p => p.PeerId == previouslySelectedPeerId);
+            var last = await _chatQueries.GetLastMessageBetweenAsync(
+                _localPeerDbId.Value,
+                peer.PeerId);
+
+            if (last != null)
+            {
+                item.LastMessage = last.Content;
+                item.LastTimestamp = last.Timestamp;
+            }
+
+            Conversations.Add(item);
+        }
+
+        ResortConversations();
     }
 
     private async Task LoadChatHistoryAsync(PeerNode peer)
     {
-        var localPeerId = await _chatQueries.GetLocalPeerIdAsync();
-        if (localPeerId is null)
-        {
-            Messages.Clear();
-            return;
-        }
-
-        var history = await _chatQueries.GetHistoryAsync(localPeerId.Value, peer.PeerId);
-
         Messages.Clear();
 
-        foreach (var chatMessage in ChatMessageMapper.FromHistoryList(
+        var history = await _chatQueries.GetHistoryAsync(
+            _localPeerDbId!.Value,
+            peer.PeerId);
+
+        foreach (var msg in ChatMessageMapper.FromHistoryList(
                      history,
-                     localPeerId.Value,
+                     _localPeerDbId.Value,
                      _peer.PeerId,
                      peer.ProtocolPeerId))
         {
-            Messages.Add(chatMessage);
+            Messages.Add(msg);
+        }
+
+        MessagesChanged?.Invoke();
+    }
+
+    private void UpdateConversationPreview(string protocolPeerId, string lastMessage, DateTime ts)
+    {
+        var convo = Conversations.FirstOrDefault(c => c.Peer.ProtocolPeerId == protocolPeerId);
+        if (convo == null)
+            return;
+
+        convo.LastMessage = lastMessage;
+        convo.LastTimestamp = ts;
+
+        var idx = Conversations.IndexOf(convo);
+        if (idx > 0)
+            Conversations.Move(idx, 0);
+    }
+
+    private void ResortConversations()
+    {
+        if (Conversations.Count <= 1)
+            return;
+
+        var ordered = Conversations
+            .OrderByDescending(c => c.LastTimestamp ?? DateTime.MinValue)
+            .ToList();
+
+        for (int i = 0; i < ordered.Count; i++)
+        {
+            var item = ordered[i];
+            var currentIndex = Conversations.IndexOf(item);
+            if (currentIndex != i)
+                Conversations.Move(currentIndex, i);
         }
     }
 }

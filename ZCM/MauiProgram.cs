@@ -1,7 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Logging;
-using System;
 using System.Net;
 using ZCL.API;
 using ZCL.Models;
@@ -13,21 +12,15 @@ using ZCL.Services.Messaging;
 
 namespace ZCM
 {
-    // NOTE(luca): Helper to access services from the builder 
     public static class ServiceHelper
     {
-        public static IServiceProvider Services { get; private set; }
-
+        public static IServiceProvider Services { get; private set; } = default!;
         public static void Initialize(IServiceProvider serviceProvider) => Services = serviceProvider;
-
-        public static T GetService<T>() => Services.GetService<T>();
+        public static T GetService<T>() => Services.GetService<T>()!;
     }
 
     public class ServiceDBContextFactory : IDesignTimeDbContextFactory<ServiceDBContext>
     {
-        // dotnet ef migrations add InitialCreate --framework net10.0-windows10.0.19041.0 --no-build
-        // dotnet ef database update --framework net10.0-windows10.0.19041.0 --no-build
-
         public ServiceDBContext CreateDbContext(string[] args)
         {
             var optionsBuilder = new DbContextOptionsBuilder<ServiceDBContext>();
@@ -36,7 +29,6 @@ namespace ZCM
                 Config.DBFileName);
 
             optionsBuilder.UseSqlite($"Data Source={dbPath}");
-
             return new ServiceDBContext(optionsBuilder.Options);
         }
     }
@@ -63,73 +55,58 @@ namespace ZCM
 
             builder.Services.AddSingleton<DataStore>();
 
-            // Repositories / query services
+            // scoped repos (EF)
             builder.Services.AddScoped<IPeerRepository, PeerRepository>();
             builder.Services.AddScoped<IMessageRepository, MessageRepository>();
             builder.Services.AddScoped<IChatQueryService, ChatQueryService>();
 
-            // ZCSP peer + sessions
+            // ZCSP
             builder.Services.AddSingleton<SessionRegistry>();
+            builder.Services.AddSingleton<ZcspPeer>();
 
-            builder.Services.AddSingleton(sp =>
-            {
-                var sessions = sp.GetRequiredService<SessionRegistry>();
-
-                // IMPORTANT:
-                // If you want discovery + chat to share identity, prefer a GUID string here.
-                // For now this keeps your original behavior.
-                return new ZcspPeer(Config.peerName, sessions);
-            });
-
-            builder.Services.AddScoped<MessagingService>();
+            // IMPORTANT: singleton so UI + background share ONE instance
+            builder.Services.AddSingleton<MessagingService>();
 
 #if DEBUG
             builder.Logging.AddDebug();
 #endif
             var app = builder.Build();
 
-            // Seed / ensure DB structure once at startup
+            // Ensure DB exists
             using (var scope = app.Services.CreateScope())
             {
-                var scopedDb = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
-                var peersRepo = scope.ServiceProvider.GetRequiredService<IPeerRepository>();
-                var zcspPeer = scope.ServiceProvider.GetRequiredService<ZcspPeer>();
-
-                scopedDb.Database.EnsureCreated();
-
-                peersRepo.EnsureLocalPeerAsync(zcspPeer.PeerId).GetAwaiter().GetResult();
-
-                ServiceDbSeeder
-                    .SeedAsync(peersRepo, zcspPeer.PeerId)
-                    .GetAwaiter()
-                    .GetResult();
+                var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+                db.Database.EnsureCreated();
             }
 
             ServiceHelper.Initialize(app.Services);
 
-            var db = ServiceHelper.GetService<ServiceDBContext>();
-            db.Database.EnsureCreated();
-
-            var store = ServiceHelper.GetService<DataStore>();
-
-            // Initialize store
+            // Init store from DB (optional / UI)
+            using (var scope = app.Services.CreateScope())
             {
-                var peersFromDb = db.PeerNodes.ToList();
-                foreach (PeerNode peer in peersFromDb)
+                var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+                var store = scope.ServiceProvider.GetRequiredService<DataStore>();
+
+                foreach (var peer in db.PeerNodes.ToList())
                     store.Peers.Add(peer);
             }
 
-            // Run discovery service
+            // Start discovery
+            using (var scope = app.Services.CreateScope())
             {
-                int port = Config.Port;
+                var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+                var store = scope.ServiceProvider.GetRequiredService<DataStore>();
+
                 var multicastAddress = IPAddress.Parse(Config.MulticastAddress);
                 string dbPath = db.Database.GetDbConnection().DataSource;
 
                 Task.Run(() =>
-                {
-                    ZCDPPeer.StartAndRun(multicastAddress, port, dbPath, store);
-                });
+                    ZCDPPeer.StartAndRun(multicastAddress, Config.Port, dbPath, store)
+                );
             }
+
+            // Force MessagingService creation at startup -> starts hosting even if MessagingPage never opened
+            _ = app.Services.GetRequiredService<MessagingService>();
 
             return app;
         }

@@ -39,4 +39,11 @@ public sealed class ChatQueryService : IChatQueryService
             .OrderBy(m => m.Timestamp)
             .ToListAsync();
     }
+    public Task<MessageEntity?> GetLastMessageBetweenAsync(Guid localPeerId, Guid remotePeerDbId, CancellationToken ct = default)
+        => _db.Messages
+            .Where(m =>
+                (m.FromPeerId == localPeerId && m.ToPeerId == remotePeerDbId) ||
+                (m.FromPeerId == remotePeerDbId && m.ToPeerId == localPeerId))
+            .OrderByDescending(m => m.Timestamp)
+            .FirstOrDefaultAsync(ct);
 }
