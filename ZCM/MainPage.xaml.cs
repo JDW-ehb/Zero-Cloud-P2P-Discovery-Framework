@@ -43,7 +43,6 @@ public partial class MainPage : ContentPage
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
-        _timer?.Stop();
     }
 
     private void SyncPeers()
