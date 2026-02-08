@@ -16,9 +16,7 @@ namespace ZCM
     public static class ServiceHelper
     {
         public static IServiceProvider Services { get; private set; } = default!;
-
         public static void Initialize(IServiceProvider serviceProvider) => Services = serviceProvider;
-
         public static T GetService<T>() => Services.GetService<T>()!;
     }
 
@@ -26,7 +24,6 @@ namespace ZCM
     {
         // dotnet ef migrations add InitialCreate --framework net10.0-windows10.0.19041.0 --no-build
         // dotnet ef database update --framework net10.0-windows10.0.19041.0 --no-build
-
         public ServiceDBContext CreateDbContext(string[] args)
         {
             var optionsBuilder = new DbContextOptionsBuilder<ServiceDBContext>();
@@ -35,13 +32,16 @@ namespace ZCM
                 Config.DBFileName);
 
             optionsBuilder.UseSqlite($"Data Source={dbPath}");
-
             return new ServiceDBContext(optionsBuilder.Options);
         }
     }
 
     public static class MauiProgram
     {
+        // IMPORTANT: keep this scope alive for the whole app lifetime,
+        // otherwise MessagingService (Scoped) gets disposed and hosting stops.
+        private static IServiceScope? _messagingScope;
+
         public static MauiApp CreateMauiApp()
         {
             var builder = MauiApp.CreateBuilder();
@@ -73,6 +73,8 @@ namespace ZCM
             // ZcspPeer is singleton and resolves repo via IServiceScopeFactory internally
             builder.Services.AddSingleton<ZcspPeer>();
 
+            // MessagingService is scoped (uses DbContext-scoped repos), but we will keep one scope alive
+            // so it hosts even when MessagingPage is never opened.
             builder.Services.AddScoped<MessagingService>();
 
 #if DEBUG
@@ -80,7 +82,7 @@ namespace ZCM
 #endif
             var app = builder.Build();
 
-            // Ensure DB exists (NO SEEDING, NO POLLUTION)
+            // Ensure DB exists
             using (var scope = app.Services.CreateScope())
             {
                 var scopedDb = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
@@ -89,20 +91,23 @@ namespace ZCM
 
             ServiceHelper.Initialize(app.Services);
 
-            var db = ServiceHelper.GetService<ServiceDBContext>();
-            db.Database.EnsureCreated();
-
-            var store = ServiceHelper.GetService<DataStore>();
-
-            // Initialize store (load any existing peers)
+            // Load peers into in-memory store (optional / UI)
             {
+                using var scope = app.Services.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+                var store = scope.ServiceProvider.GetRequiredService<DataStore>();
+
                 var peersFromDb = db.PeerNodes.ToList();
                 foreach (PeerNode peer in peersFromDb)
                     store.Peers.Add(peer);
             }
 
-            // Run discovery service
+            // Run discovery service (kept as your existing pattern)
             {
+                using var scope = app.Services.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+                var store = scope.ServiceProvider.GetRequiredService<DataStore>();
+
                 int port = Config.Port;
                 var multicastAddress = IPAddress.Parse(Config.MulticastAddress);
                 string dbPath = db.Database.GetDbConnection().DataSource;
@@ -112,6 +117,10 @@ namespace ZCM
                     ZCDPPeer.StartAndRun(multicastAddress, port, dbPath, store);
                 });
             }
+
+            // Keep the scope alive so the service + its scoped dependencies aren't disposed.
+            _messagingScope = app.Services.CreateScope();
+            _ = _messagingScope.ServiceProvider.GetRequiredService<MessagingService>();
 
             return app;
         }
