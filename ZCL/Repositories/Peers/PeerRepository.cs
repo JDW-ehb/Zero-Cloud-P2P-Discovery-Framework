@@ -39,6 +39,13 @@ public sealed class PeerRepository : IPeerRepository
 
             if (locals.Count == 0)
             {
+                await _db.Database.ExecuteSqlRawAsync(
+                    "UPDATE PeerNodes SET IsLocal = 0 WHERE IsLocal = 1",
+                    ct);
+
+                _db.ChangeTracker.Clear();
+
+
                 var protocolId = Guid.NewGuid().ToString();
 
                 _db.PeerNodes.Add(new PeerNode
@@ -56,6 +63,7 @@ public sealed class PeerRepository : IPeerRepository
                 await _db.SaveChangesAsync(ct);
                 return protocolId;
             }
+
 
             // Keep newest local, demote extras (self-heal)
             var keep = locals[0];

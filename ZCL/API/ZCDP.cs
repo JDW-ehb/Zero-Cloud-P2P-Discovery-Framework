@@ -1,7 +1,4 @@
-﻿// ===========================
-// ZCL/API/ZCDP.cs (CORRECTED)
-// ===========================
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
@@ -65,6 +62,7 @@ namespace ZCL.API
             if (found == null)
             {
                 peers.Add(peer);
+                return peer;
             }
 
             return found;
@@ -106,7 +104,6 @@ namespace ZCL.API
             Guid peerGuid = GetOrCreateLocalPeerGuid(dbPath);
 
             Socket? sender;
-            // Create sender
             {
                 try
                 {
@@ -121,7 +118,6 @@ namespace ZCL.API
             }
 
             UdpClient? listener;
-            // Create listener
             {
                 try
                 {
@@ -129,13 +125,8 @@ namespace ZCL.API
 
                     listener.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                     listener.ExclusiveAddressUse = false;
-                    // NOTE(luca): We should not receive messages from ourself.
                     listener.MulticastLoopback = false;
 
-                    // NOTE(luca): The default interface which we bind to might be wrong.
-                    // On Windows you often have multiple "Up" interfaces (Wi-Fi, Ethernet, VPN, Hyper-V, VMware, WSL, ...).
-                    // If we join multicast on the wrong one, we will NEVER receive other peers.
-                    // So we join the multicast group on ALL IPv4 interfaces that are up (except loopback).
                     {
                         var joinedAtLeastOne = false;
 
@@ -165,7 +156,6 @@ namespace ZCL.API
 
                         if (!joinedAtLeastOne)
                         {
-                            // Fallback: join without specifying interface (may still work on simple setups)
                             Debug.WriteLine("No IPv4 interfaces joined multicast explicitly; falling back to default join.");
                             listener.JoinMulticastGroup(multicastAddress);
                         }
@@ -191,7 +181,6 @@ namespace ZCL.API
                 try
                 {
                     using var db = CreateDBContext(dbPath);
-                    //  db.ChangeTracker.Clear();
 
                     if (listener != null)
                     {
@@ -201,15 +190,11 @@ namespace ZCL.API
                         {
                             byte[] bytes = listener.Receive(ref remoteEndPoint);
 
-                            // TODO(luca): Bulletproof reading of packets since they might be corrupted or wrong.
-                            // Create a wrapper that will exit and log if reading fails.
-
                             using MemoryStream memory = new MemoryStream(bytes);
                             using BinaryReader reader = new BinaryReader(memory, Encoding.UTF8, leaveOpen: true);
 
                             MsgHeader header;
 
-                            // Decode header
                             {
                                 header = new MsgHeader
                                 {
@@ -223,8 +208,6 @@ namespace ZCL.API
                                 header.PeerGuid = new Guid(guidBytes);
                             }
 
-                            // NOTE(luca): We shouldn't receive our own multicast if MulticastLoopback is false,
-                            // but some stacks still behave weird. Ignore self just in case.
                             if (header.PeerGuid == peerGuid)
                             {
                                 Debug.WriteLine(">>> Ignored self announce.");
@@ -244,45 +227,12 @@ namespace ZCL.API
                                             ServicesCount = reader.ReadUInt64(),
                                         };
 
-                                        // NOTE(luca): Sometimes the address of a peer might change, we should detect based on the Guid.
-                                        // PeerNode doesn't store Guid directly; we use ProtocolPeerId = Guid.ToString() as identity.
                                         var remoteProtocolPeerId = header.PeerGuid.ToString();
                                         var now = DateTime.UtcNow;
 
-                                        // DbSet must be PeerNodes in your context
-                                        PeerNode? peer = db.PeerNodes
-                                            .FirstOrDefault(p => p.ProtocolPeerId == remoteProtocolPeerId);
-
-                                        if (peer != null)
-                                        {
-                                            // message.Name becomes HostName in PeerNode
-                                            peer.HostName = message.Name;
-
-                                            // Address becomes IpAddress in PeerNode
-                                            peer.IpAddress = remoteEndPoint.Address.ToString();
-
-                                            peer.LastSeen = now;
-                                            peer.OnlineStatus = PeerOnlineStatus.Online;
-
-                                            var memoryPeer = store.Peers
-                                                .FirstOrDefault(p => p.ProtocolPeerId == remoteProtocolPeerId);
-
-                                            if (memoryPeer != null)
-                                            {
-                                                memoryPeer.HostName = peer.HostName;
-                                                memoryPeer.IpAddress = peer.IpAddress;
-                                                memoryPeer.LastSeen = now;
-                                                memoryPeer.OnlineStatus = peer.OnlineStatus;
-                                            }
-                                            else
-                                            {
-                                                // NOTE(luca): If it exists in DB but not yet in memory, add it now.
-                                                store.Peers.Add(peer);
-                                            }
-                                        }
-                                        else
-                                        {
-                                            peer = new PeerNode
+                                        PeerNode peer = db.PeerNodes
+                                            .FirstOrDefault(p => p.ProtocolPeerId == remoteProtocolPeerId)
+                                            ?? new PeerNode
                                             {
                                                 PeerId = Guid.NewGuid(),
                                                 ProtocolPeerId = remoteProtocolPeerId,
@@ -294,20 +244,20 @@ namespace ZCL.API
                                                 IsLocal = false
                                             };
 
+                                        peer.HostName = message.Name;
+                                        peer.IpAddress = remoteEndPoint.Address.ToString();
+                                        peer.LastSeen = now;
+                                        peer.OnlineStatus = PeerOnlineStatus.Online;
+
+                                        if (db.Entry(peer).State == EntityState.Detached)
                                             db.PeerNodes.Add(peer);
-                                            store.Peers.Add(peer);
-                                        }
+
+                                        store.Peers.AddUniquePeer(peer);
 
                                         db.SaveChanges();
 
-                                        for (uint idx = 0; idx < message.ServicesCount; idx += 1)
+                                        for (uint idx = 0; idx < message.ServicesCount; idx++)
                                         {
-                                            if (idx == 0)
-                                            {
-                                                Debug.WriteLine("Services:");
-                                            }
-
-                                            // Service property casing + link to peer via PeerRefId
                                             Service service = new Service
                                             {
                                                 Name = reader.ReadString(),
@@ -316,40 +266,17 @@ namespace ZCL.API
                                                 PeerRefId = peer.PeerId
                                             };
 
-                                            // TODO(luca): This is really annoying, what I would want is that the dbContext does not fail when
-                                            // adding a new service because that will break the updates above as well.
-
-                                            // Add only if it is unique
+                                            if (!db.Services.Any(s =>
+                                                s.PeerRefId == peer.PeerId &&
+                                                s.Name == service.Name &&
+                                                s.Address == service.Address &&
+                                                s.Port == service.Port))
                                             {
-                                                bool exists = db.Services.Any(s =>
-                                                    s.PeerRefId == peer.PeerId &&
-                                                    s.Name == service.Name &&
-                                                    s.Address == service.Address &&
-                                                    s.Port == service.Port);
-
-                                                if (!exists)
-                                                {
-                                                    db.Services.Add(service);
-                                                    Debug.WriteLine($"- Added service {service.Name}");
-                                                }
+                                                db.Services.Add(service);
                                             }
                                         }
 
-                                        try
-                                        {
-                                            db.SaveChanges();
-                                        }
-                                        catch (Exception e)
-                                        {
-                                            Debug.WriteLine($"Could not save changes: {e.Message}");
-                                            Debug.WriteLine(e.InnerException?.Message);
-                                        }
-
-                                        break;
-                                    }
-                                default:
-                                    {
-                                        // TODO(luca): Log unhandled message.
+                                        db.SaveChanges();
                                         break;
                                     }
                             }
@@ -363,7 +290,6 @@ namespace ZCL.API
                         }
                     }
 
-                    // Announce services to other peers
                     if (sender != null)
                     {
                         Debug.WriteLine("Announcing...");
@@ -379,7 +305,7 @@ namespace ZCL.API
                         {
                             Version = (ushort)ZCDPProtocolVersion,
                             Type = (uint)MsgType.Announce,
-                            MessageId = MessageID,
+                            MessageId = MessageID++,
                             PeerGuid = peerGuid,
                         };
 
@@ -408,13 +334,7 @@ namespace ZCL.API
                         }
 
                         writer.Flush();
-
-                        byte[] packet = memory.ToArray();
-
-                        IPEndPoint endPoint = new IPEndPoint(multicastAddress, port);
-                        sender.SendTo(packet, endPoint);
-
-                        MessageID += 1;
+                        sender.SendTo(memory.ToArray(), new IPEndPoint(multicastAddress, port));
                     }
                 }
                 catch (Exception e)
