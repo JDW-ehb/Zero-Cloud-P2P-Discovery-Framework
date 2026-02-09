@@ -53,19 +53,25 @@ namespace ZCL.API
 
     public static class ZCDPPeer
     {
-        public static PeerNode? AddUniquePeer(this ObservableCollection<PeerNode> peers, PeerNode peer)
+        public static PeerNode AddOrUpdatePeer(
+            this ObservableCollection<PeerNode> peers,
+            PeerNode incoming)
         {
-            // NOTE: PeerNode doesn't have Name/Address/Guid like the old Peer model.
-            // ProtocolPeerId is the stable identity in your new model, so use that.
-            var found = peers.FirstOrDefault(p => p.ProtocolPeerId == peer.ProtocolPeerId);
+            var existing = peers.FirstOrDefault(p =>
+                p.ProtocolPeerId == incoming.ProtocolPeerId);
 
-            if (found == null)
+            if (existing == null)
             {
-                peers.Add(peer);
-                return peer;
+                peers.Add(incoming);
+                return incoming;
             }
 
-            return found;
+            existing.HostName = incoming.HostName;
+            existing.IpAddress = incoming.IpAddress;
+            existing.LastSeen = incoming.LastSeen;
+            existing.OnlineStatus = incoming.OnlineStatus;
+
+            return existing;
         }
 
         public static ServiceDBContext CreateDBContext(string dbPath)
@@ -252,7 +258,7 @@ namespace ZCL.API
                                         if (db.Entry(peer).State == EntityState.Detached)
                                             db.PeerNodes.Add(peer);
 
-                                        store.Peers.AddUniquePeer(peer);
+                                        store.Peers.AddOrUpdatePeer(peer);
 
                                         db.SaveChanges();
 

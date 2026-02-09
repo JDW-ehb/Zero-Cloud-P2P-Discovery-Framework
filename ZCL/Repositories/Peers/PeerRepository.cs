@@ -23,71 +23,82 @@ public sealed class PeerRepository : IPeerRepository
     ///   update hostname/ip, self-heal duplicates, and return the kept ProtocolPeerId.
     /// </summary>
     public async Task<string> GetOrCreateLocalProtocolPeerIdAsync(
-        string hostName,
-        string ipAddress = "127.0.0.1",
-        CancellationToken ct = default)
+    string hostName,
+    string ipAddress = "127.0.0.1",
+    CancellationToken ct = default)
     {
         await _lock.WaitAsync(ct);
         try
         {
             var now = DateTime.UtcNow;
 
-            var locals = await _db.PeerNodes
+            var local = await _db.PeerNodes
                 .Where(p => p.IsLocal)
                 .OrderByDescending(p => p.LastSeen)
-                .ToListAsync(ct);
+                .FirstOrDefaultAsync(ct);
 
-            if (locals.Count == 0)
+            if (local != null)
             {
-                await _db.Database.ExecuteSqlRawAsync(
-                    "UPDATE PeerNodes SET IsLocal = 0 WHERE IsLocal = 1",
-                    ct);
+                // One-time legacy repair only
+                if (!Guid.TryParse(local.ProtocolPeerId, out _))
+                    local.ProtocolPeerId = Guid.NewGuid().ToString();
 
-                _db.ChangeTracker.Clear();
+                local.HostName = string.IsNullOrWhiteSpace(hostName)
+                    ? local.HostName
+                    : hostName;
 
+                local.IpAddress = string.IsNullOrWhiteSpace(ipAddress)
+                    ? local.IpAddress
+                    : ipAddress;
 
-                var protocolId = Guid.NewGuid().ToString();
+                local.LastSeen = now;
+                local.OnlineStatus = PeerOnlineStatus.Online;
 
-                _db.PeerNodes.Add(new PeerNode
-                {
-                    PeerId = Guid.NewGuid(),
-                    ProtocolPeerId = protocolId,
-                    HostName = string.IsNullOrWhiteSpace(hostName) ? protocolId : hostName,
-                    IpAddress = string.IsNullOrWhiteSpace(ipAddress) ? "127.0.0.1" : ipAddress,
-                    FirstSeen = now,
-                    LastSeen = now,
-                    OnlineStatus = PeerOnlineStatus.Online,
-                    IsLocal = true
-                });
+                await _db.SaveChangesAsync(ct);
+                return local.ProtocolPeerId;
+            }
 
+            var protocolId = Guid.NewGuid().ToString();
+
+            _db.PeerNodes.Add(new PeerNode
+            {
+                PeerId = Guid.NewGuid(),
+                ProtocolPeerId = protocolId,
+                HostName = string.IsNullOrWhiteSpace(hostName) ? protocolId : hostName,
+                IpAddress = string.IsNullOrWhiteSpace(ipAddress) ? "127.0.0.1" : ipAddress,
+                FirstSeen = now,
+                LastSeen = now,
+                OnlineStatus = PeerOnlineStatus.Online,
+                IsLocal = true
+            });
+
+            try
+            {
                 await _db.SaveChangesAsync(ct);
                 return protocolId;
             }
+            catch (DbUpdateException ex) when
+            (
+                ex.InnerException is Microsoft.Data.Sqlite.SqliteException sqlite &&
+                sqlite.SqliteErrorCode == 19 // UNIQUE constraint violation
+            )
+            {
+                // Another DbContext won the race → re-read and return the real local peer
+                var existing = await _db.PeerNodes
+                    .Where(p => p.IsLocal)
+                    .OrderByDescending(p => p.LastSeen)
+                    .FirstAsync(ct);
 
-
-            // Keep newest local, demote extras (self-heal)
-            var keep = locals[0];
-
-            // Legacy fix: if local ProtocolPeerId is not a GUID, replace it
-            if (!Guid.TryParse(keep.ProtocolPeerId, out _))
-                keep.ProtocolPeerId = Guid.NewGuid().ToString();
-
-            keep.HostName = string.IsNullOrWhiteSpace(hostName) ? keep.HostName : hostName;
-            keep.IpAddress = string.IsNullOrWhiteSpace(ipAddress) ? keep.IpAddress : ipAddress;
-            keep.LastSeen = now;
-            keep.OnlineStatus = PeerOnlineStatus.Online;
-
-            foreach (var extra in locals.Skip(1))
-                extra.IsLocal = false;
-
-            await _db.SaveChangesAsync(ct);
-            return keep.ProtocolPeerId;
+                return existing.ProtocolPeerId;
+            }
         }
         finally
         {
             _lock.Release();
         }
     }
+
+
 
     public async Task<PeerNode> GetOrCreateAsync(
         string protocolPeerId,
@@ -167,58 +178,7 @@ public sealed class PeerRepository : IPeerRepository
     /// Keeps newest local row, demotes extras. Also ensures the kept row matches the provided localProtocolPeerId.
     /// Note: if you move fully to GetOrCreateLocalProtocolPeerIdAsync, this method becomes mostly redundant.
     /// </summary>
-    public async Task EnsureLocalPeerAsync(string localProtocolPeerId, CancellationToken ct = default)
-    {
-        if (string.IsNullOrWhiteSpace(localProtocolPeerId))
-            throw new ArgumentException(nameof(localProtocolPeerId));
-
-        await _lock.WaitAsync(ct);
-        try
-        {
-            var locals = await _db.PeerNodes
-                .Where(p => p.IsLocal)
-                .OrderByDescending(p => p.LastSeen)
-                .ToListAsync(ct);
-
-            if (locals.Count == 0)
-            {
-                var now = DateTime.UtcNow;
-
-                _db.PeerNodes.Add(new PeerNode
-                {
-                    PeerId = Guid.NewGuid(),
-                    ProtocolPeerId = localProtocolPeerId,
-                    HostName = localProtocolPeerId,
-                    IpAddress = "127.0.0.1",
-                    FirstSeen = now,
-                    LastSeen = now,
-                    OnlineStatus = PeerOnlineStatus.Online,
-                    IsLocal = true
-                });
-
-                await _db.SaveChangesAsync(ct);
-                return;
-            }
-
-            // Keep newest local, demote extras (self-heal)
-            var keep = locals[0];
-
-            if (keep.ProtocolPeerId != localProtocolPeerId)
-            {
-                keep.ProtocolPeerId = localProtocolPeerId;
-                keep.HostName = localProtocolPeerId;
-            }
-
-            foreach (var extra in locals.Skip(1))
-                extra.IsLocal = false;
-
-            await _db.SaveChangesAsync(ct);
-        }
-        finally
-        {
-            _lock.Release();
-        }
-    }
+    
 
     public Task<Guid?> GetLocalPeerIdAsync(CancellationToken ct = default)
     {
