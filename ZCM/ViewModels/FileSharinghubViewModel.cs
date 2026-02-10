@@ -2,6 +2,7 @@
 using Microsoft.Maui.Storage;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using Microsoft.EntityFrameworkCore;
 using ZCL.Models;
 using ZCL.Services.FileSharing;
 using ZCL.Repositories.Peers;
@@ -21,6 +22,7 @@ public sealed class FileSharingHubViewModel : BindableObject
 
     public ICommand DownloadCommand { get; }
     public ICommand AddLocalFilesCommand { get; }
+    public ICommand RemoveLocalFileCommand { get; }
 
     public FileSharingHubViewModel(
         FileSharingService service,
@@ -33,16 +35,30 @@ public sealed class FileSharingHubViewModel : BindableObject
 
         DownloadCommand = new Command<SharedFileItem>(async file =>
         {
-            if (file == null) return;
+            if (file == null)
+                return;
+
             await _service.RequestFileAsync(file.FileId);
         });
 
         AddLocalFilesCommand = new Command(async () =>
             await PickAndShareFilesAsync());
 
+        RemoveLocalFileCommand = new Command<SharedFileEntity>(async file =>
+        {
+            if (file == null)
+                return;
+
+            await RemoveLocalFileAsync(file);
+        });
+
         _ = LoadPeersAsync();
         _ = LoadLocalSharedFilesAsync();
     }
+
+    // =========================
+    // PEER SELECTION
+    // =========================
 
     public async Task ActivatePeerAsync(PeerNode peer)
     {
@@ -50,17 +66,21 @@ public sealed class FileSharingHubViewModel : BindableObject
             return;
 
         _activePeer = peer;
-        Files.Clear();
+        MainThread.BeginInvokeOnMainThread(Files.Clear);
 
         await _service.EnsureSessionAsync(peer);
-        await _service.WaitForSessionBindingAsync(); 
+        await _service.WaitForSessionBindingAsync();
         await _service.RequestListAsync();
-
     }
+
+    // =========================
+    // PEERS
+    // =========================
 
     private async Task LoadPeersAsync()
     {
         var all = await _peers.GetAllAsync();
+
         MainThread.BeginInvokeOnMainThread(() =>
         {
             Peers.Clear();
@@ -69,11 +89,16 @@ public sealed class FileSharingHubViewModel : BindableObject
         });
     }
 
+    // =========================
+    // REMOTE FILES
+    // =========================
+
     private void OnFilesReceived(IReadOnlyList<SharedFileDto> files)
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
             Files.Clear();
+
             foreach (var f in files)
             {
                 Files.Add(new SharedFileItem
@@ -88,6 +113,10 @@ public sealed class FileSharingHubViewModel : BindableObject
         });
     }
 
+    // =========================
+    // LOCAL SHARED FILES
+    // =========================
+
     private async Task LoadLocalSharedFilesAsync()
     {
         var localPeerId = await _peers.GetLocalPeerIdAsync();
@@ -97,9 +126,9 @@ public sealed class FileSharingHubViewModel : BindableObject
         using var scope = ServiceHelper.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
 
-        var files = db.SharedFiles
+        var files = await db.SharedFiles
             .Where(f => f.PeerRefId == localPeerId && f.IsAvailable)
-            .ToList();
+            .ToListAsync();
 
         MainThread.BeginInvokeOnMainThread(() =>
         {
@@ -108,6 +137,27 @@ public sealed class FileSharingHubViewModel : BindableObject
                 LocalFiles.Add(f);
         });
     }
+
+    private async Task RemoveLocalFileAsync(SharedFileEntity file)
+    {
+        using var scope = ServiceHelper.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+
+        var entity = await db.SharedFiles
+            .FirstOrDefaultAsync(f => f.FileId == file.FileId);
+
+        if (entity == null)
+            return;
+
+        entity.IsAvailable = false;
+
+        await db.SaveChangesAsync();
+        await LoadLocalSharedFilesAsync();
+    }
+
+    // =========================
+    // ADD FILES (PICKER)
+    // =========================
 
     private async Task PickAndShareFilesAsync()
     {
@@ -125,6 +175,7 @@ public sealed class FileSharingHubViewModel : BindableObject
         foreach (var file in result)
         {
             var info = new FileInfo(file.FullPath);
+
             db.SharedFiles.Add(new SharedFileEntity
             {
                 FileId = Guid.NewGuid(),
@@ -142,6 +193,10 @@ public sealed class FileSharingHubViewModel : BindableObject
         await db.SaveChangesAsync();
         await LoadLocalSharedFilesAsync();
     }
+
+    // =========================
+    // ADD FILES (DRAG & DROP)
+    // =========================
 
     public async Task AddFilesFromPathsAsync(IEnumerable<string> paths)
     {
@@ -176,5 +231,4 @@ public sealed class FileSharingHubViewModel : BindableObject
         await db.SaveChangesAsync();
         await LoadLocalSharedFilesAsync();
     }
-
 }
