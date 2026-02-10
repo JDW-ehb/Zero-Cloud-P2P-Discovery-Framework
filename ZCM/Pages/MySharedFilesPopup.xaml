@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="ZCM.Pages.MySharedFilesPopup"
+    BackgroundColor="#80000000">
+
+    <!-- Backdrop -->
+    <Grid>
+
+        <!-- Click-to-dismiss backdrop -->
+        <BoxView BackgroundColor="Transparent">
+            <BoxView.GestureRecognizers>
+                <TapGestureRecognizer Tapped="OnBackdropTapped" />
+            </BoxView.GestureRecognizers>
+        </BoxView>
+
+        <!-- Modal card -->
+        <Frame
+            WidthRequest="640"
+            Padding="20"
+            CornerRadius="18"
+            BackgroundColor="#1F1F1F"
+            HasShadow="False"
+            HorizontalOptions="Center"
+            VerticalOptions="Center">
+
+            <VerticalStackLayout Spacing="16">
+
+                <!-- ===================== -->
+                <!-- HEADER -->
+                <!-- ===================== -->
+                <Grid ColumnDefinitions="*,Auto">
+                    <VerticalStackLayout Spacing="2">
+                        <Label
+                            Text="Shared files"
+                            FontSize="20"
+                            FontAttributes="Bold"
+                            TextColor="White" />
+
+                        <Label
+                            Text="Files you expose to other peers on the local network"
+                            FontSize="12"
+                            TextColor="#AAAAAA" />
+                    </VerticalStackLayout>
+
+                    <Button
+                        Grid.Column="1"
+                        Text="✕"
+                        Clicked="OnCloseClicked"
+                        BackgroundColor="#2A2A2A"
+                        TextColor="White"
+                        CornerRadius="10"
+                        WidthRequest="36"
+                        HeightRequest="36" />
+                </Grid>
+
+                <!-- ===================== -->
+                <!-- DROP ZONE -->
+                <!-- ===================== -->
+                <Border
+                    Stroke="#27AE60"
+                    StrokeThickness="2"
+                    StrokeDashArray="6,4"
+                    BackgroundColor="#1A2E22"
+                    Padding="24">
+
+                    <Border.GestureRecognizers>
+                        <DropGestureRecognizer Drop="OnFilesDropped" />
+                    </Border.GestureRecognizers>
+
+                    <VerticalStackLayout
+                        HorizontalOptions="Center"
+                        VerticalOptions="Center"
+                        Spacing="8">
+
+                        <Label
+                            Text="Drop files to share"
+                            FontSize="16"
+                            FontAttributes="Bold"
+                            TextColor="White"
+                            HorizontalTextAlignment="Center" />
+
+                        <Label
+                            Text="or add them manually"
+                            FontSize="12"
+                            TextColor="#BBBBBB"
+                            HorizontalTextAlignment="Center" />
+
+                        <Button
+                            Text="Add files"
+                            Command="{Binding AddLocalFilesCommand}"
+                            BackgroundColor="#27AE60"
+                            TextColor="White"
+                            CornerRadius="10"
+                            Padding="16,8" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- ===================== -->
+                <!-- SHARED FILES LIST -->
+                <!-- ===================== -->
+                <VerticalStackLayout Spacing="8">
+
+                    <Label
+                        Text="Currently shared"
+                        FontSize="14"
+                        TextColor="#AAAAAA" />
+
+                    <CollectionView
+                        ItemsSource="{Binding LocalFiles}"
+                        HeightRequest="240"
+                        SelectionMode="None">
+
+                        <CollectionView.EmptyView>
+                            <Label
+                                Text="No files are currently shared"
+                                TextColor="#777777"
+                                HorizontalOptions="Center"
+                                VerticalOptions="Center" />
+                        </CollectionView.EmptyView>
+
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Frame
+                                    Padding="12"
+                                    Margin="0,4"
+                                    CornerRadius="10"
+                                    BackgroundColor="#2A2A2A"
+                                    HasShadow="False">
+
+                                    <Grid ColumnDefinitions="*,Auto">
+
+                                        <Label
+                                            Text="{Binding FileName}"
+                                            TextColor="White"
+                                            LineBreakMode="TailTruncation" />
+
+                                    </Grid>
+                                </Frame>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+
+                    </CollectionView>
+                </VerticalStackLayout>
+
+            </VerticalStackLayout>
+        </Frame>
+    </Grid>
+</ContentPage>

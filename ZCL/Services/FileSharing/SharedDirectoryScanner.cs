@@ -30,10 +30,11 @@ public sealed class SharedDirectoryScanner
         }
     }
 
-    private static string ComputeSha256(string path)
+    public static string ComputeSha256(string path)
     {
         using var sha = SHA256.Create();
         using var stream = File.OpenRead(path);
         return Convert.ToHexString(sha.ComputeHash(stream));
     }
+
 }

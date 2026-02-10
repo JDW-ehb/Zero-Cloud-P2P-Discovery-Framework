@@ -77,6 +77,9 @@
 	  <Compile Update="Pages\FileSharingPage.xaml.cs">
 	    <DependentUpon>FileSharingPage.xaml</DependentUpon>
 	  </Compile>
+	  <Compile Update="Pages\MySharedFilesPopup.xaml.cs">
+	    <DependentUpon>MySharedFilesPopup.xaml</DependentUpon>
+	  </Compile>
 	  <Compile Update="Pages\PeerDetailsPage.xaml.cs">
 	    <DependentUpon>PeerDetailsPage.xaml</DependentUpon>
 	  </Compile>
@@ -87,6 +90,9 @@
 	    <Generator>MSBuild:Compile</Generator>
 	  </MauiXaml>
 	  <MauiXaml Update="Pages\FileSharingPage.xaml">
+	    <Generator>MSBuild:Compile</Generator>
+	  </MauiXaml>
+	  <MauiXaml Update="Pages\MySharedFilesPopup.xaml">
 	    <Generator>MSBuild:Compile</Generator>
 	  </MauiXaml>
 	  <MauiXaml Update="Pages\PeerDetailsPage.xaml">

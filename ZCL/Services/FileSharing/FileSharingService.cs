@@ -103,8 +103,13 @@ public sealed class FileSharingService : IZcspService
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
 
+        var transferPeer = await db.FileTransfers
+            .Where(t => t.SessionId == sessionId)
+            .Select(t => t.PeerRefId)
+            .FirstOrDefaultAsync();
+
         var files = await db.SharedFiles
-            .Where(f => f.IsAvailable)
+            .Where(f => f.PeerRefId == transferPeer && f.IsAvailable)
             .ToListAsync();
 
         var payload = BinaryCodec.Serialize(
@@ -128,6 +133,7 @@ public sealed class FileSharingService : IZcspService
 
         await Framing.WriteAsync(_stream!, payload);
     }
+
 
     private async Task HandleFileRequestAsync(Guid sessionId, Guid fileId)
     {

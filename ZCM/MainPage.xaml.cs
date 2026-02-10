@@ -1,10 +1,11 @@
-﻿using System.Collections.ObjectModel;
+﻿using Microsoft.Maui.ApplicationModel;
+using Microsoft.Maui.Dispatching;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using Microsoft.Maui.Dispatching;
-using Microsoft.Maui.ApplicationModel;
 using ZCL.API;
 using ZCL.Models;
+using ZCL.Protocol.ZCSP;
 using ZCM.Pages;
 
 namespace ZCM;
@@ -12,6 +13,7 @@ namespace ZCM;
 public partial class MainPage : ContentPage
 {
     private readonly DataStore _store;
+
 
     public ObservableCollection<PeerNodeCard> Peers { get; } = new();
 
@@ -92,8 +94,10 @@ public partial class MainPage : ContentPage
 
     private async void ShareButton_Clicked(object sender, EventArgs e)
     {
-        await DisplayAlert("Share", "Navigate to Share page here.", "OK");
+        await Navigation.PushAsync(new ZCM.Pages.FileSharingPage());
     }
+
+
     private async void OnPeerTapped(object sender, TappedEventArgs e)
     {
         if (e.Parameter is not PeerNodeCard card)

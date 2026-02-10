@@ -1,15 +1,42 @@
 using ZCM.ViewModels;
+using ZCL.Models;
 
 namespace ZCM.Pages;
 
 public partial class FileSharingPage : ContentPage
 {
-    public FileSharingPage(Guid sessionId)
+    private readonly FileSharingHubViewModel _vm;
+
+    public FileSharingPage()
     {
         InitializeComponent();
 
-        BindingContext = new FileSharingViewModel(
+        _vm = new FileSharingHubViewModel(
+            ServiceHelper.GetService<ZCL.Protocol.ZCSP.ZcspPeer>(),
             ServiceHelper.GetService<ZCL.Services.FileSharing.FileSharingService>(),
-            sessionId);
+            ServiceHelper.GetService<ZCL.Repositories.Peers.IPeerRepository>());
+
+        BindingContext = _vm;
     }
+
+    private async void OnPeerSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (e.CurrentSelection.Count == 0)
+            return;
+
+        if (e.CurrentSelection[0] is not PeerNode peer)
+            return;
+
+        ((CollectionView)sender).SelectedItem = null;
+        await _vm.ActivatePeerAsync(peer);
+    }
+
+    private async void OnMySharedFilesClicked(object sender, EventArgs e)
+    {
+        await Navigation.PushModalAsync(
+            new MySharedFilesPopup(_vm));
+    }
+
+
+
 }
