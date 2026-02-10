@@ -39,6 +39,8 @@ public sealed class FileSharingService : IZcspService
     private readonly Dictionary<Guid, FileStream> _activeDownloads = new();
     private readonly Dictionary<Guid, long> _receivedBytes = new();
 
+    private Guid _localPeerDbId;
+
     public Guid CurrentSessionId => _currentSessionId;
     public bool IsConnected =>
         _stream != null &&
@@ -114,11 +116,20 @@ public sealed class FileSharingService : IZcspService
         using var scope = _scopeFactory.CreateScope();
         var peers = scope.ServiceProvider.GetRequiredService<IPeerRepository>();
 
+        // remote (the other side)
         var peer = await peers.GetByProtocolPeerIdAsync(remotePeerId)
             ?? throw new InvalidOperationException($"Unknown remote peer '{remotePeerId}'");
 
         _remotePeerDbId = peer.PeerId;
+
+        // local (me)
+        var localId = await peers.GetLocalPeerIdAsync();
+        if (localId == null)
+            throw new InvalidOperationException("Local peer id not found in DB.");
+
+        _localPeerDbId = localId.Value;
     }
+
 
     public async Task OnSessionDataAsync(Guid sessionId, BinaryReader reader)
     {
@@ -200,8 +211,9 @@ public sealed class FileSharingService : IZcspService
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
 
+
         var files = await db.SharedFiles
-            .Where(f => f.PeerRefId == _remotePeerDbId && f.IsAvailable)
+            .Where(f => f.PeerRefId == _localPeerDbId && f.IsAvailable)
             .ToListAsync();
 
         var payload = BinaryCodec.Serialize(
@@ -225,6 +237,7 @@ public sealed class FileSharingService : IZcspService
 
         await Framing.WriteAsync(_stream!, payload);
     }
+
 
     private void HandleFilesResponse(BinaryReader reader)
     {
@@ -250,7 +263,11 @@ public sealed class FileSharingService : IZcspService
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
 
-        var file = await db.SharedFiles.FirstOrDefaultAsync(f => f.FileId == fileId);
+        var file = await db.SharedFiles.FirstOrDefaultAsync(f =>
+            f.FileId == fileId &&
+            f.PeerRefId == _localPeerDbId &&
+            f.IsAvailable);
+
         if (file == null || !File.Exists(file.LocalPath))
             return;
 
@@ -339,8 +356,9 @@ public sealed class FileSharingService : IZcspService
     CancellationToken ct = default)
     {
         // Fast-path: already bound
-        if (_remotePeerDbId != null && _remotePeerDbId != Guid.Empty)
+        if (_remotePeerDbId != Guid.Empty)
             return;
+
 
         // Wait (bounded) for session handshake to finish
         const int maxAttempts = 40; // ~2 seconds
@@ -348,8 +366,9 @@ public sealed class FileSharingService : IZcspService
         {
             ct.ThrowIfCancellationRequested();
 
-            if (_remotePeerDbId != null && _remotePeerDbId != Guid.Empty)
+            if (_remotePeerDbId != Guid.Empty)
                 return;
+
 
             await Task.Delay(50, ct);
         }

@@ -158,6 +158,8 @@ public static class MauiProgram
                 })
         );
 
+
+
         // =========================
         // Force service construction
         // =========================
