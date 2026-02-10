@@ -7,6 +7,9 @@ public class ServiceDBContext : DbContext
     public DbSet<Service> Services => Set<Service>();
     public DbSet<PeerNode> PeerNodes => Set<PeerNode>();
     public DbSet<MessageEntity> Messages => Set<MessageEntity>();
+    public DbSet<SharedFileEntity> SharedFiles => Set<SharedFileEntity>();
+    public DbSet<FileTransferEntity> FileTransfers => Set<FileTransferEntity>();
+
 
     public ServiceDBContext(DbContextOptions<ServiceDBContext> options)
         : base(options)

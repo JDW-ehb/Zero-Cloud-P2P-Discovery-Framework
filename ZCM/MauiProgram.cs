@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Logging;
+using Microsoft.Maui.Storage;
 using System.Net;
 using ZCL.API;
 using ZCL.Models;
@@ -9,6 +10,7 @@ using ZCL.Protocol.ZCSP.Sessions;
 using ZCL.Repositories.Messages;
 using ZCL.Repositories.Peers;
 using ZCL.Services.Messaging;
+using ZCL.Services.FileSharing;
 
 namespace ZCM
 {
@@ -38,6 +40,7 @@ namespace ZCM
         public static MauiApp CreateMauiApp()
         {
             var builder = MauiApp.CreateBuilder();
+
             builder
                 .UseMauiApp<App>()
                 .ConfigureFonts(fonts =>
@@ -46,33 +49,69 @@ namespace ZCM
                     fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
                 });
 
+            // =========================
+            // Database
+            // =========================
             builder.Services.AddDbContext<ServiceDBContext>(options =>
             {
-                var dbPath = Path.Combine(FileSystem.AppDataDirectory, Config.DBFileName);
-                options.UseSqlite($"Data Source={dbPath}",
+                var dbPath = Path.Combine(
+                    FileSystem.AppDataDirectory,
+                    Config.DBFileName);
+
+                options.UseSqlite(
+                    $"Data Source={dbPath}",
                     b => b.MigrationsAssembly("ZCM"));
             });
 
             builder.Services.AddSingleton<DataStore>();
 
-            // scoped repos (EF)
+            // =========================
+            // Repositories (EF scoped)
+            // =========================
             builder.Services.AddScoped<IPeerRepository, PeerRepository>();
             builder.Services.AddScoped<IMessageRepository, MessageRepository>();
             builder.Services.AddScoped<IChatQueryService, ChatQueryService>();
 
-            // ZCSP
+            // =========================
+            // ZCSP core
+            // =========================
             builder.Services.AddSingleton<SessionRegistry>();
             builder.Services.AddSingleton<ZcspPeer>();
 
-            // IMPORTANT: singleton so UI + background share ONE instance
+            // =========================
+            // Messaging service
+            // =========================
             builder.Services.AddSingleton<MessagingService>();
+
+            // =========================
+            // FileSharing service
+            // =========================
+
+            // Provide platform-specific download directory
+            builder.Services.AddSingleton<Func<string>>(_ =>
+            {
+                return () =>
+                {
+                    var dir = Path.Combine(
+                        FileSystem.AppDataDirectory,
+                        "Downloads");
+
+                    Directory.CreateDirectory(dir);
+                    return dir;
+                };
+            });
+
+            builder.Services.AddSingleton<FileSharingService>();
 
 #if DEBUG
             builder.Logging.AddDebug();
 #endif
+
             var app = builder.Build();
 
+            // =========================
             // Ensure DB exists
+            // =========================
             using (var scope = app.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
@@ -81,7 +120,9 @@ namespace ZCM
 
             ServiceHelper.Initialize(app.Services);
 
-            // Init store from DB (optional / UI)
+            // =========================
+            // Init DataStore from DB
+            // =========================
             using (var scope = app.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
@@ -91,7 +132,9 @@ namespace ZCM
                     store.Peers.Add(peer);
             }
 
-            // Start discovery
+            // =========================
+            // Start discovery (ZCDP)
+            // =========================
             using (var scope = app.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
@@ -101,12 +144,19 @@ namespace ZCM
                 string dbPath = db.Database.GetDbConnection().DataSource;
 
                 Task.Run(() =>
-                    ZCDPPeer.StartAndRun(multicastAddress, Config.Port, dbPath, store)
+                    ZCDPPeer.StartAndRun(
+                        multicastAddress,
+                        Config.Port,
+                        dbPath,
+                        store)
                 );
             }
 
-            // Force MessagingService creation at startup -> starts hosting even if MessagingPage never opened
+            // =========================
+            // Force service startup
+            // =========================
             _ = app.Services.GetRequiredService<MessagingService>();
+            _ = app.Services.GetRequiredService<FileSharingService>();
 
             return app;
         }
