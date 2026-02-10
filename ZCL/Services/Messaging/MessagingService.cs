@@ -18,7 +18,6 @@ public sealed class MessagingService : IZcspService
     private readonly IServiceScopeFactory _scopeFactory;
 
     private readonly SemaphoreSlim _sessionLock = new(1, 1);
-    private Task? _hostingTask;
 
     private NetworkStream? _stream;
     private Guid _currentSessionId;
@@ -33,7 +32,6 @@ public sealed class MessagingService : IZcspService
         _peer = peer;
         _scopeFactory = scopeFactory;
 
-        EnsureHostingStarted(5555);
     }
 
     private (IPeerRepository peers, IMessageRepository messages) GetRepos()
@@ -55,17 +53,7 @@ public sealed class MessagingService : IZcspService
         await action(scope.ServiceProvider);
     }
 
-    public void EnsureHostingStarted(int port)
-    {
-        if (_hostingTask != null) return;
 
-        _hostingTask = Task.Run(() =>
-            _peer.StartHostingAsync(
-                port,
-                serviceName => serviceName == ServiceName ? this : null
-            )
-        );
-    }
 
     private bool IsSessionActiveWith(string remoteProtocolPeerId)
         => _stream != null &&
@@ -87,7 +75,6 @@ public sealed class MessagingService : IZcspService
             if (IsSessionActiveWith(remoteProtocolPeerId))
                 return;
 
-            EnsureHostingStarted(port);
 
             if (!ShouldInitiate(remoteProtocolPeerId))
             {

@@ -12,7 +12,6 @@ public partial class FileSharingPage : ContentPage
         InitializeComponent();
 
         _vm = new FileSharingHubViewModel(
-            ServiceHelper.GetService<ZCL.Protocol.ZCSP.ZcspPeer>(),
             ServiceHelper.GetService<ZCL.Services.FileSharing.FileSharingService>(),
             ServiceHelper.GetService<ZCL.Repositories.Peers.IPeerRepository>());
 
