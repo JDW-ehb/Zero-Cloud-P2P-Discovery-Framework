@@ -52,7 +52,11 @@ public sealed class FileSharingService : IZcspService
 
 
     public void BindStream(NetworkStream stream)
-        => _stream = stream;
+    {
+        _stream?.Dispose(); 
+        _stream = stream;
+    }
+
 
     public Task OnSessionStartedAsync(Guid sessionId, string remotePeerId)
     {
@@ -92,7 +96,13 @@ public sealed class FileSharingService : IZcspService
 
 
     public Task OnSessionClosedAsync(Guid sessionId)
-        => Task.CompletedTask;
+    {
+        if (sessionId == _currentSessionId)
+            return CloseCurrentSessionAsync();
+
+        return Task.CompletedTask;
+    }
+
 
     // =========================
     // Handlers
@@ -277,6 +287,32 @@ public sealed class FileSharingService : IZcspService
             });
 
         await Framing.WriteAsync(_stream!, msg);
+    }
+    public Task CloseCurrentSessionAsync()
+    {
+        try
+        {
+            _stream?.Close();
+            _stream?.Dispose();
+        }
+        catch
+        {
+        }
+
+        _stream = null;
+        _currentSessionId = Guid.Empty;
+        _remotePeerId = null;
+
+        // Abort any in-progress downloads
+        foreach (var fs in _activeDownloads.Values)
+        {
+            try { fs.Dispose(); } catch { }
+        }
+
+        _activeDownloads.Clear();
+        _receivedBytes.Clear();
+
+        return Task.CompletedTask;
     }
 
 

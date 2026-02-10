@@ -90,6 +90,8 @@ public sealed class FileSharingHubViewModel : BindableObject
         _activePeer = peer;
         Files.Clear();
 
+        await _service.CloseCurrentSessionAsync();
+
         await _peer.ConnectAsync(
             peer.IpAddress,
             FileSharingPort,
@@ -98,6 +100,7 @@ public sealed class FileSharingHubViewModel : BindableObject
 
         await _service.RequestListAsync(_service.CurrentSessionId);
     }
+
 
     private void OnFilesReceived(IReadOnlyList<SharedFileDto> files)
     {
