@@ -14,6 +14,10 @@ public interface IPeerRepository
         string? ipAddress = null,
         string? hostName = null,
         CancellationToken ct = default);
+    Task<PeerNode?> GetByProtocolPeerIdAsync(
+    string protocolPeerId,
+    CancellationToken ct = default);
+
 
     Task<PeerNode?> GetByProtocolIdAsync(string protocolPeerId, CancellationToken ct = default);
     Task<PeerNode> GetLocalPeerAsync(CancellationToken ct = default);

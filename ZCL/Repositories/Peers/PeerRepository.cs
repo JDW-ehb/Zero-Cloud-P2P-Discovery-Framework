@@ -188,4 +188,16 @@ public sealed class PeerRepository : IPeerRepository
             .Select(p => (Guid?)p.PeerId)
             .FirstOrDefaultAsync(ct);
     }
+
+    public async Task<PeerNode?> GetByProtocolPeerIdAsync(
+    string protocolPeerId,
+    CancellationToken ct = default)
+    {
+        return await _db.PeerNodes
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                p => p.ProtocolPeerId == protocolPeerId,
+                ct);
+    }
+
 }

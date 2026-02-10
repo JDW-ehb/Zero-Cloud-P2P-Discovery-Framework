@@ -1,11 +1,13 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Sockets;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Protocol.ZCSP.Protocol;
 using ZCL.Protocol.ZCSP.Transport;
+using ZCL.Repositories.Peers;
 
 
 namespace ZCL.Services.FileSharing;
@@ -33,7 +35,7 @@ public sealed class FileSharingService : IZcspService
 
     private readonly Dictionary<Guid, FileStream> _activeDownloads = new();
     private readonly Dictionary<Guid, long> _receivedBytes = new();
-
+    private Guid _remotePeerDbId;
     private Guid _currentSessionId;
     private string? _remotePeerId;
 
@@ -48,7 +50,9 @@ public sealed class FileSharingService : IZcspService
     {
         _scopeFactory = scopeFactory;
         _downloadDirectoryProvider = downloadDirectoryProvider;
+        Debug.WriteLine("[FileSharing] Constructed");
     }
+
 
 
     public void BindStream(NetworkStream stream)
@@ -58,12 +62,22 @@ public sealed class FileSharingService : IZcspService
     }
 
 
-    public Task OnSessionStartedAsync(Guid sessionId, string remotePeerId)
+    public async Task OnSessionStartedAsync(Guid sessionId, string remotePeerId)
     {
         _currentSessionId = sessionId;
         _remotePeerId = remotePeerId;
-        return Task.CompletedTask;
+
+        using var scope = _scopeFactory.CreateScope();
+        var peers = scope.ServiceProvider.GetRequiredService<IPeerRepository>();
+
+        var peer = await peers.GetByProtocolPeerIdAsync(remotePeerId);
+        if (peer == null)
+            throw new InvalidOperationException(
+                $"Unknown remote peer '{remotePeerId}'");
+
+        _remotePeerDbId = peer.PeerId;
     }
+
 
     public async Task OnSessionDataAsync(Guid sessionId, BinaryReader reader)
     {
@@ -113,13 +127,8 @@ public sealed class FileSharingService : IZcspService
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
 
-        var transferPeer = await db.FileTransfers
-            .Where(t => t.SessionId == sessionId)
-            .Select(t => t.PeerRefId)
-            .FirstOrDefaultAsync();
-
         var files = await db.SharedFiles
-            .Where(f => f.PeerRefId == transferPeer && f.IsAvailable)
+            .Where(f => f.PeerRefId == _remotePeerDbId && f.IsAvailable)
             .ToListAsync();
 
         var payload = BinaryCodec.Serialize(
@@ -143,6 +152,8 @@ public sealed class FileSharingService : IZcspService
 
         await Framing.WriteAsync(_stream!, payload);
     }
+
+
 
 
     private async Task HandleFileRequestAsync(Guid sessionId, Guid fileId)
