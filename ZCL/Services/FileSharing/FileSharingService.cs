@@ -335,4 +335,27 @@ public sealed class FileSharingService : IZcspService
 
         return Task.CompletedTask;
     }
+    public async Task WaitForSessionBindingAsync(
+    CancellationToken ct = default)
+    {
+        // Fast-path: already bound
+        if (_remotePeerDbId != null && _remotePeerDbId != Guid.Empty)
+            return;
+
+        // Wait (bounded) for session handshake to finish
+        const int maxAttempts = 40; // ~2 seconds
+        for (int i = 0; i < maxAttempts; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            if (_remotePeerDbId != null && _remotePeerDbId != Guid.Empty)
+                return;
+
+            await Task.Delay(50, ct);
+        }
+
+        throw new TimeoutException(
+            "Timed out waiting for file-sharing session to bind remote peer");
+    }
+
 }

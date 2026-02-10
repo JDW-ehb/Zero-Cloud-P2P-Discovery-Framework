@@ -53,7 +53,9 @@ public sealed class FileSharingHubViewModel : BindableObject
         Files.Clear();
 
         await _service.EnsureSessionAsync(peer);
+        await _service.WaitForSessionBindingAsync(); 
         await _service.RequestListAsync();
+
     }
 
     private async Task LoadPeersAsync()
