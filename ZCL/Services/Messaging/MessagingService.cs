@@ -16,7 +16,6 @@ public sealed class MessagingService : IZcspService
 
     private readonly ZcspPeer _peer;
     private readonly IServiceScopeFactory _scopeFactory;
-
     private readonly SemaphoreSlim _sessionLock = new(1, 1);
 
     private NetworkStream? _stream;
@@ -25,26 +24,12 @@ public sealed class MessagingService : IZcspService
 
     public event Action<string>? SessionStarted;
     public event Action<ChatMessage>? MessageReceived;
-    public event Action? SessionClosed;
+    public event Action<string>? SessionClosed;
 
     public MessagingService(ZcspPeer peer, IServiceScopeFactory scopeFactory)
     {
         _peer = peer;
         _scopeFactory = scopeFactory;
-
-    }
-
-    private (IPeerRepository peers, IMessageRepository messages) GetRepos()
-    {
-        var scope = _scopeFactory.CreateScope();
-        // caller must Dispose -> easiest: use it inside a "using var scope"
-        throw new NotSupportedException("Use the overload below that keeps scope alive.");
-    }
-
-    private T UseScope<T>(Func<IServiceProvider, T> action)
-    {
-        using var scope = _scopeFactory.CreateScope();
-        return action(scope.ServiceProvider);
     }
 
     private async Task UseScopeAsync(Func<IServiceProvider, Task> action)
@@ -53,18 +38,16 @@ public sealed class MessagingService : IZcspService
         await action(scope.ServiceProvider);
     }
 
-
-
     private bool IsSessionActiveWith(string remoteProtocolPeerId)
         => _stream != null &&
            _currentSessionId != Guid.Empty &&
            _remotePeerId == remoteProtocolPeerId;
 
     public async Task EnsureSessionAsync(
-    string remoteProtocolPeerId,
-    string remoteIp,
-    int port,
-    CancellationToken ct = default)
+        string remoteProtocolPeerId,
+        string remoteIp,
+        int port,
+        CancellationToken ct = default)
     {
         if (IsSessionActiveWith(remoteProtocolPeerId))
             return;
@@ -78,8 +61,7 @@ public sealed class MessagingService : IZcspService
             await _peer.ConnectAsync(remoteIp, port, remoteProtocolPeerId, this);
 
             if (!IsSessionActiveWith(remoteProtocolPeerId))
-                throw new InvalidOperationException(
-                    "Connect completed but session not active.");
+                throw new InvalidOperationException("Connect completed but session not active.");
         }
         finally
         {
@@ -87,19 +69,23 @@ public sealed class MessagingService : IZcspService
         }
     }
 
-
-
-    public async Task SendMessageAsync(string remoteProtocolPeerId, string remoteIp, int port, string content, CancellationToken ct = default)
+    public async Task SendMessageAsync(
+        string remoteProtocolPeerId,
+        string remoteIp,
+        int port,
+        string content,
+        CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(content)) return;
+        if (string.IsNullOrWhiteSpace(content))
+            return;
 
         await EnsureSessionAsync(remoteProtocolPeerId, remoteIp, port, ct);
 
         if (_stream == null)
             throw new InvalidOperationException("Messaging session is not active.");
 
-        // DB work in a scope
         MessageEntity entity = default!;
+
         await UseScopeAsync(async sp =>
         {
             var peers = sp.GetRequiredService<IPeerRepository>();
@@ -111,7 +97,6 @@ public sealed class MessagingService : IZcspService
                 ipAddress: remoteIp,
                 ct: ct);
 
-
             entity = await messages.StoreOutgoingAsync(
                 _currentSessionId,
                 localPeer.PeerId,
@@ -119,7 +104,8 @@ public sealed class MessagingService : IZcspService
                 content);
         });
 
-        MessageReceived?.Invoke(ChatMessageMapper.Outgoing(_peer.PeerId, remoteProtocolPeerId, entity));
+        MessageReceived?.Invoke(
+            ChatMessageMapper.Outgoing(_peer.PeerId, remoteProtocolPeerId, entity));
 
         var data = BinaryCodec.Serialize(
             ZcspMessageType.SessionData,
@@ -134,13 +120,16 @@ public sealed class MessagingService : IZcspService
         await Framing.WriteAsync(_stream, data);
     }
 
-    // IZcspService
-    public void BindStream(NetworkStream stream) => _stream = stream;
+    public void BindStream(NetworkStream stream)
+    {
+        _stream = stream;
+    }
 
     public Task OnSessionStartedAsync(Guid sessionId, string remotePeerId)
     {
         _currentSessionId = sessionId;
         _remotePeerId = remotePeerId;
+
         SessionStarted?.Invoke(remotePeerId);
         return Task.CompletedTask;
     }
@@ -161,7 +150,6 @@ public sealed class MessagingService : IZcspService
             var fromPeerEntity = await peers.GetOrCreateAsync(fromPeer);
             var toPeerEntity = await peers.GetLocalPeerAsync();
 
-
             entity = await messages.StoreIncomingAsync(
                 sessionId,
                 fromPeerEntity.PeerId,
@@ -169,29 +157,27 @@ public sealed class MessagingService : IZcspService
                 content);
         });
 
-        MessageReceived?.Invoke(ChatMessageMapper.Incoming(fromPeer, toPeer, entity));
+        MessageReceived?.Invoke(
+            ChatMessageMapper.Incoming(fromPeer, toPeer, entity));
     }
-
-
-
 
     public Task OnSessionClosedAsync(Guid sessionId)
     {
+        var remote = _remotePeerId;
+
         try
         {
             _stream?.Dispose();
         }
-        catch
-        {
-            // ignore cleanup errors
-        }
+        catch { }
 
         _stream = null;
-        _remotePeerId = null;
         _currentSessionId = Guid.Empty;
+        _remotePeerId = null;
 
-        SessionClosed?.Invoke();
+        if (remote != null)
+            SessionClosed?.Invoke(remote);
+
         return Task.CompletedTask;
     }
-
 }

@@ -134,54 +134,94 @@ namespace ZCL.Protocol.ZCSP
             var localId = await EnsurePeerIdAsync();
 
             var client = new TcpClient();
-            await client.ConnectAsync(host, port);
-            var stream = client.GetStream();
+            NetworkStream? stream = null;
 
-            var request = BinaryCodec.Serialize(
-                ZcspMessageType.ServiceRequest,
-                null,
-                w =>
-                {
-                    w.Write(Guid.NewGuid().ToByteArray());
-                    BinaryCodec.WriteString(w, localId);
-                    BinaryCodec.WriteString(w, remotePeerId);
-                    BinaryCodec.WriteString(w, service.ServiceName);
-                });
-
-            await Framing.WriteAsync(stream, request);
-
-            var frame = await Framing.ReadAsync(stream);
-            if (frame == null) return;
-
-            var (type, sessionId, _, _) = BinaryCodec.Deserialize(frame);
-            if (type != ZcspMessageType.ServiceResponse || sessionId == null) return;
-
-            service.BindStream(stream);
-            await service.OnSessionStartedAsync(sessionId.Value, remotePeerId);
-
-            _ = Task.Run(async () =>
+            try
             {
-                try { await RunSessionAsync(stream, sessionId.Value, service); }
-                finally { stream.Dispose(); client.Dispose(); }
-            });
+                await client.ConnectAsync(host, port);
+                stream = client.GetStream();
+
+                var request = BinaryCodec.Serialize(
+                    ZcspMessageType.ServiceRequest,
+                    null,
+                    w =>
+                    {
+                        w.Write(Guid.NewGuid().ToByteArray());
+                        BinaryCodec.WriteString(w, localId);
+                        BinaryCodec.WriteString(w, remotePeerId);
+                        BinaryCodec.WriteString(w, service.ServiceName);
+                    });
+
+                await Framing.WriteAsync(stream, request);
+
+                var frame = await Framing.ReadAsync(stream);
+                if (frame == null)
+                    throw new IOException("No service response (connection closed).");
+
+                var (type, sessionId, _, _) = BinaryCodec.Deserialize(frame);
+                if (type != ZcspMessageType.ServiceResponse || sessionId == null)
+                    throw new InvalidOperationException("Invalid service response.");
+
+                service.BindStream(stream);
+                await service.OnSessionStartedAsync(sessionId.Value, remotePeerId);
+
+                _ = Task.Run(async () =>
+                {
+                    try { await RunSessionAsync(stream, sessionId.Value, service); }
+                    finally { stream.Dispose(); client.Dispose(); }
+                });
+            }
+            catch
+            {
+                try { stream?.Dispose(); } catch { }
+                try { client.Dispose(); } catch { }
+                throw;
+            }
         }
+
 
         private async Task RunSessionAsync(NetworkStream stream, Guid sessionId, IZcspService service)
         {
-            while (true)
+            try
             {
-                var frame = await Framing.ReadAsync(stream);
-                if (frame == null) break;
+                while (true)
+                {
+                    byte[]? frame;
 
-                var (type, _, _, reader) = BinaryCodec.Deserialize(frame);
+                    try
+                    {
+                        frame = await Framing.ReadAsync(stream);
+                    }
+                    catch (IOException)
+                    {
+                        break;
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        break;
+                    }
 
-                if (type == ZcspMessageType.SessionClose) break;
-                if (type == ZcspMessageType.SessionData)
-                    await service.OnSessionDataAsync(sessionId, reader);
+                    if (frame == null)
+                        break;
+
+                    var (type, _, _, reader) = BinaryCodec.Deserialize(frame);
+
+                    if (type == ZcspMessageType.SessionClose)
+                        break;
+
+                    if (type == ZcspMessageType.SessionData)
+                        await service.OnSessionDataAsync(sessionId, reader);
+                }
             }
+            finally
+            {
+                // ALWAYS notify service, even if an exception happened mid-read or mid-handle
+                try { await service.OnSessionClosedAsync(sessionId); }
+                catch { /* don't let close cascade-crash */ }
 
-            await service.OnSessionClosedAsync(sessionId);
-            _sessions.Remove(sessionId);
+                _sessions.Remove(sessionId);
+            }
         }
+
     }
 }
