@@ -218,7 +218,7 @@ public sealed class FileSharingService : IZcspService
         var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
 
         var files = await db.SharedFiles
-            .Where(f => f.PeerRefId == _localPeerDbId && f.IsAvailable)
+            .Where(f => f.PeerRefId == _localPeerDbId)
             .ToListAsync();
 
         Debug.WriteLine($"[FileSharing] Sending {files.Count} files");

@@ -127,7 +127,7 @@ public sealed class FileSharingHubViewModel : BindableObject
         var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
 
         var files = await db.SharedFiles
-            .Where(f => f.PeerRefId == localPeerId && f.IsAvailable)
+            .Where(f => f.PeerRefId == localPeerId)
             .ToListAsync();
 
         MainThread.BeginInvokeOnMainThread(() =>
@@ -149,7 +149,7 @@ public sealed class FileSharingHubViewModel : BindableObject
         if (entity == null)
             return;
 
-        entity.IsAvailable = false;
+        db.SharedFiles.Remove(entity);
 
         await db.SaveChangesAsync();
         await LoadLocalSharedFilesAsync();
