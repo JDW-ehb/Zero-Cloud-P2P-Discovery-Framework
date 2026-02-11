@@ -60,8 +60,11 @@
                     BackgroundColor="#1A2E22"
                     Padding="24">
 
+                    <!-- THIS IS CRITICAL -->
                     <Border.GestureRecognizers>
-                        <DropGestureRecognizer Drop="OnFilesDropped" />
+                        <DropGestureRecognizer
+                            AllowDrop="True"
+                            Drop="OnFilesDropped" />
                     </Border.GestureRecognizers>
 
                     <VerticalStackLayout
@@ -70,15 +73,10 @@
                         Spacing="8">
 
                         <Label
-                            Text="Drop files to share"
+                            Text="Add your files here !"
                             FontSize="16"
                             FontAttributes="Bold"
                             TextColor="White" />
-
-                        <Label
-                            Text="or add them manually"
-                            FontSize="12"
-                            TextColor="#BBBBBB" />
 
                         <Button
                             Text="Add files"

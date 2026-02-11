@@ -1,7 +1,11 @@
 using ZCM.ViewModels;
-using Microsoft.Maui;
-using Microsoft.Maui.ApplicationModel.DataTransfer;
 using Microsoft.Maui.Controls;
+using Microsoft.Maui.ApplicationModel.DataTransfer;
+
+#if WINDOWS
+using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage;
+#endif
 
 namespace ZCM.Pages;
 
@@ -25,18 +29,34 @@ public partial class MySharedFilesPopup : ContentPage
     private async void OnFilesDropped(object sender, DropEventArgs e)
     {
 #if WINDOWS
-    if (e.Data.Properties.TryGetValue("FileDrop", out var value) && value is string[] paths)
+    System.Diagnostics.Debug.WriteLine("DROP EVENT FIRED");
+
+    if (e.Data.Properties.TryGetValue("StorageItems", out var value))
     {
-        await _vm.AddFilesFromPathsAsync(paths);
+        if (value is IEnumerable<object> items)
+        {
+            var paths = new List<string>();
+
+            foreach (var item in items)
+            {
+                var pathProp = item.GetType().GetProperty("Path");
+                if (pathProp != null)
+                {
+                    var path = pathProp.GetValue(item) as string;
+                    if (!string.IsNullOrWhiteSpace(path))
+                        paths.Add(path);
+                }
+            }
+
+            if (paths.Count > 0)
+            {
+                await _vm.AddFilesFromPathsAsync(paths);
+            }
+        }
     }
-    else
-    {
-        System.Diagnostics.Debug.WriteLine("No file paths found in drop data.");
-    }
-#else
-        System.Diagnostics.Debug.WriteLine("Drag & drop only implemented for Windows.");
 #endif
     }
+
 
 
 

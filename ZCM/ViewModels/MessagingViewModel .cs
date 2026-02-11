@@ -109,6 +109,11 @@ public sealed class MessagingViewModel : BindableObject
         });
     }
 
+    // ============================
+    // FIX: show history even if offline
+    // File: MessagingViewModel.cs
+    // Function: ActivateConversationFromUIAsync
+    // ============================
     public async Task ActivateConversationFromUIAsync(ConversationItem convo)
     {
         if (_activeConversation == convo)
@@ -116,8 +121,13 @@ public sealed class MessagingViewModel : BindableObject
 
         _activeConversation = convo;
         _activeProtocolPeerId = convo.Peer.ProtocolPeerId;
+
+        // Always reset session state first (sending is blocked until session started)
         _sessionReady = false;
         IsConnected = false;
+        ((Command)SendMessageCommand).ChangeCanExecute();
+
+        await LoadChatHistoryAsync(convo.Peer);
 
         StatusMessage = $"Connecting to {convo.DisplayName}…";
 
@@ -127,18 +137,21 @@ public sealed class MessagingViewModel : BindableObject
                 convo.Peer.ProtocolPeerId,
                 convo.Peer.IpAddress,
                 MessagingPort);
+
         }
         catch
         {
+            StatusMessage = "Offline (history loaded).";
+
             await TransientNotificationService.ShowAsync(
-                "Peer is not available.",
+                "Peer is not available (showing history).",
                 NotificationSeverity.Warning);
 
-            StatusMessage = "Connection failed.";
-            return;
+            // Keep send disabled
+            _sessionReady = false;
+            IsConnected = false;
+            ((Command)SendMessageCommand).ChangeCanExecute();
         }
-
-        await LoadChatHistoryAsync(convo.Peer);
     }
 
     private async Task SendAsync()
@@ -185,6 +198,7 @@ public sealed class MessagingViewModel : BindableObject
 
     private void OnMessageReceived(ChatMessage msg)
     {
+        // ignore loopback outgoing
         if (msg.Direction == MessageDirection.Outgoing &&
             msg.FromPeer == _peer.PeerId)
             return;
@@ -205,17 +219,13 @@ public sealed class MessagingViewModel : BindableObject
 
     private async Task LoadConversationsAsync()
     {
-        if (_localPeerDbId is null)
-            return;
+        var historyPeers = await _chatQueries.GetPeersWithMessagesAsync();
 
         Conversations.Clear();
 
-        var peers = (await _chatQueries.GetPeersAsync())
-            .Where(p => !p.IsLocal)
-            .ToList();
-
-        foreach (var peer in peers)
+        foreach (var peer in historyPeers)
         {
+
             Conversations.Add(new ConversationItem(peer));
         }
     }

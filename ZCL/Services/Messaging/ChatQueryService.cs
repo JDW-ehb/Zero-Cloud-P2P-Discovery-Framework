@@ -20,9 +20,29 @@ public sealed class ChatQueryService : IChatQueryService
             .ToListAsync();
     }
 
+
+    public async Task<List<PeerNode>> GetPeersWithMessagesAsync()
+    {
+        var localId = await GetLocalPeerIdAsync();
+
+        if (localId == null)
+            return new List<PeerNode>();
+
+        var remotePeerIds = await _db.Messages
+            .Where(m => m.FromPeerId == localId || m.ToPeerId == localId)
+            .Select(m => m.FromPeerId == localId ? m.ToPeerId : m.FromPeerId)
+            .Distinct()
+            .ToListAsync();
+
+        return await _db.PeerNodes
+            .Where(p => remotePeerIds.Contains(p.PeerId))
+            .OrderByDescending(p => p.LastSeen)
+            .ToListAsync();
+    }
+
+
     public async Task<Guid?> GetLocalPeerIdAsync()
     {
-        // Safe even if there are multiple "local" rows 
         return await _db.PeerNodes
             .Where(p => p.IsLocal)
             .OrderByDescending(p => p.LastSeen)
@@ -39,7 +59,11 @@ public sealed class ChatQueryService : IChatQueryService
             .OrderBy(m => m.Timestamp)
             .ToListAsync();
     }
-    public Task<MessageEntity?> GetLastMessageBetweenAsync(Guid localPeerId, Guid remotePeerDbId, CancellationToken ct = default)
+
+    public Task<MessageEntity?> GetLastMessageBetweenAsync(
+        Guid localPeerId,
+        Guid remotePeerDbId,
+        CancellationToken ct = default)
         => _db.Messages
             .Where(m =>
                 (m.FromPeerId == localPeerId && m.ToPeerId == remotePeerDbId) ||

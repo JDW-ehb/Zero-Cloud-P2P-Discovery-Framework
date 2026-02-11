@@ -7,6 +7,9 @@ public interface IChatQueryService
     Task<List<PeerNode>> GetPeersAsync();
     Task<Guid?> GetLocalPeerIdAsync();
     Task<List<MessageEntity>> GetHistoryAsync(Guid localPeerId, Guid remotePeerId);
-
-    Task<MessageEntity?> GetLastMessageBetweenAsync(Guid localPeerId, Guid remotePeerDbId, CancellationToken ct = default);
+    Task<List<PeerNode>> GetPeersWithMessagesAsync();
+    Task<MessageEntity?> GetLastMessageBetweenAsync(
+        Guid localPeerId,
+        Guid remotePeerDbId,
+        CancellationToken ct = default);
 }
