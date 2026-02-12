@@ -18,14 +18,22 @@ public sealed record SharedFileDto(
     string Checksum,
     DateTime SharedSince);
 
-public sealed class FileSharingService : IZcspService
+/// <summary>
+/// Application-level FileSharing hub.
+/// Transport sessions are handled by FileSharingSessionHandler.
+/// </summary>
+public sealed class FileSharingService
 {
-    public string ServiceName => "FileSharing";
+    public const string Service = "FileSharing";
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly Func<string> _downloadDirectoryProvider;
     private readonly ZcspPeer _peer;
+
     private readonly Dictionary<Guid, string> _downloadTargets = new();
+    private readonly Dictionary<Guid, SharedFileDto> _knownFiles = new();
+    private readonly Dictionary<Guid, FileStream> _activeDownloads = new();
+    private readonly Dictionary<Guid, long> _receivedBytes = new();
 
     private NetworkStream? _stream;
     private Guid _currentSessionId;
@@ -37,10 +45,7 @@ public sealed class FileSharingService : IZcspService
     private readonly SemaphoreSlim _sessionLock = new(1, 1);
 
     private const int ChunkSize = 64 * 1024;
-
-    private readonly Dictionary<Guid, SharedFileDto> _knownFiles = new();
-    private readonly Dictionary<Guid, FileStream> _activeDownloads = new();
-    private readonly Dictionary<Guid, long> _receivedBytes = new();
+    private readonly IServiceProvider _services;
 
     public bool IsConnected =>
         _stream != null &&
@@ -53,14 +58,16 @@ public sealed class FileSharingService : IZcspService
     public FileSharingService(
         ZcspPeer peer,
         IServiceScopeFactory scopeFactory,
-        Func<string> downloadDirectoryProvider)
+        Func<string> downloadDirectoryProvider,
+        IServiceProvider services)
     {
         _peer = peer;
         _scopeFactory = scopeFactory;
         _downloadDirectoryProvider = downloadDirectoryProvider;
-
-        Debug.WriteLine("[FileSharing] Service constructed");
+        _services = services;
     }
+
+
 
     // =========================
     // SESSION MANAGEMENT
@@ -86,87 +93,19 @@ public sealed class FileSharingService : IZcspService
 
             Debug.WriteLine($"[FileSharing] Connecting to {peer.ProtocolPeerId}");
 
+            var handler = _services.GetRequiredService<FileSharingSessionHandler>();
+
             await _peer.ConnectAsync(
                 peer.IpAddress,
                 port: 5555,
                 remotePeerId: peer.ProtocolPeerId,
-                service: this);
+                service: handler);
+
         }
         finally
         {
             _sessionLock.Release();
         }
-    }
-
-    // =========================
-    // IZcspService
-    // =========================
-
-    public void BindStream(NetworkStream stream)
-    {
-        Debug.WriteLine("[FileSharing] Stream bound");
-        _stream?.Dispose();
-        _stream = stream;
-    }
-
-    public async Task OnSessionStartedAsync(Guid sessionId, string remotePeerId)
-    {
-        Debug.WriteLine($"[FileSharing] Session started {sessionId}");
-
-        _currentSessionId = sessionId;
-        _remoteProtocolPeerId = remotePeerId;
-
-        using var scope = _scopeFactory.CreateScope();
-        var peers = scope.ServiceProvider.GetRequiredService<IPeerRepository>();
-
-        var remote = await peers.GetByProtocolPeerIdAsync(remotePeerId)
-            ?? throw new InvalidOperationException($"Unknown remote peer '{remotePeerId}'");
-
-        _remotePeerDbId = remote.PeerId;
-
-        var localId = await peers.GetLocalPeerIdAsync();
-        if (localId == null)
-            throw new InvalidOperationException("Local peer id not found");
-
-        _localPeerDbId = localId.Value;
-
-        Debug.WriteLine($"[FileSharing] Local={_localPeerDbId}, Remote={_remotePeerDbId}");
-    }
-
-    public async Task OnSessionDataAsync(Guid sessionId, BinaryReader reader)
-    {
-        var action = BinaryCodec.ReadString(reader);
-        Debug.WriteLine($"[FileSharing] Action '{action}'");
-
-        switch (action)
-        {
-            case "ListFiles":
-                await HandleListFilesAsync(sessionId);
-                break;
-
-            case "Files":
-                HandleFilesResponse(reader);
-                break;
-
-            case "RequestFile":
-                var fileId = new Guid(reader.ReadBytes(16));
-                await HandleFileRequestAsync(sessionId, fileId);
-                break;
-
-            case "FileChunk":
-                HandleFileChunk(reader);
-                break;
-
-            case "FileComplete":
-                HandleFileComplete(reader);
-                break;
-        }
-    }
-
-    public Task OnSessionClosedAsync(Guid sessionId)
-    {
-        Debug.WriteLine($"[FileSharing] Session closed {sessionId}");
-        return CloseCurrentSessionAsync();
     }
 
     // =========================
@@ -177,8 +116,6 @@ public sealed class FileSharingService : IZcspService
     {
         if (!IsConnected)
             return;
-
-        Debug.WriteLine("[FileSharing] Requesting file list");
 
         var msg = BinaryCodec.Serialize(
             ZcspMessageType.SessionData,
@@ -193,8 +130,6 @@ public sealed class FileSharingService : IZcspService
         if (!IsConnected)
             return;
 
-        Debug.WriteLine($"[FileSharing] Requesting file {fileId}");
-
         var msg = BinaryCodec.Serialize(
             ZcspMessageType.SessionData,
             _currentSessionId,
@@ -207,22 +142,102 @@ public sealed class FileSharingService : IZcspService
         await Framing.WriteAsync(_stream!, msg);
     }
 
+    public void SetDownloadTarget(Guid fileId, string path)
+        => _downloadTargets[fileId] = path;
+
+    public bool TryGetKnownFile(Guid id, out SharedFileDto dto)
+        => _knownFiles.TryGetValue(id, out dto);
+
+    public Task CloseCurrentSessionAsync()
+    {
+        try { _stream?.Dispose(); } catch { }
+
+        _stream = null;
+        _currentSessionId = Guid.Empty;
+        _remoteProtocolPeerId = null;
+
+        foreach (var fs in _activeDownloads.Values)
+        {
+            try { fs.Dispose(); } catch { }
+        }
+
+        _activeDownloads.Clear();
+        _receivedBytes.Clear();
+
+        return Task.CompletedTask;
+    }
+
     // =========================
-    // HANDLERS (SERVER SIDE)
+    // INTERNAL SESSION CALLBACKS
+    // =========================
+
+    internal async Task InternalOnSessionStartedAsync(
+        Guid sessionId,
+        string remotePeerId,
+        NetworkStream stream)
+    {
+        Debug.WriteLine($"[FileSharing] Session started {sessionId}");
+
+        _stream?.Dispose();
+        _stream = stream;
+
+        _currentSessionId = sessionId;
+        _remoteProtocolPeerId = remotePeerId;
+
+        using var scope = _scopeFactory.CreateScope();
+        var peers = scope.ServiceProvider.GetRequiredService<IPeerRepository>();
+
+        var remote = await peers.GetByProtocolPeerIdAsync(remotePeerId)
+            ?? throw new InvalidOperationException($"Unknown remote peer '{remotePeerId}'");
+
+        _remotePeerDbId = remote.PeerId;
+
+        var localId = await peers.GetLocalPeerIdAsync()
+            ?? throw new InvalidOperationException("Local peer id not found");
+
+        _localPeerDbId = localId;
+
+        Debug.WriteLine($"[FileSharing] Local={_localPeerDbId}, Remote={_remotePeerDbId}");
+    }
+
+    internal Task InternalOnSessionClosedAsync(Guid sessionId)
+    {
+        if (_currentSessionId != sessionId)
+            return Task.CompletedTask;
+
+        return CloseCurrentSessionAsync();
+    }
+
+    internal Task InternalOnSessionDataAsync(Guid sessionId, BinaryReader reader)
+    {
+        if (_currentSessionId == Guid.Empty)
+            _currentSessionId = sessionId;
+
+        var action = BinaryCodec.ReadString(reader);
+
+        return action switch
+        {
+            "ListFiles" => HandleListFilesAsync(sessionId),
+            "Files" => HandleFilesResponseAsync(reader),
+            "RequestFile" => HandleRequestFileAsync(sessionId, new Guid(reader.ReadBytes(16))),
+            "FileChunk" => HandleFileChunkAsync(reader),
+            "FileComplete" => HandleFileCompleteAsync(reader),
+            _ => Task.CompletedTask
+        };
+    }
+
+    // =========================
+    // PROTOCOL HANDLERS
     // =========================
 
     private async Task HandleListFilesAsync(Guid sessionId)
     {
-        Debug.WriteLine("[FileSharing] Handling ListFiles");
-
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
 
         var files = await db.SharedFiles
             .Where(f => f.PeerRefId == _localPeerDbId)
             .ToListAsync();
-
-        Debug.WriteLine($"[FileSharing] Sending {files.Count} files");
 
         var payload = BinaryCodec.Serialize(
             ZcspMessageType.SessionData,
@@ -246,11 +261,9 @@ public sealed class FileSharingService : IZcspService
         await Framing.WriteAsync(_stream!, payload);
     }
 
-    private async void HandleFilesResponse(BinaryReader reader)
+    private async Task HandleFilesResponseAsync(BinaryReader reader)
     {
         int count = reader.ReadInt32();
-        Debug.WriteLine($"[FileSharing] Received {count} files");
-
         var files = new List<SharedFileDto>(count);
 
         for (int i = 0; i < count; i++)
@@ -267,41 +280,11 @@ public sealed class FileSharingService : IZcspService
             _knownFiles[dto.FileId] = dto;
         }
 
-        using var scope = _scopeFactory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
-
-        var existing = db.SharedFiles
-            .Where(f => f.PeerRefId == _remotePeerDbId);
-
-        db.SharedFiles.RemoveRange(existing);
-
-        foreach (var dto in files)
-        {
-            db.SharedFiles.Add(new SharedFileEntity
-            {
-                FileId = dto.FileId,
-                PeerRefId = _remotePeerDbId,
-                FileName = dto.Name,
-                FileSize = dto.Size,
-                FileType = dto.Type,
-                Checksum = dto.Checksum,
-                LocalPath = string.Empty, 
-                SharedSince = dto.SharedSince,
-                IsAvailable = true
-            });
-        }
-
-        await db.SaveChangesAsync();
-
         FilesReceived?.Invoke(files);
     }
 
-
-
-    private async Task HandleFileRequestAsync(Guid sessionId, Guid fileId)
+    private async Task HandleRequestFileAsync(Guid sessionId, Guid fileId)
     {
-        Debug.WriteLine($"[FileSharing] Sending file {fileId}");
-
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
 
@@ -332,21 +315,9 @@ public sealed class FileSharingService : IZcspService
 
             await Framing.WriteAsync(_stream!, chunk);
         }
-
-        var done = BinaryCodec.Serialize(
-            ZcspMessageType.SessionData,
-            sessionId,
-            w =>
-            {
-                BinaryCodec.WriteString(w, "FileComplete");
-                w.Write(fileId.ToByteArray());
-                BinaryCodec.WriteString(w, file.Checksum);
-            });
-
-        await Framing.WriteAsync(_stream!, done);
     }
 
-    private void HandleFileChunk(BinaryReader reader)
+    private Task HandleFileChunkAsync(BinaryReader reader)
     {
         var fileId = new Guid(reader.ReadBytes(16));
         int length = reader.ReadInt32();
@@ -355,86 +326,35 @@ public sealed class FileSharingService : IZcspService
         if (!_activeDownloads.TryGetValue(fileId, out var fs))
         {
             if (!_downloadTargets.TryGetValue(fileId, out var targetPath))
-            {
-                Debug.WriteLine("[FileSharing] No download target set.");
-                return;
-            }
+                return Task.CompletedTask;
 
-            var directory = Path.GetDirectoryName(targetPath);
-            if (!string.IsNullOrWhiteSpace(directory))
-                Directory.CreateDirectory(directory);
+            Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
 
             fs = File.Create(targetPath);
-
-
             _activeDownloads[fileId] = fs;
             _receivedBytes[fileId] = 0;
-
-            //Debug.WriteLine($"[FileSharing] Receiving {fileName}");
         }
-
 
         fs.Write(data);
         _receivedBytes[fileId] += data.Length;
 
         TransferProgress?.Invoke(fileId, _receivedBytes[fileId]);
+
+        return Task.CompletedTask;
     }
 
-    private void HandleFileComplete(BinaryReader reader)
+    private Task HandleFileCompleteAsync(BinaryReader reader)
     {
         var fileId = new Guid(reader.ReadBytes(16));
-        var checksum = BinaryCodec.ReadString(reader);
 
         if (_activeDownloads.Remove(fileId, out var fs))
             fs.Dispose();
 
         _receivedBytes.Remove(fileId);
-        TransferCompleted?.Invoke(fileId, checksum);
         _downloadTargets.Remove(fileId);
 
-        Debug.WriteLine($"[FileSharing] Completed {fileId}");
-    }
-
-
-    public Task CloseCurrentSessionAsync()
-    {
-        _stream?.Dispose();
-        _stream = null;
-        _currentSessionId = Guid.Empty;
-        _remoteProtocolPeerId = null;
-
-        foreach (var fs in _activeDownloads.Values)
-            fs.Dispose();
-
-        _activeDownloads.Clear();
-        _receivedBytes.Clear();
+        TransferCompleted?.Invoke(fileId, "OK");
 
         return Task.CompletedTask;
     }
-
-    public async Task WaitForSessionBindingAsync(CancellationToken ct = default)
-    {
-        if (_remotePeerDbId != Guid.Empty)
-            return;
-
-        for (int i = 0; i < 40; i++)
-        {
-            ct.ThrowIfCancellationRequested();
-
-            if (_remotePeerDbId != Guid.Empty)
-                return;
-
-            await Task.Delay(50, ct);
-        }
-
-        throw new TimeoutException("FileSharing session bind timeout");
-    }
-
-    public void SetDownloadTarget(Guid fileId, string path)
-    {
-        _downloadTargets[fileId] = path;
-    }
-    public bool TryGetKnownFile(Guid id, out SharedFileDto dto)
-    => _knownFiles.TryGetValue(id, out dto);
-
 }

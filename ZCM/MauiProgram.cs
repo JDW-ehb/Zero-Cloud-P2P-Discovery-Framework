@@ -76,7 +76,6 @@ public static class MauiProgram
         // =========================
         // Services
         // =========================
-        builder.Services.AddSingleton<MessagingService>();
 
         builder.Services.AddSingleton<Func<string>>(_ =>
         {
@@ -88,7 +87,16 @@ public static class MauiProgram
             };
         });
 
+        // Hubs (application-level singletons)
+        builder.Services.AddSingleton<MessagingService>();
         builder.Services.AddSingleton<FileSharingService>();
+
+        // Per-session transport handlers
+        builder.Services.AddTransient<MessagingSessionHandler>();
+        builder.Services.AddTransient<FileSharingSessionHandler>();
+
+
+
 
 #if DEBUG
         builder.Logging.AddDebug();
@@ -149,10 +157,11 @@ public static class MauiProgram
                 port: 5555,
                 serviceName =>
                 {
+                    // Important: return the per-session handler
                     return serviceName switch
                     {
-                        "Messaging" => app.Services.GetRequiredService<MessagingService>(),
-                        "FileSharing" => app.Services.GetRequiredService<FileSharingService>(),
+                        "Messaging" => app.Services.GetRequiredService<MessagingSessionHandler>(),
+                        "FileSharing" => app.Services.GetRequiredService<FileSharingSessionHandler>(),
                         _ => null
                     };
                 })
@@ -160,11 +169,7 @@ public static class MauiProgram
 
 
 
-        // =========================
-        // Force service construction
-        // =========================
-        _ = app.Services.GetRequiredService<MessagingService>();
-        _ = app.Services.GetRequiredService<FileSharingService>();
+
 
         return app;
     }

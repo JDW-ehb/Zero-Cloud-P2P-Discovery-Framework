@@ -1,47 +1,37 @@
-﻿using System.IO;
-using System.Net.Sockets;
-using Microsoft.Extensions.DependencyInjection;
+﻿using System.Net.Sockets;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Protocol.ZCSP.Protocol;
 using ZCL.Protocol.ZCSP.Transport;
-using ZCL.Repositories.Messages;
-using ZCL.Repositories.Peers;
 
 namespace ZCL.Services.Messaging;
 
-public sealed class MessagingService : IZcspService
+public sealed class MessagingService
 {
-    public string ServiceName => "Messaging";
-
     private readonly ZcspPeer _peer;
-    private readonly IServiceScopeFactory _scopeFactory;
     private readonly SemaphoreSlim _sessionLock = new(1, 1);
-
-    private NetworkStream? _stream;
-    private Guid _currentSessionId;
-    private string? _remotePeerId;
+    private readonly MessagingSessionHandler _handler;
 
     public event Action<string>? SessionStarted;
     public event Action<ChatMessage>? MessageReceived;
     public event Action<string>? SessionClosed;
 
-    public MessagingService(ZcspPeer peer, IServiceScopeFactory scopeFactory)
+    private sealed record SessionState(Guid SessionId, string RemotePeerId, NetworkStream Stream);
+    private readonly Dictionary<string, SessionState> _sessionsByRemote = new();
+    private readonly object _gate = new();
+
+    public MessagingService(ZcspPeer peer, MessagingSessionHandler handler)
     {
         _peer = peer;
-        _scopeFactory = scopeFactory;
+        _handler = handler;
     }
 
-    private async Task UseScopeAsync(Func<IServiceProvider, Task> action)
-    {
-        using var scope = _scopeFactory.CreateScope();
-        await action(scope.ServiceProvider);
-    }
+    private void Log(string msg)
+        => Console.WriteLine($"[MessagingHub:{_peer.PeerId}] {msg}");
 
-    private bool IsSessionActiveWith(string remoteProtocolPeerId)
-        => _stream != null &&
-           _currentSessionId != Guid.Empty &&
-           _remotePeerId == remoteProtocolPeerId;
+    // =====================================================
+    // OUTBOUND CONNECTION
+    // =====================================================
 
     public async Task EnsureSessionAsync(
         string remoteProtocolPeerId,
@@ -49,25 +39,40 @@ public sealed class MessagingService : IZcspService
         int port,
         CancellationToken ct = default)
     {
-        if (IsSessionActiveWith(remoteProtocolPeerId))
+        if (HasSession(remoteProtocolPeerId))
             return;
 
         await _sessionLock.WaitAsync(ct);
         try
         {
-            if (IsSessionActiveWith(remoteProtocolPeerId))
+            if (HasSession(remoteProtocolPeerId))
                 return;
 
-            await _peer.ConnectAsync(remoteIp, port, remoteProtocolPeerId, this);
+            Log($"Connecting to {remoteProtocolPeerId} @ {remoteIp}:{port}");
 
-            if (!IsSessionActiveWith(remoteProtocolPeerId))
-                throw new InvalidOperationException("Connect completed but session not active.");
+
+            await _peer.ConnectAsync(
+                remoteIp,
+                port,
+                remoteProtocolPeerId,
+                _handler);
+
         }
         finally
         {
             _sessionLock.Release();
         }
     }
+
+    private bool HasSession(string remote)
+    {
+        lock (_gate)
+            return _sessionsByRemote.ContainsKey(remote);
+    }
+
+    // =====================================================
+    // SEND
+    // =====================================================
 
     public async Task SendMessageAsync(
         string remoteProtocolPeerId,
@@ -81,35 +86,17 @@ public sealed class MessagingService : IZcspService
 
         await EnsureSessionAsync(remoteProtocolPeerId, remoteIp, port, ct);
 
-        if (_stream == null)
-            throw new InvalidOperationException("Messaging session is not active.");
+        SessionState state;
 
-        MessageEntity entity = default!;
-
-        await UseScopeAsync(async sp =>
+        lock (_gate)
         {
-            var peers = sp.GetRequiredService<IPeerRepository>();
-            var messages = sp.GetRequiredService<IMessageRepository>();
-
-            var localPeer = await peers.GetLocalPeerAsync(ct);
-            var remotePeer = await peers.GetOrCreateAsync(
-                remoteProtocolPeerId,
-                ipAddress: remoteIp,
-                ct: ct);
-
-            entity = await messages.StoreOutgoingAsync(
-                _currentSessionId,
-                localPeer.PeerId,
-                remotePeer.PeerId,
-                content);
-        });
-
-        MessageReceived?.Invoke(
-            ChatMessageMapper.Outgoing(_peer.PeerId, remoteProtocolPeerId, entity));
+            if (!_sessionsByRemote.TryGetValue(remoteProtocolPeerId, out state!))
+                throw new InvalidOperationException("No active session.");
+        }
 
         var data = BinaryCodec.Serialize(
             ZcspMessageType.SessionData,
-            _currentSessionId,
+            state.SessionId,
             w =>
             {
                 BinaryCodec.WriteString(w, _peer.PeerId);
@@ -117,67 +104,66 @@ public sealed class MessagingService : IZcspService
                 BinaryCodec.WriteString(w, content);
             });
 
-        await Framing.WriteAsync(_stream, data);
+        await Framing.WriteAsync(state.Stream, data);
     }
 
-    public void BindStream(NetworkStream stream)
-    {
-        _stream = stream;
-    }
+    // =====================================================
+    // CALLED BY SESSION HANDLER
+    // =====================================================
 
-    public Task OnSessionStartedAsync(Guid sessionId, string remotePeerId)
+    internal Task InternalOnSessionStartedAsync(
+        Guid sessionId,
+        string remotePeerId,
+        NetworkStream stream)
     {
-        _currentSessionId = sessionId;
-        _remotePeerId = remotePeerId;
+        lock (_gate)
+            _sessionsByRemote[remotePeerId] =
+                new SessionState(sessionId, remotePeerId, stream);
 
         SessionStarted?.Invoke(remotePeerId);
+
+        Log($"Session started with {remotePeerId}");
         return Task.CompletedTask;
     }
 
-    public async Task OnSessionDataAsync(Guid sessionId, BinaryReader reader)
+    internal Task InternalOnSessionClosedAsync(Guid sessionId)
     {
-        var fromPeer = BinaryCodec.ReadString(reader);
-        var toPeer = BinaryCodec.ReadString(reader);
-        var content = BinaryCodec.ReadString(reader);
+        string? remote = null;
 
-        MessageEntity entity = default!;
-
-        await UseScopeAsync(async sp =>
+        lock (_gate)
         {
-            var peers = sp.GetRequiredService<IPeerRepository>();
-            var messages = sp.GetRequiredService<IMessageRepository>();
-
-            var fromPeerEntity = await peers.GetOrCreateAsync(fromPeer);
-            var toPeerEntity = await peers.GetLocalPeerAsync();
-
-            entity = await messages.StoreIncomingAsync(
-                sessionId,
-                fromPeerEntity.PeerId,
-                toPeerEntity.PeerId,
-                content);
-        });
-
-        MessageReceived?.Invoke(
-            ChatMessageMapper.Incoming(fromPeer, toPeer, entity));
-    }
-
-    public Task OnSessionClosedAsync(Guid sessionId)
-    {
-        var remote = _remotePeerId;
-
-        try
-        {
-            _stream?.Dispose();
+            var kv = _sessionsByRemote.FirstOrDefault(x => x.Value.SessionId == sessionId);
+            if (!string.IsNullOrEmpty(kv.Key))
+            {
+                remote = kv.Key;
+                _sessionsByRemote.Remove(kv.Key);
+            }
         }
-        catch { }
-
-        _stream = null;
-        _currentSessionId = Guid.Empty;
-        _remotePeerId = null;
 
         if (remote != null)
+        {
             SessionClosed?.Invoke(remote);
+            Log($"Session closed with {remote}");
+        }
 
+        return Task.CompletedTask;
+    }
+
+    internal Task InternalOnIncomingAsync(
+        Guid sessionId,
+        string fromPeer,
+        string toPeer,
+        string content)
+    {
+        var msg = new ChatMessage(
+            id: Guid.NewGuid(),
+            fromPeer: fromPeer,
+            toPeer: toPeer,
+            content: content,
+            direction: MessageDirection.Incoming,
+            timestamp: DateTime.UtcNow);
+
+        MessageReceived?.Invoke(msg);
         return Task.CompletedTask;
     }
 }

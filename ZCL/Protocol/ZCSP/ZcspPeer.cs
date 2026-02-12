@@ -11,7 +11,7 @@ namespace ZCL.Protocol.ZCSP
 {
     public sealed class ZcspPeer
     {
-        private string? _peerId; // resolved from DB (GUID string)
+        private string? _peerId;
         private readonly SessionRegistry _sessions;
         private readonly IServiceScopeFactory _scopeFactory;
 
@@ -22,6 +22,9 @@ namespace ZCL.Protocol.ZCSP
             _scopeFactory = scopeFactory;
             _sessions = sessions;
         }
+
+        private void Log(string msg)
+            => Console.WriteLine($"[ZCSP:{PeerId}] {msg}");
 
         private async Task<string> EnsurePeerIdAsync(CancellationToken ct = default)
         {
@@ -37,7 +40,9 @@ namespace ZCL.Protocol.ZCSP
                 ct: ct);
 
             if (!Guid.TryParse(_peerId, out _))
-                throw new InvalidOperationException($"Local protocol peer id must be a GUID string, got '{_peerId}'.");
+                throw new InvalidOperationException($"Local protocol peer id must be GUID string, got '{_peerId}'.");
+
+            Console.WriteLine($"[ZCSP:{_peerId}] Local PeerId resolved.");
 
             return _peerId!;
         }
@@ -53,18 +58,20 @@ namespace ZCL.Protocol.ZCSP
             var listener = new TcpListener(IPAddress.Any, port);
             listener.Start();
 
-            Console.WriteLine($"[{localId}] Hosting on port {port}");
+            Log($"Hosting on port {port}");
 
             while (true)
             {
                 var client = await listener.AcceptTcpClientAsync();
+
+                Log("Inbound TCP connection accepted.");
 
                 _ = Task.Run(async () =>
                 {
                     try { await HandleClientAsync(client, serviceResolver); }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[{localId}] Client handler crashed:");
+                        Log("Client handler crashed:");
                         Console.WriteLine(ex);
                     }
                 });
@@ -80,23 +87,37 @@ namespace ZCL.Protocol.ZCSP
                 using (client)
                 using (var stream = client.GetStream())
                 {
+                    Log("Reading inbound ServiceRequest...");
+
                     var frame = await Framing.ReadAsync(stream);
-                    if (frame == null) return;
+                    if (frame == null)
+                    {
+                        Log("Inbound connection closed before ServiceRequest.");
+                        return;
+                    }
 
                     var (type, _, _, reader) = BinaryCodec.Deserialize(frame);
-                    if (type != ZcspMessageType.ServiceRequest) return;
+                    if (type != ZcspMessageType.ServiceRequest)
+                    {
+                        Log($"Unexpected message type: {type}");
+                        return;
+                    }
 
                     reader.ReadBytes(16); // requestId
                     var fromPeer = BinaryCodec.ReadString(reader);
                     BinaryCodec.ReadString(reader); // toPeer
                     var serviceName = BinaryCodec.ReadString(reader);
 
+                    Log($"ServiceRequest from {fromPeer} for service '{serviceName}'");
+
                     var service = serviceResolver(serviceName);
                     if (service == null)
                     {
+                        Log($"Service '{serviceName}' not found. Rejecting.");
+
                         var reject = BinaryCodec.Serialize(
                             ZcspMessageType.ServiceResponse,
-                            Guid.Empty,
+                            null,
                             w => { w.Write(false); w.Write(0L); });
 
                         await Framing.WriteAsync(stream, reject);
@@ -105,6 +126,8 @@ namespace ZCL.Protocol.ZCSP
 
                     var session = _sessions.Create(fromPeer, TimeSpan.FromMinutes(30));
 
+                    Log($"Inbound session created | SessionId={session.Id}");
+
                     var accept = BinaryCodec.Serialize(
                         ZcspMessageType.ServiceResponse,
                         session.Id,
@@ -112,15 +135,19 @@ namespace ZCL.Protocol.ZCSP
 
                     await Framing.WriteAsync(stream, accept);
 
+                    Log("ServiceResponse ACCEPT sent.");
+
                     service.BindStream(stream);
                     await service.OnSessionStartedAsync(session.Id, fromPeer);
+
+                    Log("Inbound session bound to service.");
 
                     await RunSessionAsync(stream, session.Id, service);
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[{localId}] HandleClientAsync failed:");
+                Log("HandleClientAsync failed:");
                 Console.WriteLine(ex);
             }
         }
@@ -133,13 +160,17 @@ namespace ZCL.Protocol.ZCSP
         {
             var localId = await EnsurePeerIdAsync();
 
+            Log($"ConnectAsync → {remotePeerId} @ {host}:{port}");
+
             var client = new TcpClient();
             NetworkStream? stream = null;
 
             try
             {
-               await client.ConnectAsync(host, port);
+                await client.ConnectAsync(host, port);
                 stream = client.GetStream();
+
+                Log("TCP connection established.");
 
                 var request = BinaryCodec.Serialize(
                     ZcspMessageType.ServiceRequest,
@@ -154,26 +185,38 @@ namespace ZCL.Protocol.ZCSP
 
                 await Framing.WriteAsync(stream, request);
 
+                Log("ServiceRequest sent.");
+
                 var frame = await Framing.ReadAsync(stream);
                 if (frame == null)
                     throw new IOException("No service response (connection closed).");
 
                 var (type, sessionId, _, _) = BinaryCodec.Deserialize(frame);
+
                 if (type != ZcspMessageType.ServiceResponse || sessionId == null)
                     throw new InvalidOperationException("Invalid service response.");
+
+                Log($"ServiceResponse received | SessionId={sessionId}");
 
                 service.BindStream(stream);
                 await service.OnSessionStartedAsync(sessionId.Value, remotePeerId);
 
+                Log("Outbound session bound to service.");
+
                 _ = Task.Run(async () =>
                 {
                     try { await RunSessionAsync(stream, sessionId.Value, service); }
-                    finally { stream.Dispose(); client.Dispose(); }
+                    finally
+                    {
+                        Log("Outbound session ended.");
+                        stream.Dispose();
+                        client.Dispose();
+                    }
                 });
             }
             catch (SocketException ex)
             {
-                Console.WriteLine($"[ZCSP] Connection failed: {ex.Message}");
+                Log($"Connection failed: {ex.Message}");
 
                 try { stream?.Dispose(); } catch { }
                 try { client.Dispose(); } catch { }
@@ -182,7 +225,7 @@ namespace ZCL.Protocol.ZCSP
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ZCSP] Unexpected connection error:");
+                Log("Unexpected connection error:");
                 Console.WriteLine(ex);
 
                 try { stream?.Dispose(); } catch { }
@@ -190,12 +233,16 @@ namespace ZCL.Protocol.ZCSP
 
                 throw;
             }
-
         }
 
+        // =====================
+        // SESSION LOOP
+        // =====================
 
         private async Task RunSessionAsync(NetworkStream stream, Guid sessionId, IZcspService service)
         {
+            Log($"RunSessionAsync started | SessionId={sessionId}");
+
             try
             {
                 while (true)
@@ -208,20 +255,30 @@ namespace ZCL.Protocol.ZCSP
                     }
                     catch (IOException)
                     {
+                        Log("Stream IO exception. Closing session.");
                         break;
                     }
                     catch (ObjectDisposedException)
                     {
+                        Log("Stream disposed. Closing session.");
                         break;
                     }
 
                     if (frame == null)
+                    {
+                        Log("Frame null (remote closed).");
                         break;
+                    }
 
                     var (type, _, _, reader) = BinaryCodec.Deserialize(frame);
 
+                    Log($"Frame received | Type={type}");
+
                     if (type == ZcspMessageType.SessionClose)
+                    {
+                        Log("SessionClose received.");
                         break;
+                    }
 
                     if (type == ZcspMessageType.SessionData)
                         await service.OnSessionDataAsync(sessionId, reader);
@@ -229,13 +286,15 @@ namespace ZCL.Protocol.ZCSP
             }
             finally
             {
-                // ALWAYS notify service, even if an exception happened mid-read or mid-handle
+                Log($"Session closing | SessionId={sessionId}");
+
                 try { await service.OnSessionClosedAsync(sessionId); }
-                catch { /* don't let close cascade-crash */ }
+                catch { }
 
                 _sessions.Remove(sessionId);
+
+                Log($"Session removed from registry.");
             }
         }
-
     }
 }
