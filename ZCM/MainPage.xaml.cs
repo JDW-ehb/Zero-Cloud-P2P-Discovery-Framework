@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using ZCL.API;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
+using ZCL.Repositories.Peers;
 using ZCM.Pages;
 
 namespace ZCM;
@@ -55,7 +56,7 @@ public partial class MainPage : ContentPage
                 Path.Combine(FileSystem.AppDataDirectory, Config.DBFileName)
             );
 
-            foreach (var p in _store.Peers)
+            foreach (var p in _store.Peers.Where(p => !p.IsLocal))
             {
                 var existing = Peers.FirstOrDefault(x => x.ProtocolPeerId == p.ProtocolPeerId);
 
