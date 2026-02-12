@@ -52,7 +52,7 @@ public partial class MainPage : ContentPage
         MainThread.BeginInvokeOnMainThread(() =>
         {
             using var db = ZCDPPeer.CreateDBContext(
-                Path.Combine(FileSystem.AppDataDirectory, Config.DBFileName)
+                Path.Combine(FileSystem.AppDataDirectory, Config.Instance.DBFileName)
             );
 
             foreach (var p in _store.Peers)
@@ -95,6 +95,11 @@ public partial class MainPage : ContentPage
     private async void ShareButton_Clicked(object sender, EventArgs e)
     {
         await Navigation.PushAsync(new ZCM.Pages.FileSharingPage());
+    }
+
+    private async void SettingsButton_Clicked(object sender, EventArgs e)
+    {
+        await Navigation.PushAsync(new ZCM.Pages.SettingsPage());
     }
 
 

@@ -13,17 +13,20 @@ using ZCL.Repositories.Peers;
 
 namespace ZCL.API
 {
-    public static class Config
+    public class Config
     {
-        public const string DBFileName = "services.db";
-        public const int Port = 2600;
-        public const string MulticastAddress = "224.0.0.26";
-        public const ushort ZCDPProtocolVersion = 0;
-        public const int DiscoveryTimeoutMS = (3 * 1000);
+        public static Config Instance { get; } = new Config();
 
-        // TODO(luca): We should really use the computer's name instead.
-        public const string peerName = "Luca's desktop";
+        public string DBFileName { get; set; } = "services.db";
+        public int DiscoveryPort { get; set; } = 2600;
+        public string MulticastAddress { get; set; } = "224.0.0.26";
+        public ushort ZCDPProtocolVersion { get; set; } = 0;
+        public int DiscoveryTimeoutMS { get; set; } = 3 * 1000;
+        public string PeerName { get; set; } = Environment.MachineName;
+
+        private Config() { }
     }
+
 
     // Keeping it here as you asked
     public class DataStore
@@ -93,7 +96,7 @@ namespace ZCL.API
             var peersRepo = new PeerRepository(db);
 
             var localProtocolPeerId = peersRepo
-                .GetOrCreateLocalProtocolPeerIdAsync(Config.peerName, "127.0.0.1")
+                .GetOrCreateLocalProtocolPeerIdAsync(Config.Instance.PeerName, "127.0.0.1")
                 .GetAwaiter()
                 .GetResult();
 
@@ -103,7 +106,7 @@ namespace ZCL.API
         public static void StartAndRun(IPAddress multicastAddress, int port, string dbPath, DataStore store)
         {
             ulong MessageID = 0;
-            ushort ZCDPProtocolVersion = Config.ZCDPProtocolVersion;
+            ushort ZCDPProtocolVersion = Config.Instance.ZCDPProtocolVersion;
 
             // NOTE(luca): If you hardcode the same Guid on multiple machines, they will appear as ONE peer.
             // Persist a unique id per installation so each PC is discoverable.
@@ -317,7 +320,7 @@ namespace ZCL.API
 
                         MsgPeerAnnounce message = new MsgPeerAnnounce
                         {
-                            Name = Config.peerName,
+                            Name = Config.Instance.PeerName,
                             ServicesCount = (ulong)services.Length
                         };
 
@@ -348,7 +351,7 @@ namespace ZCL.API
                     Debug.WriteLine($"Error: {e.Message}");
                 }
 
-                Thread.Sleep(Config.DiscoveryTimeoutMS);
+                Thread.Sleep(Config.Instance.DiscoveryTimeoutMS);
             }
         }
     }

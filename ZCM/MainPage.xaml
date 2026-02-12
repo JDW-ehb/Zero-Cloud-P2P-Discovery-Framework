@@ -45,6 +45,14 @@
                 BackgroundColor="#27AE60"
                 TextColor="White"
                 CornerRadius="10" />
+ 
+
+            <Button
+       Text="Settings"
+       Clicked="SettingsButton_Clicked"
+       BackgroundColor="#2D6CDF"
+       TextColor="White"
+       CornerRadius="10" />
         </VerticalStackLayout>
 
         <!-- ===================== -->
