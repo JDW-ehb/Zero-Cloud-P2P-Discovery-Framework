@@ -3,6 +3,7 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:conv="clr-namespace:ZCM.Converters"
+    xmlns:controls="clr-namespace:ZCM.Controls"
     x:Class="ZCM.Pages.MessagingPage"
     BackgroundColor="#1e1e1e">
 
@@ -107,11 +108,11 @@
 
                                 <VerticalStackLayout Spacing="4">
 
-                                    <!-- SELECTABLE MESSAGE TEXT -->
-                                    <Label Text="{Binding Content}"
-                                           TextColor="White"
-                                           LineBreakMode="WordWrap"
-                                           IsTextSelectionEnabled="True" />
+                                    <!-- SELECTABLE TEXT -->
+                                    <controls:SelectableLabel
+                                        Text="{Binding Content}"
+                                        TextColor="White"
+                                        LineBreakMode="WordWrap" />
 
                                     <Label Text="{Binding Timestamp, Converter={StaticResource ChatTimestampConverter}}"
                                            FontSize="10"
