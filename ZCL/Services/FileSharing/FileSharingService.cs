@@ -25,6 +25,7 @@ public sealed class FileSharingService : IZcspService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly Func<string> _downloadDirectoryProvider;
     private readonly ZcspPeer _peer;
+    private readonly Dictionary<Guid, string> _downloadTargets = new();
 
     private NetworkStream? _stream;
     private Guid _currentSessionId;
@@ -353,20 +354,23 @@ public sealed class FileSharingService : IZcspService
 
         if (!_activeDownloads.TryGetValue(fileId, out var fs))
         {
-            var dir = _downloadDirectoryProvider();
-            Directory.CreateDirectory(dir);
+            if (!_downloadTargets.TryGetValue(fileId, out var targetPath))
+            {
+                Debug.WriteLine("[FileSharing] No download target set.");
+                return;
+            }
 
-            var fileName =
-                _knownFiles.TryGetValue(fileId, out var meta)
-                    ? meta.Name
-                    : fileId.ToString();
+            var directory = Path.GetDirectoryName(targetPath);
+            if (!string.IsNullOrWhiteSpace(directory))
+                Directory.CreateDirectory(directory);
 
-            fs = File.Create(Path.Combine(dir, fileName));
+            fs = File.Create(targetPath);
+
 
             _activeDownloads[fileId] = fs;
             _receivedBytes[fileId] = 0;
 
-            Debug.WriteLine($"[FileSharing] Receiving {fileName}");
+            //Debug.WriteLine($"[FileSharing] Receiving {fileName}");
         }
 
 
@@ -386,6 +390,7 @@ public sealed class FileSharingService : IZcspService
 
         _receivedBytes.Remove(fileId);
         TransferCompleted?.Invoke(fileId, checksum);
+        _downloadTargets.Remove(fileId);
 
         Debug.WriteLine($"[FileSharing] Completed {fileId}");
     }
@@ -423,4 +428,10 @@ public sealed class FileSharingService : IZcspService
 
         throw new TimeoutException("FileSharing session bind timeout");
     }
+
+    public void SetDownloadTarget(Guid fileId, string path)
+    {
+        _downloadTargets[fileId] = path;
+    }
+
 }

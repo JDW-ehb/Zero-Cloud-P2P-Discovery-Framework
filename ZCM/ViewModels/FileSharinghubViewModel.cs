@@ -9,6 +9,12 @@ using Microsoft.EntityFrameworkCore;
 using ZCL.Models;
 using ZCL.Services.FileSharing;
 using ZCL.Repositories.Peers;
+#if WINDOWS
+using Windows.Storage.Pickers;
+using WinRT.Interop;
+#endif
+
+
 
 namespace ZCM.ViewModels;
 
@@ -41,8 +47,31 @@ public sealed class FileSharingHubViewModel : BindableObject
             if (file == null)
                 return;
 
+#if WINDOWS
+    var picker = new FileSavePicker();
+
+    picker.SuggestedFileName = file.Name;
+
+    picker.FileTypeChoices.Add(
+        file.Type.ToUpper(),
+        new List<string> { $".{file.Type}" });
+
+    var window = Application.Current?.Windows[0];
+    var hwnd = WindowNative.GetWindowHandle(window.Handler.PlatformView);
+    InitializeWithWindow.Initialize(picker, hwnd);
+
+    var result = await picker.PickSaveFileAsync();
+
+    if (result == null)
+        return;
+
+    _service.SetDownloadTarget(file.FileId, result.Path);
+#endif
+
             await _service.RequestFileAsync(file.FileId);
         });
+
+
 
         AddLocalFilesCommand = new Command(async () =>
             await PickAndShareFilesAsync());
