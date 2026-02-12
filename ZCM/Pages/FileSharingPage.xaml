@@ -8,13 +8,14 @@
     <Grid ColumnDefinitions="320,*">
 
         <!-- ===================== -->
-        <!-- LEFT: peers + local entry -->
+        <!-- LEFT: peers + local entry + download progress -->
         <!-- ===================== -->
         <Grid Grid.Column="0"
-              RowDefinitions="Auto,Auto,*"
+              RowDefinitions="Auto,Auto,*,Auto"
               Padding="16"
               BackgroundColor="#151515">
 
+            <!-- Title -->
             <Label Text="File Sharing"
                    FontSize="22"
                    FontAttributes="Bold"
@@ -74,6 +75,30 @@
                 </CollectionView.ItemTemplate>
             </CollectionView>
 
+            <!-- Download Progress -->
+            <Frame Grid.Row="3"
+                   Margin="0,16,0,0"
+                   Padding="14"
+                   CornerRadius="14"
+                   BackgroundColor="#1F1F1F"
+                   HasShadow="False"
+                   IsVisible="{Binding IsDownloading}">
+
+                <VerticalStackLayout Spacing="8">
+
+                    <Label Text="{Binding DownloadFileName}"
+                           TextColor="White"
+                           FontSize="12"
+                           LineBreakMode="TailTruncation"/>
+
+                    <ProgressBar Progress="{Binding DownloadProgress}"
+                                 HeightRequest="8"
+                                 BackgroundColor="#333333"
+                                 ProgressColor="#27AE60"/>
+
+                </VerticalStackLayout>
+            </Frame>
+
         </Grid>
 
         <!-- ===================== -->
@@ -130,7 +155,6 @@
                             ItemsSource="{Binding Files}"
                             SelectionMode="None">
 
-                <!-- THIS is the important part -->
                 <CollectionView.ItemsLayout>
                     <LinearItemsLayout Orientation="Vertical"
                                        ItemSpacing="14" />
@@ -155,30 +179,25 @@
                                   ColumnSpacing="20"
                                   VerticalOptions="Center">
 
-                                <!-- File Name -->
                                 <Label Text="{Binding Name}"
                                        TextColor="White"
                                        LineBreakMode="TailTruncation"/>
 
-                                <!-- Date -->
                                 <Label Grid.Column="1"
                                        Text="{Binding SharedSinceText}"
                                        TextColor="#CCCCCC"
                                        HorizontalOptions="Center"/>
 
-                                <!-- Type -->
                                 <Label Grid.Column="2"
                                        Text="{Binding Type}"
                                        TextColor="#CCCCCC"
                                        HorizontalOptions="Center"/>
 
-                                <!-- Size -->
                                 <Label Grid.Column="3"
                                        Text="{Binding SizeText}"
                                        TextColor="#CCCCCC"
                                        HorizontalOptions="Center"/>
 
-                                <!-- Download -->
                                 <Button Grid.Column="4"
                                         Text="Download"
                                         Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.DownloadCommand}"

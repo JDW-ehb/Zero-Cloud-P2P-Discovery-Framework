@@ -395,6 +395,7 @@ public sealed class FileSharingService : IZcspService
         Debug.WriteLine($"[FileSharing] Completed {fileId}");
     }
 
+
     public Task CloseCurrentSessionAsync()
     {
         _stream?.Dispose();
@@ -433,5 +434,7 @@ public sealed class FileSharingService : IZcspService
     {
         _downloadTargets[fileId] = path;
     }
+    public bool TryGetKnownFile(Guid id, out SharedFileDto dto)
+    => _knownFiles.TryGetValue(id, out dto);
 
 }

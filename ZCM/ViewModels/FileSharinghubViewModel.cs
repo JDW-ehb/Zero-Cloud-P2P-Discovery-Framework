@@ -33,6 +33,10 @@ public sealed class FileSharingHubViewModel : BindableObject
     public ICommand AddLocalFilesCommand { get; }
     public ICommand RemoveLocalFileCommand { get; }
 
+    private bool _isDownloading;
+    private double _downloadProgress;
+    private string _downloadFileName = string.Empty;
+
     public FileSharingHubViewModel(
         FileSharingService service,
         IPeerRepository peers)
@@ -41,6 +45,9 @@ public sealed class FileSharingHubViewModel : BindableObject
         _peers = peers;
 
         _service.FilesReceived += OnFilesReceived;
+        _service.TransferProgress += OnTransferProgress;
+        _service.TransferCompleted += OnTransferCompleted;
+
 
         DownloadCommand = new Command<SharedFileItem>(async file =>
         {
@@ -314,5 +321,52 @@ public sealed class FileSharingHubViewModel : BindableObject
             }
         });
     }
+
+
+    public bool IsDownloading
+    {
+        get => _isDownloading;
+        set { _isDownloading = value; OnPropertyChanged(); }
+    }
+
+    public double DownloadProgress
+    {
+        get => _downloadProgress;
+        set { _downloadProgress = value; OnPropertyChanged(); }
+    }
+
+    public string DownloadFileName
+    {
+        get => _downloadFileName;
+        set { _downloadFileName = value; OnPropertyChanged(); }
+    }
+
+
+    private void OnTransferProgress(Guid fileId, double bytesReceived)
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            if (!_service.TryGetKnownFile(fileId, out var meta))
+                return;
+
+            DownloadFileName = meta.Name;
+            IsDownloading = true;
+
+            var percent = bytesReceived / meta.Size;
+            DownloadProgress = percent;
+        });
+    }
+
+    private void OnTransferCompleted(Guid fileId, string checksum)
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            DownloadProgress = 1;
+            IsDownloading = false;
+        });
+    }
+
+
+
 
 }
