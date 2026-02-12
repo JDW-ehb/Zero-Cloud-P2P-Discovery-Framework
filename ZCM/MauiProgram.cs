@@ -28,7 +28,7 @@ public class ServiceDBContextFactory : IDesignTimeDbContextFactory<ServiceDBCont
         var optionsBuilder = new DbContextOptionsBuilder<ServiceDBContext>();
         var dbPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            Config.DBFileName);
+            Config.Instance.DBFileName);
 
         optionsBuilder.UseSqlite($"Data Source={dbPath}");
         return new ServiceDBContext(optionsBuilder.Options);
@@ -49,16 +49,19 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
             });
 
+        builder.Services.AddSingleton<Config>();
+
         // =========================
         // Database
         // =========================
         builder.Services.AddDbContext<ServiceDBContext>(options =>
         {
-            var dbPath = Path.Combine(FileSystem.AppDataDirectory, Config.DBFileName);
+            var dbPath = Path.Combine(FileSystem.AppDataDirectory, Config.Instance.DBFileName);
             options.UseSqlite($"Data Source={dbPath}", b => b.MigrationsAssembly("ZCM"));
         });
 
         builder.Services.AddSingleton<DataStore>();
+
 
         // =========================
         // Repositories
@@ -127,13 +130,13 @@ public static class MauiProgram
             var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
             var store = scope.ServiceProvider.GetRequiredService<DataStore>();
 
-            var multicastAddress = IPAddress.Parse(Config.MulticastAddress);
+            var multicastAddress = IPAddress.Parse(Config.Instance.MulticastAddress);
             string dbPath = db.Database.GetDbConnection().DataSource;
 
             Task.Run(() =>
                 ZCDPPeer.StartAndRun(
                     multicastAddress,
-                    Config.Port,
+                    Config.Instance.DiscoveryPort,
                     dbPath,
                     store)
             );

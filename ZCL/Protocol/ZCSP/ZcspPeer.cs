@@ -32,7 +32,7 @@ namespace ZCL.Protocol.ZCSP
             var peers = scope.ServiceProvider.GetRequiredService<IPeerRepository>();
 
             _peerId = await peers.GetOrCreateLocalProtocolPeerIdAsync(
-                hostName: Config.peerName,
+                hostName: Config.Instance.PeerName,
                 ipAddress: "127.0.0.1",
                 ct: ct);
 

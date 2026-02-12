@@ -40,7 +40,7 @@ public partial class DiscoveryPage : ContentPage
         public PeerNode Peer { get; }
 
         // Convenience properties for XAML bindings if you used old names
-        public string HostName => Peer.HostName;
+        public string HostName => Config.Instance.PeerName;
         public string IpAddress => Peer.IpAddress;
         public DateTime LastSeen => Peer.LastSeen;
         public string ProtocolPeerId => Peer.ProtocolPeerId;
