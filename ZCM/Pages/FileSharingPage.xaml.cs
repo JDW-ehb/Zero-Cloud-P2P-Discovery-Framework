@@ -18,6 +18,19 @@ public partial class FileSharingPage : ContentPage
         BindingContext = _vm;
     }
 
+    // ?? New constructor to support redirection from PeerDetailsPage
+    public FileSharingPage(PeerNode peer) : this()
+    {
+        _ = ActivatePeerOnLoad(peer);
+    }
+
+    private async Task ActivatePeerOnLoad(PeerNode peer)
+    {
+        // Let UI render first
+        await Task.Delay(50);
+        await _vm.ActivatePeerAsync(peer);
+    }
+
     private async void OnPeerSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (e.CurrentSelection.Count == 0)
@@ -35,7 +48,4 @@ public partial class FileSharingPage : ContentPage
         await Navigation.PushModalAsync(
             new MySharedFilesPopup(_vm));
     }
-
-
-
 }

@@ -1,3 +1,5 @@
+using ZCL.Models;
+
 namespace ZCM.Pages;
 
 public partial class PeerDetailsPage : ContentPage
@@ -14,7 +16,6 @@ public partial class PeerDetailsPage : ContentPage
     private async void OnBackdropTapped(object sender, EventArgs e)
         => await Navigation.PopModalAsync();
 
-
     private async void OnServiceClicked(object sender, EventArgs e)
     {
         if (sender is not Button btn)
@@ -23,16 +24,27 @@ public partial class PeerDetailsPage : ContentPage
         if (BindingContext is not MainPage.PeerNodeCard card)
             return;
 
-        if (btn.Text != "Messaging")
-            return;
+        var peer = card.ToPeerNode();
 
-        // 1?? Close popup
+        // Close modal FIRST
         await Navigation.PopModalAsync();
 
-        // 2?? Navigate to MessagingPage with peer
-        await Application.Current!.MainPage!.Navigation
-            .PushAsync(new MessagingPage(card.ToPeerNode()));
+        // Always navigate from root navigation stack
+        var nav = Application.Current!.MainPage!.Navigation;
+
+        switch (btn.Text)
+        {
+            case "Messaging":
+                await nav.PushAsync(new MessagingPage(peer));
+                break;
+
+            case "FileTransfer":
+                await nav.PushAsync(new FileSharingPage(peer));
+                break;
+
+            case "AIChat":
+                // future extension
+                break;
+        }
     }
-
-
 }
