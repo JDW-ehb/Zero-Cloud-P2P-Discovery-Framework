@@ -1,4 +1,5 @@
-﻿using System.Net.Sockets;
+﻿using Microsoft.Extensions.DependencyInjection;
+using System.Net.Sockets;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Protocol.ZCSP.Protocol;
@@ -11,6 +12,7 @@ public sealed class MessagingService
     private readonly ZcspPeer _peer;
     private readonly SemaphoreSlim _sessionLock = new(1, 1);
     private readonly MessagingSessionHandler _handler;
+    private readonly IServiceProvider _services;
 
     public event Action<string>? SessionStarted;
     public event Action<ChatMessage>? MessageReceived;
@@ -20,10 +22,10 @@ public sealed class MessagingService
     private readonly Dictionary<string, SessionState> _sessionsByRemote = new();
     private readonly object _gate = new();
 
-    public MessagingService(ZcspPeer peer, MessagingSessionHandler handler)
+    public MessagingService(ZcspPeer peer, IServiceProvider services)
     {
         _peer = peer;
-        _handler = handler;
+        _services = services;
     }
 
     private void Log(string msg)
@@ -51,11 +53,14 @@ public sealed class MessagingService
             Log($"Connecting to {remoteProtocolPeerId} @ {remoteIp}:{port}");
 
 
+            var handler = _services.GetRequiredService<MessagingSessionHandler>();
+
             await _peer.ConnectAsync(
                 remoteIp,
                 port,
                 remoteProtocolPeerId,
-                _handler);
+                handler);
+
 
         }
         finally
