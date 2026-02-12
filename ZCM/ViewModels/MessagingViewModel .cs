@@ -75,17 +75,23 @@ public sealed class MessagingViewModel : BindableObject
         StatusMessage = "Ready";
     }
 
+    // ===============================
+    // SESSION EVENTS
+    // ===============================
+
     private void OnSessionStarted(string remoteProtocolPeerId)
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
-            if (_activeProtocolPeerId != remoteProtocolPeerId)
-                return;
+            // If the started session matches the active conversation,
+            // enable sending immediately.
+            if (_activeProtocolPeerId == remoteProtocolPeerId)
+            {
+                SetSessionConnected();
+            }
 
-            _sessionReady = true;
-            IsConnected = true;
-            StatusMessage = "Connected";
-            ((Command)SendMessageCommand).ChangeCanExecute();
+            // If session started before user clicked conversation,
+            // we do nothing here — activation logic will re-check state.
         });
     }
 
@@ -96,24 +102,35 @@ public sealed class MessagingViewModel : BindableObject
             if (_activeProtocolPeerId != remoteProtocolPeerId)
                 return;
 
-            _sessionReady = false;
-            IsConnected = false;
-            StatusMessage = "Peer disconnected.";
+            SetSessionDisconnected("Peer disconnected.");
 
             await TransientNotificationService.ShowAsync(
                 "Peer disconnected.",
                 NotificationSeverity.Warning,
                 5000);
-
-            ((Command)SendMessageCommand).ChangeCanExecute();
         });
     }
 
-    // ============================
-    // FIX: show history even if offline
-    // File: MessagingViewModel.cs
-    // Function: ActivateConversationFromUIAsync
-    // ============================
+    private void SetSessionConnected()
+    {
+        _sessionReady = true;
+        IsConnected = true;
+        StatusMessage = "Connected";
+        ((Command)SendMessageCommand).ChangeCanExecute();
+    }
+
+    private void SetSessionDisconnected(string status)
+    {
+        _sessionReady = false;
+        IsConnected = false;
+        StatusMessage = status;
+        ((Command)SendMessageCommand).ChangeCanExecute();
+    }
+
+    // ===============================
+    // ACTIVATION
+    // ===============================
+
     public async Task ActivateConversationFromUIAsync(ConversationItem convo)
     {
         if (_activeConversation == convo)
@@ -122,14 +139,9 @@ public sealed class MessagingViewModel : BindableObject
         _activeConversation = convo;
         _activeProtocolPeerId = convo.Peer.ProtocolPeerId;
 
-        // Always reset session state first (sending is blocked until session started)
-        _sessionReady = false;
-        IsConnected = false;
-        ((Command)SendMessageCommand).ChangeCanExecute();
+        SetSessionDisconnected("Connecting…");
 
         await LoadChatHistoryAsync(convo.Peer);
-
-        StatusMessage = $"Connecting to {convo.DisplayName}…";
 
         try
         {
@@ -138,21 +150,22 @@ public sealed class MessagingViewModel : BindableObject
                 convo.Peer.IpAddress,
                 MessagingPort);
 
+            SetSessionConnected();
         }
         catch
         {
-            StatusMessage = "Offline (history loaded).";
+            SetSessionDisconnected("Offline (history loaded).");
 
             await TransientNotificationService.ShowAsync(
                 "Peer is not available (showing history).",
                 NotificationSeverity.Warning);
-
-            // Keep send disabled
-            _sessionReady = false;
-            IsConnected = false;
-            ((Command)SendMessageCommand).ChangeCanExecute();
         }
     }
+
+
+    // ===============================
+    // SENDING
+    // ===============================
 
     private async Task SendAsync()
     {
@@ -163,16 +176,6 @@ public sealed class MessagingViewModel : BindableObject
         if (string.IsNullOrWhiteSpace(text))
             return;
 
-        var msg = new ChatMessage(
-            Guid.NewGuid(),
-            _peer.PeerId,
-            _activeProtocolPeerId!,
-            text,
-            MessageDirection.Outgoing,
-            DateTime.UtcNow);
-
-        Messages.Add(msg);
-        MessagesChanged?.Invoke();
         OutgoingMessage = string.Empty;
 
         try
@@ -185,23 +188,21 @@ public sealed class MessagingViewModel : BindableObject
         }
         catch
         {
-            _sessionReady = false;
-            IsConnected = false;
+            SetSessionDisconnected("Connection lost.");
 
             await TransientNotificationService.ShowAsync(
                 "Connection lost.",
                 NotificationSeverity.Error);
-
-            ((Command)SendMessageCommand).ChangeCanExecute();
         }
     }
 
+    // ===============================
+    // INCOMING MESSAGES
+    // ===============================
+
     private void OnMessageReceived(ChatMessage msg)
     {
-        // ignore loopback outgoing
-        if (msg.Direction == MessageDirection.Outgoing &&
-            msg.FromPeer == _peer.PeerId)
-            return;
+
 
         MainThread.BeginInvokeOnMainThread(() =>
         {
@@ -217,6 +218,10 @@ public sealed class MessagingViewModel : BindableObject
         });
     }
 
+    // ===============================
+    // DATA LOADING
+    // ===============================
+
     private async Task LoadConversationsAsync()
     {
         var historyPeers = await _chatQueries.GetPeersWithMessagesAsync();
@@ -224,10 +229,7 @@ public sealed class MessagingViewModel : BindableObject
         Conversations.Clear();
 
         foreach (var peer in historyPeers)
-        {
-
             Conversations.Add(new ConversationItem(peer));
-        }
     }
 
     private async Task LoadChatHistoryAsync(PeerNode peer)
