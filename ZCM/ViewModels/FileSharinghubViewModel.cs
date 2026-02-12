@@ -1,6 +1,9 @@
 ﻿using Microsoft.Maui.Dispatching;
 using Microsoft.Maui.Storage;
+using System;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Net.Sockets;
 using System.Windows.Input;
 using Microsoft.EntityFrameworkCore;
 using ZCL.Models;
@@ -66,12 +69,35 @@ public sealed class FileSharingHubViewModel : BindableObject
             return;
 
         _activePeer = peer;
-        MainThread.BeginInvokeOnMainThread(Files.Clear);
 
-        await _service.EnsureSessionAsync(peer);
-        await _service.WaitForSessionBindingAsync();
-        await _service.RequestListAsync();
+        // Always load last known files
+        await LoadRemoteFilesFromDbAsync(peer);
+
+        // If offline → stop here
+        if (peer.OnlineStatus != PeerOnlineStatus.Online)
+            return;
+
+        try
+        {
+            await _service.EnsureSessionAsync(peer);
+            await _service.WaitForSessionBindingAsync();
+            await _service.RequestListAsync();
+        }
+        catch (SocketException)
+        {
+            Debug.WriteLine("[FileSharingHub] Peer unreachable.");
+        }
+        catch (TimeoutException)
+        {
+            Debug.WriteLine("[FileSharingHub] Session bind timeout.");
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[FileSharingHub] Unexpected error: {ex}");
+        }
     }
+
+
 
     // =========================
     // PEERS
@@ -231,4 +257,33 @@ public sealed class FileSharingHubViewModel : BindableObject
         await db.SaveChangesAsync();
         await LoadLocalSharedFilesAsync();
     }
+
+    private async Task LoadRemoteFilesFromDbAsync(PeerNode peer)
+    {
+        using var scope = ServiceHelper.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+
+        var files = await db.SharedFiles
+            .Where(f => f.PeerRefId == peer.PeerId)
+            .OrderByDescending(f => f.SharedSince)
+            .ToListAsync();
+
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            Files.Clear();
+
+            foreach (var f in files)
+            {
+                Files.Add(new SharedFileItem
+                {
+                    FileId = f.FileId,
+                    Name = f.FileName,
+                    Type = f.FileType,
+                    Size = f.FileSize,
+                    SharedSince = f.SharedSince
+                });
+            }
+        });
+    }
+
 }

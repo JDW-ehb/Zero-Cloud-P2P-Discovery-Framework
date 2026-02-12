@@ -138,7 +138,7 @@ namespace ZCL.Protocol.ZCSP
 
             try
             {
-                await client.ConnectAsync(host, port);
+               await client.ConnectAsync(host, port);
                 stream = client.GetStream();
 
                 var request = BinaryCodec.Serialize(
@@ -171,12 +171,26 @@ namespace ZCL.Protocol.ZCSP
                     finally { stream.Dispose(); client.Dispose(); }
                 });
             }
-            catch
+            catch (SocketException ex)
             {
+                Console.WriteLine($"[ZCSP] Connection failed: {ex.Message}");
+
                 try { stream?.Dispose(); } catch { }
                 try { client.Dispose(); } catch { }
+
                 throw;
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ZCSP] Unexpected connection error:");
+                Console.WriteLine(ex);
+
+                try { stream?.Dispose(); } catch { }
+                try { client.Dispose(); } catch { }
+
+                throw;
+            }
+
         }
 
 

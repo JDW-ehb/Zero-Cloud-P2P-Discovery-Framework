@@ -94,4 +94,13 @@ public partial class MessagingPage : ContentPage
         var remaining = vm.Messages.Count - (e.LastVisibleItemIndex + 1);
         _userNearBottom = remaining <= 2;
     }
+    private void OnMessageEntryCompleted(object sender, EventArgs e)
+    {
+        if (BindingContext is MessagingViewModel vm &&
+            vm.SendMessageCommand.CanExecute(null))
+        {
+            vm.SendMessageCommand.Execute(null);
+        }
+    }
+
 }

@@ -245,7 +245,7 @@ public sealed class FileSharingService : IZcspService
         await Framing.WriteAsync(_stream!, payload);
     }
 
-    private void HandleFilesResponse(BinaryReader reader)
+    private async void HandleFilesResponse(BinaryReader reader)
     {
         int count = reader.ReadInt32();
         Debug.WriteLine($"[FileSharing] Received {count} files");
@@ -263,12 +263,38 @@ public sealed class FileSharingService : IZcspService
                 new DateTime(reader.ReadInt64(), DateTimeKind.Utc));
 
             files.Add(dto);
-
             _knownFiles[dto.FileId] = dto;
         }
 
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+
+        var existing = db.SharedFiles
+            .Where(f => f.PeerRefId == _remotePeerDbId);
+
+        db.SharedFiles.RemoveRange(existing);
+
+        foreach (var dto in files)
+        {
+            db.SharedFiles.Add(new SharedFileEntity
+            {
+                FileId = dto.FileId,
+                PeerRefId = _remotePeerDbId,
+                FileName = dto.Name,
+                FileSize = dto.Size,
+                FileType = dto.Type,
+                Checksum = dto.Checksum,
+                LocalPath = string.Empty, 
+                SharedSince = dto.SharedSince,
+                IsAvailable = true
+            });
+        }
+
+        await db.SaveChangesAsync();
+
         FilesReceived?.Invoke(files);
     }
+
 
 
     private async Task HandleFileRequestAsync(Guid sessionId, Guid fileId)

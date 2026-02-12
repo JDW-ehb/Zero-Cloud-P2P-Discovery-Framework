@@ -45,11 +45,13 @@
                                HasShadow="False"
                                BackgroundColor="#1F1F1F">
 
-                            <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
+                            <Grid ColumnDefinitions="Auto,*,Auto"
+                                  RowDefinitions="Auto,Auto">
 
                                 <BoxView WidthRequest="10"
                                          HeightRequest="10"
                                          CornerRadius="5"
+                                         VerticalOptions="Center"
                                          Color="{Binding IsOnline, Converter={StaticResource BoolToColorConverter}}" />
 
                                 <Label Grid.Column="1"
@@ -61,7 +63,8 @@
                                 <Label Grid.Column="2"
                                        Text="{Binding LastTimestamp, Converter={StaticResource ChatTimestampConverter}}"
                                        FontSize="11"
-                                       TextColor="#AAAAAA" />
+                                       TextColor="#AAAAAA"
+                                       HorizontalOptions="End" />
 
                                 <Label Grid.Row="1"
                                        Grid.Column="1"
@@ -84,17 +87,17 @@
               Padding="16">
 
             <CollectionView
-                    x:Name="MessagesView"
-                    ItemsSource="{Binding Messages}"
-                    ItemsUpdatingScrollMode="KeepScrollOffset"
-                    Scrolled="OnMessagesScrolled"
-                    VerticalScrollBarVisibility="Never"
-                    HorizontalScrollBarVisibility="Never">
-
+                x:Name="MessagesView"
+                ItemsSource="{Binding Messages}"
+                ItemsUpdatingScrollMode="KeepScrollOffset"
+                Scrolled="OnMessagesScrolled"
+                VerticalScrollBarVisibility="Never"
+                HorizontalScrollBarVisibility="Never">
 
                 <CollectionView.ItemTemplate>
                     <DataTemplate>
                         <Grid Margin="0,6">
+
                             <Frame Padding="12"
                                    CornerRadius="16"
                                    HasShadow="False"
@@ -103,14 +106,19 @@
                                    BackgroundColor="{Binding IsOutgoing, Converter={StaticResource BoolToColorConverter}}">
 
                                 <VerticalStackLayout Spacing="4">
+
+                                    <!-- SELECTABLE MESSAGE TEXT -->
                                     <Label Text="{Binding Content}"
-                                           TextColor="White" />
+                                           TextColor="White"
+                                           LineBreakMode="WordWrap"
+                                           IsTextSelectionEnabled="True" />
 
                                     <Label Text="{Binding Timestamp, Converter={StaticResource ChatTimestampConverter}}"
                                            FontSize="10"
                                            TextColor="#CCCCCC"
                                            HorizontalOptions="End" />
                                 </VerticalStackLayout>
+
                             </Frame>
                         </Grid>
                     </DataTemplate>
@@ -118,14 +126,18 @@
 
             </CollectionView>
 
+            <!-- MESSAGE INPUT -->
             <Grid Grid.Row="1"
-                  ColumnDefinitions="*,Auto">
+                  ColumnDefinitions="*,Auto"
+                  Margin="0,12,0,0">
 
                 <Entry Text="{Binding OutgoingMessage}"
                        Placeholder="Type a message…"
                        BackgroundColor="#2A2A2A"
                        TextColor="White"
-                       HeightRequest="44" />
+                       HeightRequest="44"
+                       ReturnType="Send"
+                       Completed="OnMessageEntryCompleted" />
 
                 <Button Grid.Column="1"
                         Text="Send"
@@ -135,6 +147,7 @@
                         TextColor="White"
                         CornerRadius="10" />
             </Grid>
+
         </Grid>
     </Grid>
 </ContentPage>
