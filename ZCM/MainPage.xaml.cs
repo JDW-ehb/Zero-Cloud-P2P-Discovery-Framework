@@ -144,19 +144,22 @@ public partial class MainPage : ContentPage
 
         private void LoadServices(ServiceDBContext db)
         {
-            Services.Clear();
-
             var services = db.Services
                 .Where(s => s.PeerRefId == _peer.PeerId)
                 .Select(s => s.Name)
                 .Distinct()
                 .ToList();
 
+            if (Services.SequenceEqual(services))
+                return;
+
+            Services.Clear();
             foreach (var s in services)
                 Services.Add(s);
 
             OnPropertyChanged(nameof(HasServices));
         }
+
         public PeerNode ToPeerNode() => _peer;
 
 
