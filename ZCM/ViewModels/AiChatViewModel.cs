@@ -13,6 +13,7 @@ public sealed class AiChatViewModel : BindableObject
     private readonly ZcspPeer _peer;
     private readonly AiChatService _ai;
     private readonly SemaphoreSlim _lock = new(1, 1);
+    private bool _isThinking;
 
     private PeerNode? _activePeer;
     private AiPeerItem? _selectedPeer;
@@ -94,8 +95,10 @@ public sealed class AiChatViewModel : BindableObject
 
     private async Task SendAsync()
     {
-        if (!IsConnected || _activePeer == null)
+        if (!IsConnected || _activePeer == null || _isThinking)
             return;
+
+        _isThinking = true;
 
         var text = Prompt.Trim();
         if (string.IsNullOrWhiteSpace(text))
@@ -110,8 +113,8 @@ public sealed class AiChatViewModel : BindableObject
 
         try
         {
-            await _ai.SendQueryAsync(text);
             Status = "Thinking…";
+            await _ai.SendQueryAsync(text);
         }
         catch
         {
@@ -119,7 +122,12 @@ public sealed class AiChatViewModel : BindableObject
             Status = "Connection lost";
             ((Command)SendCommand).ChangeCanExecute();
         }
+        finally
+        {
+            _isThinking = false;
+        }
     }
+
 
     private void OnResponse(string response)
     {

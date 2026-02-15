@@ -4,28 +4,33 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     x:Class="ZCM.Pages.AiChatPage"
     BackgroundColor="#1e1e1e">
+
     <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="16">
 
         <!-- Peer dropdown -->
         <Picker
-        Title="Select AI Peer"
-        ItemsSource="{Binding AiPeers}"
-        ItemDisplayBinding="{Binding Display}"
-        SelectedItem="{Binding SelectedPeer}"
-        BackgroundColor="#2A2A2A"
-        TextColor="White" />
+            Grid.Row="0"
+            Title="Select AI Peer"
+            ItemsSource="{Binding AiPeers}"
+            ItemDisplayBinding="{Binding Display}"
+            SelectedItem="{Binding SelectedPeer}"
+            BackgroundColor="#2A2A2A"
+            TextColor="White"
+            HeightRequest="44"/>
 
+        <!-- Status -->
         <Label
-        Grid.Row="1"
-        Text="{Binding Status}"
-        TextColor="#CCCCCC"
-        FontSize="12" />
+            Grid.Row="1"
+            Text="{Binding Status}"
+            TextColor="#CCCCCC"
+            FontSize="12"
+            Margin="0,4,0,8"/>
 
+        <!-- Messages -->
         <CollectionView
-        Grid.Row="2"
-        ItemsSource="{Binding Messages}"
-        SelectionMode="None">
-
+            Grid.Row="2"
+            ItemsSource="{Binding Messages}"
+            SelectionMode="None">
 
             <CollectionView.ItemTemplate>
                 <DataTemplate>
@@ -43,21 +48,29 @@
 
         </CollectionView>
 
-        <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="16">
-            <Entry Text="{Binding Prompt}"
-                   Placeholder="Ask the AI…"
-                   BackgroundColor="#2A2A2A"
-                   TextColor="White"
-                   HeightRequest="44"
-                   ReturnType="Send" />
+        <!-- Input bar -->
+        <Grid Grid.Row="3"
+              ColumnDefinitions="*,Auto"
+              Margin="0,12,0,0">
 
-            <Button Grid.Column="1"
-                    Text="Send"
-                    Command="{Binding SendCommand}"
-                    Margin="8,0,0,0"
-                    BackgroundColor="#C9B037"
-                    TextColor="Black"
-                    CornerRadius="10" />
+            <Entry
+                Text="{Binding Prompt}"
+                Placeholder="Type a message..."
+                BackgroundColor="#2A2A2A"
+                TextColor="White"
+                HeightRequest="44"
+                ReturnType="Send"
+                HorizontalOptions="FillAndExpand"/>
+
+            <Button
+                Grid.Column="1"
+                Text="Send"
+                Command="{Binding SendCommand}"
+                Margin="8,0,0,0"
+                BackgroundColor="#6C5CE7"
+                TextColor="White"
+                CornerRadius="12"
+                HeightRequest="44"/>
         </Grid>
 
     </Grid>

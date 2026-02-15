@@ -21,8 +21,10 @@ public sealed class AiChatService : IZcspService
     {
         _http = new HttpClient
         {
-            BaseAddress = new Uri("http://localhost:11434")
+            BaseAddress = new Uri("http://localhost:11434"),
+            Timeout = TimeSpan.FromSeconds(60)
         };
+
     }
 
     public void BindStream(NetworkStream stream)
@@ -88,37 +90,58 @@ public sealed class AiChatService : IZcspService
 
     private async Task HandleAiQueryAsync(Guid sessionId, string prompt)
     {
-        if (_stream == null)
-            return;
+        try
+        {
+            if (_stream == null)
+                return;
 
-        // Safety: limit prompt size
-        if (prompt.Length > 4000)
-            prompt = prompt[..4000];
+            if (prompt.Length > 4000)
+                prompt = prompt[..4000];
 
-        var httpResponse = await _http.PostAsJsonAsync(
-            "/api/generate",
-            new
-            {
-                model = "phi3:latest",
-                prompt = prompt,
-                stream = false
-            });
+            var httpResponse = await _http.PostAsJsonAsync(
+                "/api/generate",
+                new
+                {
+                    model = "phi3:latest",
+                    prompt = prompt,
+                    stream = false
+                });
 
-        var result = await httpResponse.Content.ReadFromJsonAsync<OllamaResponse>();
+            httpResponse.EnsureSuccessStatusCode();
 
-        var reply = result?.Response ?? "No response.";
+            var result = await httpResponse.Content
+                .ReadFromJsonAsync<OllamaResponse>();
 
-        var responseMsg = BinaryCodec.Serialize(
-            ZcspMessageType.SessionData,
-            sessionId,
-            w =>
-            {
-                BinaryCodec.WriteString(w, "AiResponse");
-                BinaryCodec.WriteString(w, reply);
-            });
+            var reply = result?.Response ?? "No response.";
 
-        await Framing.WriteAsync(_stream, responseMsg);
+            if (_stream == null)
+                return; // session may have closed
+
+            var responseMsg = BinaryCodec.Serialize(
+                ZcspMessageType.SessionData,
+                sessionId,
+                w =>
+                {
+                    BinaryCodec.WriteString(w, "AiResponse");
+                    BinaryCodec.WriteString(w, reply);
+                });
+
+            await Framing.WriteAsync(_stream, responseMsg);
+        }
+        catch (TaskCanceledException)
+        {
+            // Ignore — usually client disconnected or timeout
+        }
+        catch (IOException)
+        {
+            // Stream closed mid-send — normal in distributed systems
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"AI error: {ex.Message}");
+        }
     }
+
 
     private sealed class OllamaResponse
     {
