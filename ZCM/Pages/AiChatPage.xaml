@@ -5,48 +5,63 @@
     x:Class="ZCM.Pages.AiChatPage"
     BackgroundColor="#1e1e1e">
 
-    <Grid ColumnDefinitions="300,*"
-          RowDefinitions="*"
-          Padding="0">
+    <Grid ColumnDefinitions="320,*"
+          RowDefinitions="*">
 
-        <!-- ========================= -->
+        <!-- ===================================== -->
         <!-- LEFT PANEL -->
-        <!-- ========================= -->
+        <!-- ===================================== -->
         <Grid Grid.Column="0"
       RowDefinitions="Auto,Auto,*"
       Padding="16"
       BackgroundColor="#151515">
 
-            <!-- Peer Dropdown -->
-            <Picker
-        Grid.Row="0"
-        Title="Select AI Peer"
-        ItemsSource="{Binding AiPeers}"
-        ItemDisplayBinding="{Binding Display}"
-        SelectedItem="{Binding SelectedPeer}"
-        BackgroundColor="#1F1F1F"
-        TextColor="White"
-        HeightRequest="44"/>
+            <Label Text="AI Conversations"
+           FontSize="20"
+           TextColor="White" />
 
-            <!-- Model display (for selected peer) -->
-            <Label Grid.Row="1"
-           Margin="0,8,0,0"
-           Text="{Binding SelectedPeer.ModelDisplay}"
-           TextColor="#999999"
-           FontSize="12"/>
+            <Button Grid.Row="1"
+            Text="+ New Conversation"
+            Command="{Binding StartNewConversationCommand}"
+            Margin="0,12,0,0"
+            BackgroundColor="#2A2A2A"
+            TextColor="White"
+            CornerRadius="10" />
 
-            <!-- Conversation History (future) -->
             <CollectionView Grid.Row="2"
                     Margin="0,12,0,0"
-                    ItemsSource="{Binding Conversations}">
+                    ItemsSource="{Binding Conversations}"
+                    SelectionMode="Single"
+                    SelectedItem="{Binding SelectedConversation}">
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Frame Padding="10"
+                       Margin="0,6"
+                       CornerRadius="12"
+                       BackgroundColor="#1F1F1F"
+                       HasShadow="False">
+
+                            <VerticalStackLayout Spacing="2">
+                                <Label Text="{Binding DisplayName}"
+                               TextColor="White"
+                               FontAttributes="Bold"/>
+                                <Label Text="{Binding ModelDisplay}"
+                               TextColor="#999999"
+                               FontSize="12"/>
+                            </VerticalStackLayout>
+
+                        </Frame>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
             </CollectionView>
 
         </Grid>
 
 
-        <!-- ========================= -->
+        <!-- ===================================== -->
         <!-- RIGHT PANEL -->
-        <!-- ========================= -->
+        <!-- ===================================== -->
         <Grid Grid.Column="1"
               RowDefinitions="Auto,*,Auto"
               Padding="20"
@@ -65,17 +80,22 @@
 
                 <CollectionView.ItemTemplate>
                     <DataTemplate>
-                        <Frame Padding="12"
-                               Margin="0,6"
-                               CornerRadius="14"
-                               HasShadow="False"
-                               BackgroundColor="#1F1F1F">
+                        <Grid Margin="0,6">
 
-                            <Label Text="{Binding Content}"
-                                   TextColor="White"
-                                   LineBreakMode="WordWrap"/>
+                            <Frame Padding="12"
+                                   CornerRadius="16"
+                                   HasShadow="False"
+                                   MaximumWidthRequest="520"
+                                   HorizontalOptions="{Binding IsUser, Converter={StaticResource BoolToLayoutConverter}}"
+                                   BackgroundColor="{Binding IsUser, Converter={StaticResource BoolToColorConverter}}">
 
-                        </Frame>
+                                <Label Text="{Binding Content}"
+                                       TextColor="White"
+                                       LineBreakMode="WordWrap"/>
+
+                            </Frame>
+
+                        </Grid>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
 
@@ -90,7 +110,8 @@
                        Placeholder="Type a message..."
                        BackgroundColor="#2A2A2A"
                        TextColor="White"
-                       HeightRequest="44"/>
+                       HeightRequest="44"
+                       ReturnType="Send" />
 
                 <Button Grid.Column="1"
                         Text="Send"

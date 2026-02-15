@@ -1,5 +1,7 @@
 ﻿using ZCL.Models;
 
+namespace ZCM.ViewModels;
+
 public sealed class AiPeerItem
 {
     public PeerNode Peer { get; set; } = null!;
@@ -10,4 +12,18 @@ public sealed class AiPeerItem
     public string ModelDisplay =>
         Model ?? "unknown model";
 
+}
+public sealed class AiConversationItem
+{
+    public Guid Id { get; set; }            
+
+    public Guid PeerId { get; set; }
+
+    public string PeerName { get; set; } = "";
+
+    public string Model { get; set; } = "";
+
+    public string DisplayName => PeerName;
+
+    public string ModelDisplay => Model;
 }

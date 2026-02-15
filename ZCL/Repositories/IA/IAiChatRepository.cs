@@ -6,8 +6,8 @@ namespace ZCL.Repositories.IA
 {
     public interface IAiChatRepository
     {
-        Task StoreAsync(Guid peerId, string model, string content, bool isUser);
-        Task<List<AiMessageEntity>> GetHistoryAsync(Guid peerId);
+        Task<Guid> CreateConversationAsync(Guid peerId, string model);
+        Task StoreAsync(Guid conversationId, string content, bool isUser);
+        Task<List<AiMessageEntity>> GetHistoryAsync(Guid conversationId);
     }
-
 }

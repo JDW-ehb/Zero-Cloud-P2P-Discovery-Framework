@@ -19,10 +19,8 @@ public partial class AiChatPage : ContentPage
             ServiceHelper.GetService<AiChatService>(),
             ServiceHelper.GetService<IAiChatRepository>());
 
-
         BindingContext = _vm;
 
-        // Run async initialization safely
         Loaded += async (_, __) =>
         {
             await InitializeAsync(preselectPeer);
@@ -33,9 +31,28 @@ public partial class AiChatPage : ContentPage
     {
         await _vm.InitializeAsync();
 
-        if (preselectPeer != null)
+        if (preselectPeer == null)
+            return;
+
+        // Try to find existing conversation for this peer
+        var convo = _vm.Conversations
+            .FirstOrDefault(c => c.PeerId == preselectPeer.PeerId);
+
+        if (convo != null)
         {
-            await _vm.ActivatePeerAsync(preselectPeer);
+            _vm.SelectedConversation = convo;
+        }
+        else
+        {
+            // Optional: auto-create conversation container if none exists
+            _vm.Conversations.Add(new AiConversationItem
+            {
+                PeerId = preselectPeer.PeerId,
+                PeerName = preselectPeer.HostName,
+                Model = "phi3:latest"
+            });
+
+            _vm.SelectedConversation = _vm.Conversations.Last();
         }
     }
 }

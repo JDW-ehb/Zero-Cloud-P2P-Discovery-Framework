@@ -10,6 +10,8 @@ public class ServiceDBContext : DbContext
     public DbSet<SharedFileEntity> SharedFiles => Set<SharedFileEntity>();
     public DbSet<FileTransferEntity> FileTransfers => Set<FileTransferEntity>();
     public DbSet<AiMessageEntity> AiMessages { get; set; }
+    public DbSet<AiConversationEntity> AiConversations => Set<AiConversationEntity>();
+
 
 
     public ServiceDBContext(DbContextOptions<ServiceDBContext> options)
@@ -40,9 +42,19 @@ public class ServiceDBContext : DbContext
             .HasFilter("\"IsLocal\" = 1");
 
         modelBuilder.Entity<AiMessageEntity>()
-            .HasOne(m => m.Peer)
+            .HasOne<AiConversationEntity>()
             .WithMany()
-            .HasForeignKey(m => m.PeerId);
+            .HasForeignKey(m => m.ConversationId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+
+        modelBuilder.Entity<AiConversationEntity>()
+            .HasOne(c => c.Peer)
+            .WithMany()
+            .HasForeignKey(c => c.PeerId);
+
+
+
 
 
         base.OnModelCreating(modelBuilder);

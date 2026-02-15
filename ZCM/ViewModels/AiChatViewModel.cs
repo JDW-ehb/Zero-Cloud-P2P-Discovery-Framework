@@ -25,10 +25,30 @@ public sealed class AiChatViewModel : BindableObject
     private bool _isThinking;
 
     private PeerNode? _activePeer;
-    private AiPeerItem? _selectedPeer;
+    private AiConversationItem? _activeConversation;
 
     public ObservableCollection<AiMessage> Messages { get; } = new();
-    public ObservableCollection<AiPeerItem> AiPeers { get; } = new();
+    public ObservableCollection<AiConversationItem> Conversations { get; } = new();
+
+    public ICommand StartNewConversationCommand { get; }
+    public ICommand SendCommand { get; }
+
+    private AiConversationItem? _selectedConversation;
+    public AiConversationItem? SelectedConversation
+    {
+        get => _selectedConversation;
+        set
+        {
+            if (_selectedConversation == value)
+                return;
+
+            _selectedConversation = value;
+            OnPropertyChanged();
+
+            if (value != null)
+                _ = ActivateConversationAsync(value);
+        }
+    }
 
     private string _prompt = string.Empty;
     public string Prompt
@@ -65,8 +85,6 @@ public sealed class AiChatViewModel : BindableObject
         }
     }
 
-    public ICommand SendCommand { get; }
-
     public AiChatViewModel(
         ZcspPeer peer,
         AiChatService ai,
@@ -78,75 +96,105 @@ public sealed class AiChatViewModel : BindableObject
 
         _ai.ResponseReceived += OnResponse;
 
+        StartNewConversationCommand = new Command(async () => await StartNewConversationAsync());
+
         SendCommand = new Command(
             async () => await SendAsync(),
             () => IsConnected && !string.IsNullOrWhiteSpace(Prompt));
     }
 
-    // ===============================
+    // =========================================
     // INITIALIZATION
-    // ===============================
+    // =========================================
 
     public async Task InitializeAsync()
     {
-        await LoadAiPeersAsync();
-
-        if (AiPeers.Count > 0)
-            await SelectPeerAsync(AiPeers[0]);
+        await LoadConversationsAsync();
     }
 
-    private async Task LoadAiPeersAsync()
+    private async Task LoadConversationsAsync()
     {
         using var scope = ServiceHelper.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
 
-        var services = await db.Services
-            .Where(s => s.Name == "AIChat")
-            .Include(s => s.Peer)
+        var conversations = await db.AiConversations
+            .Include(c => c.Peer)
+            .OrderByDescending(c => c.CreatedAt)
             .ToListAsync();
 
-        AiPeers.Clear();
+        Conversations.Clear();
 
-        foreach (var s in services)
+        foreach (var c in conversations)
         {
-            AiPeers.Add(new AiPeerItem
+            Conversations.Add(new AiConversationItem
             {
-                Peer = s.Peer!,
-                Model = s.Metadata
+                Id = c.Id,
+                PeerId = c.PeerId,
+                PeerName = c.Peer?.HostName ?? "Unknown",
+                Model = c.Model
             });
         }
     }
 
-    // ===============================
-    // PEER SELECTION
-    // ===============================
+    // =========================================
+    // NEW CONVERSATION
+    // =========================================
 
-    public AiPeerItem? SelectedPeer
+    private async Task StartNewConversationAsync()
     {
-        get => _selectedPeer;
-        set
+        var peers = await GetAvailablePeersAsync();
+
+        if (peers.Count == 0)
         {
-            if (_selectedPeer == value)
-                return;
-
-            _selectedPeer = value;
-            OnPropertyChanged();
-
-            if (value != null)
-                _ = SelectPeerAsync(value);
+            Status = "No AI peers available.";
+            return;
         }
+
+        var options = peers
+            .Select(p => $"{p.Peer.HostName} ({p.Model})")
+            .ToArray();
+
+        var selected = await Application.Current!.MainPage!
+            .DisplayActionSheetAsync("Select AI Peer", "Cancel", null, options);
+
+        if (selected == null || selected == "Cancel")
+            return;
+
+        var chosen = peers.First(p =>
+            $"{p.Peer.HostName} ({p.Model})" == selected);
+
+        var conversationId = await _repo.CreateConversationAsync(
+            chosen.Peer.PeerId,
+            chosen.Model);
+
+        var convo = new AiConversationItem
+        {
+            Id = conversationId,
+            PeerId = chosen.Peer.PeerId,
+            PeerName = chosen.Peer.HostName,
+            Model = chosen.Model
+        };
+
+        Conversations.Insert(0, convo);
+        SelectedConversation = convo;
     }
 
-    private async Task SelectPeerAsync(AiPeerItem item)
-    {
-        await ActivatePeerAsync(item.Peer);
-    }
+    // =========================================
+    // ACTIVATE CONVERSATION
+    // =========================================
 
-    public async Task ActivatePeerAsync(PeerNode peer)
+    private async Task ActivateConversationAsync(AiConversationItem convo)
     {
         await _lock.WaitAsync();
+
         try
         {
+            _activeConversation = convo;
+
+            var peer = await GetPeerByIdAsync(convo.PeerId);
+            if (peer == null)
+                return;
+
             _activePeer = peer;
 
             Status = "Connecting…";
@@ -161,7 +209,7 @@ public sealed class AiChatViewModel : BindableObject
             IsConnected = true;
             Status = "Connected";
 
-            await LoadHistoryAsync(peer);
+            await LoadHistoryAsync(convo.Id);
         }
         catch
         {
@@ -174,13 +222,9 @@ public sealed class AiChatViewModel : BindableObject
         }
     }
 
-    // ===============================
-    // HISTORY LOADING
-    // ===============================
-
-    private async Task LoadHistoryAsync(PeerNode peer)
+    private async Task LoadHistoryAsync(Guid conversationId)
     {
-        var history = await _repo.GetHistoryAsync(peer.PeerId);
+        var history = await _repo.GetHistoryAsync(conversationId);
 
         MainThread.BeginInvokeOnMainThread(() =>
         {
@@ -197,13 +241,13 @@ public sealed class AiChatViewModel : BindableObject
         });
     }
 
-    // ===============================
-    // SENDING
-    // ===============================
+    // =========================================
+    // SEND
+    // =========================================
 
     private async Task SendAsync()
     {
-        if (!IsConnected || _activePeer == null || _selectedPeer == null || _isThinking)
+        if (!IsConnected || _activeConversation == null || _isThinking)
             return;
 
         var text = Prompt.Trim();
@@ -220,10 +264,9 @@ public sealed class AiChatViewModel : BindableObject
         });
 
         await _repo.StoreAsync(
-            _activePeer.PeerId,
-            _selectedPeer.Model,
+            _activeConversation.Id,
             text,
-            isUser: true);
+            true);
 
         try
         {
@@ -241,22 +284,21 @@ public sealed class AiChatViewModel : BindableObject
         }
     }
 
-    // ===============================
-    // RECEIVING
-    // ===============================
+    // =========================================
+    // RECEIVE
+    // =========================================
 
     private async void OnResponse(string response)
     {
-        if (_activePeer == null || _selectedPeer == null)
+        if (_activeConversation == null)
             return;
 
         var clean = response.Trim();
 
         await _repo.StoreAsync(
-            _activePeer.PeerId,
-            _selectedPeer.Model,
+            _activeConversation.Id,
             clean,
-            isUser: false);
+            false);
 
         MainThread.BeginInvokeOnMainThread(() =>
         {
@@ -268,5 +310,32 @@ public sealed class AiChatViewModel : BindableObject
 
             Status = "Connected";
         });
+    }
+
+    // =========================================
+    // HELPERS
+    // =========================================
+
+    private async Task<PeerNode?> GetPeerByIdAsync(Guid peerId)
+    {
+        using var scope = ServiceHelper.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+        return await db.PeerNodes.FirstOrDefaultAsync(p => p.PeerId == peerId);
+    }
+
+    private async Task<List<(PeerNode Peer, string Model)>> GetAvailablePeersAsync()
+    {
+        using var scope = ServiceHelper.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+
+        var services = await db.Services
+            .Where(s => s.Name == "AIChat")
+            .Include(s => s.Peer)
+            .ToListAsync();
+
+        return services
+            .Where(s => s.Peer != null)
+            .Select(s => (s.Peer!, s.Metadata ?? "unknown"))
+            .ToList();
     }
 }
