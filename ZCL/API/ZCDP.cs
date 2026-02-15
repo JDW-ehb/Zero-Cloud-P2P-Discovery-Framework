@@ -272,17 +272,25 @@ namespace ZCL.API
                                                 Name = reader.ReadString(),
                                                 Address = reader.ReadString(),
                                                 Port = reader.ReadUInt16(),
+                                                Metadata = reader.ReadString(),
                                                 PeerRefId = peer.PeerId
                                             };
 
-                                            if (!db.Services.Any(s =>
+                                            var existing = db.Services.FirstOrDefault(s =>
                                                 s.PeerRefId == peer.PeerId &&
                                                 s.Name == service.Name &&
                                                 s.Address == service.Address &&
-                                                s.Port == service.Port))
+                                                s.Port == service.Port);
+
+                                            if (existing == null)
                                             {
                                                 db.Services.Add(service);
                                             }
+                                            else
+                                            {
+                                                existing.Metadata = service.Metadata;
+                                            }
+
                                         }
 
                                         db.SaveChanges();
@@ -309,7 +317,7 @@ namespace ZCL.API
                         [
                             new Service { Name = "FileSharing", Address = "tcp", Port = ZcspPort },
                             new Service { Name = "Messaging",  Address = "tcp", Port = ZcspPort },
-                            new Service { Name = "AIChat",     Address = "tcp", Port = ZcspPort },
+                            new Service { Name = "AIChat",     Address = "localhost", Port = 5555, Metadata = "model=phi3:latest"},
                         ];
 
 
@@ -343,6 +351,7 @@ namespace ZCL.API
                             writer.Write(service.Name);
                             writer.Write(service.Address);
                             writer.Write(service.Port);
+                            writer.Write(service.Metadata ?? string.Empty);
                         }
 
                         writer.Flush();

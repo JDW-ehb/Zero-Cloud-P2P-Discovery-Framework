@@ -1,6 +1,7 @@
-﻿using System.Collections.ObjectModel;
-using System.Windows.Input;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Maui.Dispatching;
+using System.Collections.ObjectModel;
+using System.Windows.Input;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Services.AI;
@@ -11,10 +12,10 @@ public sealed class AiChatViewModel : BindableObject
 {
     private readonly ZcspPeer _peer;
     private readonly AiChatService _ai;
-
     private readonly SemaphoreSlim _lock = new(1, 1);
 
     private PeerNode? _activePeer;
+    private AiPeerItem? _selectedPeer;
 
     public ObservableCollection<string> Messages { get; } = new();
 
@@ -24,6 +25,8 @@ public sealed class AiChatViewModel : BindableObject
         get => _prompt;
         set { _prompt = value; OnPropertyChanged(); ((Command)SendCommand).ChangeCanExecute(); }
     }
+    public ObservableCollection<AiPeerItem> AiPeers { get; } = new();
+
 
     private bool _isConnected;
     public bool IsConnected
@@ -126,4 +129,54 @@ public sealed class AiChatViewModel : BindableObject
             Status = "Connected";
         });
     }
+
+    private async Task LoadAiPeersAsync()
+    {
+        using var scope = ServiceHelper.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+
+        var peers = await db.Services
+            .Where(s => s.Name == "AIChat")
+            .Include(s => s.Peer)
+            .ToListAsync();
+
+        foreach (var s in peers)
+        {
+            AiPeers.Add(new AiPeerItem
+            {
+                Peer = s.Peer!,
+                Model = s.Metadata
+            });
+        }
+    }
+
+    public async Task InitializeAsync()
+    {
+        await LoadAiPeersAsync();
+
+        if (AiPeers.Count > 0)
+            await SelectPeerAsync(AiPeers[0]);
+    }
+    public AiPeerItem? SelectedPeer
+    {
+        get => _selectedPeer;
+        set
+        {
+            if (_selectedPeer == value)
+                return;
+
+            _selectedPeer = value;
+            OnPropertyChanged();
+
+            if (value != null)
+                _ = SelectPeerAsync(value);
+        }
+    }
+
+    private async Task SelectPeerAsync(AiPeerItem item)
+    {
+        await ActivatePeerAsync(item.Peer);
+    }
+
+
 }

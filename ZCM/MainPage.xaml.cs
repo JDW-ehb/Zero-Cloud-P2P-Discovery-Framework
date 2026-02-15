@@ -90,7 +90,7 @@ public partial class MainPage : ContentPage
 
     private async void LlmButton_Clicked(object sender, EventArgs e)
     {
-        await DisplayAlert("LLM", "Navigate to LLM page here.", "OK");
+        //await Navigation.PushAsync(new AiChatPage());
     }
 
     private async void ShareButton_Clicked(object sender, EventArgs e)
@@ -152,9 +152,10 @@ public partial class MainPage : ContentPage
         {
             var services = db.Services
                 .Where(s => s.PeerRefId == _peer.PeerId)
-                .Select(s => s.Name)
-                .Distinct()
-                .ToList();
+                .Select(s => s.Name == "AIChat" && s.Metadata != null
+                    ? $"{s.Name} ({s.Metadata})"
+                    : s.Name);
+
 
             if (Services.SequenceEqual(services))
                 return;

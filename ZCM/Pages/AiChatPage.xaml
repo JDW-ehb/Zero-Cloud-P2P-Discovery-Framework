@@ -4,18 +4,28 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     x:Class="ZCM.Pages.AiChatPage"
     BackgroundColor="#1e1e1e">
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="16">
 
-    <Grid RowDefinitions="Auto,*,Auto" Padding="16">
+        <!-- Peer dropdown -->
+        <Picker
+        Title="Select AI Peer"
+        ItemsSource="{Binding AiPeers}"
+        ItemDisplayBinding="{Binding Display}"
+        SelectedItem="{Binding SelectedPeer}"
+        BackgroundColor="#2A2A2A"
+        TextColor="White" />
 
         <Label
-            Text="{Binding Status}"
-            TextColor="#CCCCCC"
-            FontSize="12" />
+        Grid.Row="1"
+        Text="{Binding Status}"
+        TextColor="#CCCCCC"
+        FontSize="12" />
 
         <CollectionView
-            Grid.Row="1"
-            ItemsSource="{Binding Messages}"
-            SelectionMode="None">
+        Grid.Row="2"
+        ItemsSource="{Binding Messages}"
+        SelectionMode="None">
+
 
             <CollectionView.ItemTemplate>
                 <DataTemplate>
@@ -33,7 +43,7 @@
 
         </CollectionView>
 
-        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,12,0,0">
+        <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="16">
             <Entry Text="{Binding Prompt}"
                    Placeholder="Ask the AI…"
                    BackgroundColor="#2A2A2A"
