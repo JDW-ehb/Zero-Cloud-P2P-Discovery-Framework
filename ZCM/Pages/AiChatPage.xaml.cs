@@ -9,7 +9,7 @@ public partial class AiChatPage : ContentPage
 {
     private readonly AiChatViewModel _vm;
 
-    public AiChatPage()
+    public AiChatPage(PeerNode? preselectPeer = null)
     {
         InitializeComponent();
 
@@ -19,7 +19,16 @@ public partial class AiChatPage : ContentPage
 
         BindingContext = _vm;
 
-        _ = _vm.InitializeAsync();
+        _ = InitializeAsync(preselectPeer);
     }
+
+    private async Task InitializeAsync(PeerNode? preselectPeer)
+    {
+        await _vm.InitializeAsync();
+
+        if (preselectPeer != null)
+            await _vm.ActivatePeerAsync(preselectPeer);
+    }
+
 
 }

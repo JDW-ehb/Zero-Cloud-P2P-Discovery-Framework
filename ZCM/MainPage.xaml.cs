@@ -90,7 +90,7 @@ public partial class MainPage : ContentPage
 
     private async void LlmButton_Clicked(object sender, EventArgs e)
     {
-        //await Navigation.PushAsync(new AiChatPage());
+        await Navigation.PushAsync(new AiChatPage());
     }
 
     private async void ShareButton_Clicked(object sender, EventArgs e)
