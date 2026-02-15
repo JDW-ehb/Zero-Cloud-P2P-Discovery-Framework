@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="ZCM.Pages.SettingsPage"
+             BackgroundColor="#1E1E1E"
+             Title="SettingsPage">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="15">
+
+            <!-- Database File -->
+            <Label Text="Database File" TextColor="White" />
+            <Entry Text="{Binding DBFileName}" TextColor="White" />
+
+            <!-- Discovery Port -->
+            <Label Text="Discovery Port" TextColor="White" />
+            <Entry Text="{Binding DiscoveryPort}" Keyboard="Numeric" TextColor="White" />
+
+            <!-- Multicast Address -->
+            <Label Text="Multicast Address" TextColor="White" />
+            <Entry Text="{Binding MulticastAddress}" TextColor="White" />
+
+            <!-- Protocol Version -->
+            <Label Text="Protocol Version" TextColor="White" />
+            <Entry Text="{Binding ZCDPProtocolVersion}" Keyboard="Numeric" TextColor="White" />
+
+            <!-- Discovery Timeout -->
+            <Label Text="Discovery Timeout (ms)" TextColor="White" />
+            <Entry Text="{Binding DiscoveryTimeoutMS}" Keyboard="Numeric" TextColor="White" />
+
+            <!-- Peer Name -->
+            <Label Text="Peer Name" TextColor="White" />
+            <Entry Text="{Binding PeerName}" TextColor="White" />
+
+            <!-- Services to Announce -->
+            <Label Text="Services to Announce" TextColor="White" />
+
+            <HorizontalStackLayout Spacing="10" VerticalOptions="Center">
+                <CheckBox IsChecked="{Binding AnnounceLLM}" Color="#007ACC" VerticalOptions="Center"/>
+                <Label Text="LLM" TextColor="White" VerticalOptions="Center"/>
+            </HorizontalStackLayout>
+
+            <HorizontalStackLayout Spacing="10" VerticalOptions="Center">
+                <CheckBox IsChecked="{Binding AnnounceFileSharing}" Color="#007ACC" VerticalOptions="Center"/>
+                <Label Text="FileSharing" TextColor="White" VerticalOptions="Center"/>
+            </HorizontalStackLayout>
+
+            <HorizontalStackLayout Spacing="10" VerticalOptions="Center">
+                <CheckBox IsChecked="{Binding AnnounceMessaging}" Color="#007ACC" VerticalOptions="Center"/>
+                <Label Text="Messaging" TextColor="White" VerticalOptions="Center"/>
+            </HorizontalStackLayout>
+            <!-- Save Button -->
+            <Button Text="Save Settings"
+                    TextColor="White"
+                    BackgroundColor="#007ACC"
+                    Clicked="SaveButton_Clicked" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
