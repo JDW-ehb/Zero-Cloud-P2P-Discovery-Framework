@@ -8,6 +8,12 @@ using ZCL.Services.AI;
 
 namespace ZCM.ViewModels;
 
+public sealed class AiMessage
+{
+    public string Content { get; set; } = "";
+    public bool IsUser { get; set; }
+}
+
 public sealed class AiChatViewModel : BindableObject
 {
     private readonly ZcspPeer _peer;
@@ -18,7 +24,7 @@ public sealed class AiChatViewModel : BindableObject
     private PeerNode? _activePeer;
     private AiPeerItem? _selectedPeer;
 
-    public ObservableCollection<string> Messages { get; } = new();
+    public ObservableCollection<AiMessage> Messages { get; } = new();
 
     private string _prompt = string.Empty;
     public string Prompt
@@ -78,7 +84,12 @@ public sealed class AiChatViewModel : BindableObject
             MainThread.BeginInvokeOnMainThread(() =>
             {
                 Messages.Clear();
-                Messages.Add($"[system] Connected to {peer.HostName} ({peer.IpAddress})");
+                Messages.Add(new AiMessage
+                {
+                    Content = $"Connected to {peer.HostName} ({peer.IpAddress})",
+                    IsUser = false
+                });
+
             });
         }
         catch
@@ -108,7 +119,11 @@ public sealed class AiChatViewModel : BindableObject
 
         MainThread.BeginInvokeOnMainThread(() =>
         {
-            Messages.Add($"> {text}");
+            Messages.Add(new AiMessage
+            {
+                Content = text,
+                IsUser = true
+            });
         });
 
         try
@@ -133,7 +148,11 @@ public sealed class AiChatViewModel : BindableObject
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
-            Messages.Add(response.Trim());
+            Messages.Add(new AiMessage
+            {
+                Content = response.Trim(),
+                IsUser = false
+            });
             Status = "Connected";
         });
     }

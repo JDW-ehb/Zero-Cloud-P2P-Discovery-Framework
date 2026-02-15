@@ -5,73 +5,119 @@
     x:Class="ZCM.Pages.AiChatPage"
     BackgroundColor="#1e1e1e">
 
-    <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="16">
+    <Grid ColumnDefinitions="300,*"
+          RowDefinitions="*"
+          Padding="0">
 
-        <!-- Peer dropdown -->
-        <Picker
-            Grid.Row="0"
-            Title="Select AI Peer"
-            ItemsSource="{Binding AiPeers}"
-            ItemDisplayBinding="{Binding Display}"
-            SelectedItem="{Binding SelectedPeer}"
-            BackgroundColor="#2A2A2A"
-            TextColor="White"
-            HeightRequest="44"/>
+        <!-- ========================= -->
+        <!-- LEFT PANEL -->
+        <!-- ========================= -->
+        <Grid Grid.Column="0"
+              RowDefinitions="Auto,*"
+              Padding="16"
+              BackgroundColor="#151515">
 
-        <!-- Status -->
-        <Label
-            Grid.Row="1"
-            Text="{Binding Status}"
-            TextColor="#CCCCCC"
-            FontSize="12"
-            Margin="0,4,0,8"/>
-
-        <!-- Messages -->
-        <CollectionView
-            Grid.Row="2"
-            ItemsSource="{Binding Messages}"
-            SelectionMode="None">
-
-            <CollectionView.ItemTemplate>
-                <DataTemplate>
-                    <Frame Padding="12"
-                           Margin="0,6"
-                           CornerRadius="14"
-                           HasShadow="False"
-                           BackgroundColor="#1F1F1F">
-                        <Label Text="{Binding .}"
-                               TextColor="White"
-                               LineBreakMode="WordWrap"/>
-                    </Frame>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-
-        </CollectionView>
-
-        <!-- Input bar -->
-        <Grid Grid.Row="3"
-              ColumnDefinitions="*,Auto"
-              Margin="0,12,0,0">
-
-            <Entry
-                Text="{Binding Prompt}"
-                Placeholder="Type a message..."
-                BackgroundColor="#2A2A2A"
+            <!-- Peer Dropdown -->
+            <Picker
+                Title="Select AI Peer"
+                ItemsSource="{Binding AiPeers}"
+                ItemDisplayBinding="{Binding Display}"
+                SelectedItem="{Binding SelectedPeer}"
+                BackgroundColor="#1F1F1F"
                 TextColor="White"
-                HeightRequest="44"
-                ReturnType="Send"
-                HorizontalOptions="FillAndExpand"/>
-
-            <Button
-                Grid.Column="1"
-                Text="Send"
-                Command="{Binding SendCommand}"
-                Margin="8,0,0,0"
-                BackgroundColor="#6C5CE7"
-                TextColor="White"
-                CornerRadius="12"
                 HeightRequest="44"/>
+
+            <!-- Peer List -->
+            <CollectionView Grid.Row="1"
+                            Margin="0,12,0,0"
+                            ItemsSource="{Binding AiPeers}"
+                            SelectionMode="None">
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Frame Padding="10"
+                               Margin="0,6"
+                               CornerRadius="12"
+                               BackgroundColor="#1F1F1F"
+                               HasShadow="False">
+
+                            <VerticalStackLayout Spacing="2">
+                                <Label Text="{Binding Peer.HostName}"
+                                       TextColor="White"
+                                       FontAttributes="Bold"/>
+                                <Label Text="{Binding Model}"
+                                       TextColor="#999999"
+                                       FontSize="12"/>
+                            </VerticalStackLayout>
+
+                        </Frame>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+
+            </CollectionView>
+        </Grid>
+
+        <!-- ========================= -->
+        <!-- RIGHT PANEL -->
+        <!-- ========================= -->
+        <Grid Grid.Column="1"
+              RowDefinitions="Auto,*,Auto"
+              Padding="20"
+              BackgroundColor="#1e1e1e">
+
+            <!-- Status -->
+            <Label Text="{Binding Status}"
+                   TextColor="#CCCCCC"
+                   FontSize="12"
+                   Margin="0,0,0,10"/>
+
+            <!-- Messages -->
+            <CollectionView Grid.Row="1"
+                            ItemsSource="{Binding Messages}"
+                            SelectionMode="None">
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Frame Padding="12"
+                               Margin="0,6"
+                               CornerRadius="14"
+                               HasShadow="False"
+                               BackgroundColor="#1F1F1F">
+
+                            <Label Text="{Binding Content}"
+                                   TextColor="White"
+                                   LineBreakMode="WordWrap"/>
+
+                        </Frame>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+
+            </CollectionView>
+
+            <!-- Input -->
+            <Grid Grid.Row="2"
+                  ColumnDefinitions="*,Auto"
+                  Margin="0,12,0,0">
+
+                <Entry Text="{Binding Prompt}"
+                       Placeholder="Type a message..."
+                       BackgroundColor="#2A2A2A"
+                       TextColor="White"
+                       HeightRequest="44"/>
+
+                <Button Grid.Column="1"
+                        Text="Send"
+                        Command="{Binding SendCommand}"
+                        Margin="8,0,0,0"
+                        BackgroundColor="#6C5CE7"
+                        TextColor="White"
+                        CornerRadius="12"
+                        HeightRequest="44"/>
+
+            </Grid>
+
         </Grid>
 
     </Grid>
+
 </ContentPage>

@@ -19,7 +19,11 @@ public partial class AiChatPage : ContentPage
 
         BindingContext = _vm;
 
-        _ = InitializeAsync(preselectPeer);
+        // Run async initialization safely
+        Loaded += async (_, __) =>
+        {
+            await InitializeAsync(preselectPeer);
+        };
     }
 
     private async Task InitializeAsync(PeerNode? preselectPeer)
@@ -27,8 +31,8 @@ public partial class AiChatPage : ContentPage
         await _vm.InitializeAsync();
 
         if (preselectPeer != null)
+        {
             await _vm.ActivatePeerAsync(preselectPeer);
+        }
     }
-
-
 }
