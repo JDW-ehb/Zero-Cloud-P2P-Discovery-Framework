@@ -43,8 +43,9 @@ public partial class PeerDetailsPage : ContentPage
                 break;
 
             case "AIChat":
-                // future extension
+                await nav.PushAsync(new AiChatPage(peer));
                 break;
+
         }
     }
 }

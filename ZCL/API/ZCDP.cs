@@ -303,12 +303,15 @@ namespace ZCL.API
                     {
                         Debug.WriteLine("Announcing...");
 
+                        const ushort ZcspPort = 5555;
+
                         Service[] services =
                         [
-                            new Service { Name = "FileTransfer", Address = "1.1.1.1", Port = 1111 },
-                            new Service { Name = "Messaging", Address = "2.2.2.2", Port = 2222 },
-                            new Service { Name = "AIChat", Address = "3.3.3.3", Port = 3333 },
+                            new Service { Name = "FileSharing", Address = "tcp", Port = ZcspPort },
+                            new Service { Name = "Messaging",  Address = "tcp", Port = ZcspPort },
+                            new Service { Name = "AIChat",     Address = "tcp", Port = ZcspPort },
                         ];
+
 
                         MsgHeader header = new MsgHeader
                         {

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="ZCM.Pages.AiChatPage"
+    BackgroundColor="#1e1e1e">
+
+    <Grid RowDefinitions="Auto,*,Auto" Padding="16">
+
+        <Label
+            Text="{Binding Status}"
+            TextColor="#CCCCCC"
+            FontSize="12" />
+
+        <CollectionView
+            Grid.Row="1"
+            ItemsSource="{Binding Messages}"
+            SelectionMode="None">
+
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+                    <Frame Padding="12"
+                           Margin="0,6"
+                           CornerRadius="14"
+                           HasShadow="False"
+                           BackgroundColor="#1F1F1F">
+                        <Label Text="{Binding .}"
+                               TextColor="White"
+                               LineBreakMode="WordWrap"/>
+                    </Frame>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+
+        </CollectionView>
+
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,12,0,0">
+            <Entry Text="{Binding Prompt}"
+                   Placeholder="Ask the AI…"
+                   BackgroundColor="#2A2A2A"
+                   TextColor="White"
+                   HeightRequest="44"
+                   ReturnType="Send" />
+
+            <Button Grid.Column="1"
+                    Text="Send"
+                    Command="{Binding SendCommand}"
+                    Margin="8,0,0,0"
+                    BackgroundColor="#C9B037"
+                    TextColor="Black"
+                    CornerRadius="10" />
+        </Grid>
+
+    </Grid>
+</ContentPage>
