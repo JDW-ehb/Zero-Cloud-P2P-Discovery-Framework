@@ -16,7 +16,6 @@ public sealed class AiChatService : IZcspService
     private Guid _currentSessionId;
 
     public event Action<string>? ResponseReceived;
-    public event Action<string>? SummaryReceived;
 
     public AiChatService()
     {
@@ -52,11 +51,6 @@ public sealed class AiChatService : IZcspService
             case "AiResponse":
                 var response = BinaryCodec.ReadString(reader);
                 ResponseReceived?.Invoke(response);
-                break;
-
-            case "AiSummary":
-                var summary = BinaryCodec.ReadString(reader);
-                SummaryReceived?.Invoke(summary);
                 break;
         }
     }
@@ -103,7 +97,6 @@ public sealed class AiChatService : IZcspService
             if (prompt.Length > 4000)
                 prompt = prompt[..4000];
 
-            // ---- MAIN AI REPLY ----
             var reply = await GenerateLocalAsync(prompt);
 
             if (_stream == null)
@@ -119,26 +112,6 @@ public sealed class AiChatService : IZcspService
                 });
 
             await Framing.WriteAsync(_stream, responseMsg);
-
-            // ---- SUMMARY GENERATION ----
-            var summaryPrompt =
-                $"Summarize this conversation in one short title (max 6 words):\n\nUser: {prompt}\nAI: {reply}";
-
-            var summary = await GenerateLocalAsync(summaryPrompt);
-
-            if (_stream == null)
-                return;
-
-            var summaryMsg = BinaryCodec.Serialize(
-                ZcspMessageType.SessionData,
-                sessionId,
-                w =>
-                {
-                    BinaryCodec.WriteString(w, "AiSummary");
-                    BinaryCodec.WriteString(w, summary.Trim());
-                });
-
-            await Framing.WriteAsync(_stream, summaryMsg);
         }
         catch (TaskCanceledException)
         {
@@ -158,24 +131,32 @@ public sealed class AiChatService : IZcspService
     // LOCAL OLLAMA CALL
     // =========================
 
-    private async Task<string> GenerateLocalAsync(string prompt)
+    public async Task<string> GenerateLocalAsync(string prompt)
     {
-        var httpResponse = await _http.PostAsJsonAsync(
-            "/api/generate",
-            new
-            {
-                model = "phi3:latest",
-                prompt = prompt,
-                stream = false
-            });
+        try
+        {
+            var httpResponse = await _http.PostAsJsonAsync(
+                "/api/generate",
+                new
+                {
+                    model = "phi3:latest",
+                    prompt = prompt,
+                    stream = false
+                });
 
-        httpResponse.EnsureSuccessStatusCode();
+            httpResponse.EnsureSuccessStatusCode();
 
-        var result = await httpResponse.Content
-            .ReadFromJsonAsync<OllamaResponse>();
+            var result = await httpResponse.Content
+                .ReadFromJsonAsync<OllamaResponse>();
 
-        return result?.Response?.Trim() ?? "No response.";
+            return result?.Response?.Trim() ?? "No response.";
+        }
+        catch (HttpRequestException)
+        {
+            return "AI service unavailable on this peer.";
+        }
     }
+
 
     private sealed class OllamaResponse
     {

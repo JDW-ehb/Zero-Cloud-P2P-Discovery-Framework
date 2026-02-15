@@ -63,13 +63,14 @@
                        HasShadow="False">
 
                             <VerticalStackLayout Spacing="2">
-                                <Label Text="{Binding DisplayName}"
-                               TextColor="White"
-                               FontAttributes="Bold" />
+                                <Label Text="{Binding DisplayTitle}"
+                                       TextColor="White"
+                                       FontAttributes="Bold" />
 
-                                <Label Text="{Binding ModelDisplay}"
-                               TextColor="#999999"
-                               FontSize="12" />
+                                <Label Text="{Binding Model}"
+                                       TextColor="#999999"
+                                       FontSize="12" />
+
                             </VerticalStackLayout>
 
                         </Frame>

@@ -133,7 +133,6 @@ public sealed class AiChatViewModel : BindableObject
         _repo = repo;
 
         _ai.ResponseReceived += OnResponse;
-        _ai.SummaryReceived += OnSummary;
 
         StartNewConversationCommand =
             new Command(async () => await StartNewConversationAsync());
@@ -308,6 +307,20 @@ public sealed class AiChatViewModel : BindableObject
 
         await _repo.StoreAsync(_activeConversation.Id, text, true);
 
+        // 🔥 If this is the first message → use it as title
+        if (string.IsNullOrWhiteSpace(_activeConversation.Summary))
+        {
+            var title = text.Length > 40
+                ? text.Substring(0, 40)
+                : text;
+
+            title = title.Replace("\n", " ").Trim();
+
+            _activeConversation.Summary = title;
+
+            await _repo.UpdateSummaryAsync(_activeConversation.Id, title);
+        }
+
         try
         {
             Status = "Thinking…";
@@ -323,6 +336,7 @@ public sealed class AiChatViewModel : BindableObject
             _isThinking = false;
         }
     }
+
 
     // =========================================
     // RECEIVE RESPONSE
@@ -347,25 +361,10 @@ public sealed class AiChatViewModel : BindableObject
 
             Status = "Connected";
         });
+
     }
 
-    // =========================================
-    // RECEIVE SUMMARY
-    // =========================================
 
-    private async void OnSummary(string summary)
-    {
-        if (_activeConversation == null)
-            return;
-
-        await _repo.UpdateSummaryAsync(_activeConversation.Id, summary);
-
-        MainThread.BeginInvokeOnMainThread(() =>
-        {
-            _activeConversation.Summary = summary;
-            OnPropertyChanged(nameof(Conversations));
-        });
-    }
 
     // =========================================
     // HELPERS
