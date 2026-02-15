@@ -52,6 +52,18 @@ namespace ZCL.Repositories.IA
                 .OrderBy(x => x.Timestamp)
                 .ToListAsync();
         }
+        public async Task UpdateSummaryAsync(Guid conversationId, string summary)
+        {
+            var convo = await _db.AiConversations
+                .FirstOrDefaultAsync(c => c.Id == conversationId);
+
+            if (convo == null)
+                return;
+
+            convo.Summary = summary;
+            await _db.SaveChangesAsync();
+        }
+
     }
 
 

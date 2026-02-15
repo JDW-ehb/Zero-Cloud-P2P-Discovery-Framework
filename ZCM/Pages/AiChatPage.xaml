@@ -12,15 +12,34 @@
         <!-- LEFT PANEL -->
         <!-- ===================================== -->
         <Grid Grid.Column="0"
-      RowDefinitions="Auto,Auto,*"
+      RowDefinitions="Auto,Auto,Auto,Auto,*"
       Padding="16"
       BackgroundColor="#151515">
 
+            <!-- Title -->
             <Label Text="AI Conversations"
            FontSize="20"
            TextColor="White" />
 
-            <Button Grid.Row="1"
+            <!-- Peer Dropdown -->
+            <Picker Grid.Row="1"
+            Margin="0,12,0,0"
+            ItemsSource="{Binding AvailablePeers}"
+            SelectedItem="{Binding SelectedPeer}"
+            Title="Select AI Peer"
+            ItemDisplayBinding="{Binding Display}"
+            BackgroundColor="#2A2A2A"
+            TextColor="White" />
+
+            <!-- Model Name -->
+            <Label Grid.Row="2"
+           Text="{Binding SelectedPeer.ModelDisplay}"
+           TextColor="#999999"
+           FontSize="12"
+           Margin="4,4,0,0" />
+
+            <!-- New Conversation -->
+            <Button Grid.Row="3"
             Text="+ New Conversation"
             Command="{Binding StartNewConversationCommand}"
             Margin="0,12,0,0"
@@ -28,7 +47,8 @@
             TextColor="White"
             CornerRadius="10" />
 
-            <CollectionView Grid.Row="2"
+            <!-- Conversations -->
+            <CollectionView Grid.Row="4"
                     Margin="0,12,0,0"
                     ItemsSource="{Binding Conversations}"
                     SelectionMode="Single"
@@ -45,15 +65,17 @@
                             <VerticalStackLayout Spacing="2">
                                 <Label Text="{Binding DisplayName}"
                                TextColor="White"
-                               FontAttributes="Bold"/>
+                               FontAttributes="Bold" />
+
                                 <Label Text="{Binding ModelDisplay}"
                                TextColor="#999999"
-                               FontSize="12"/>
+                               FontSize="12" />
                             </VerticalStackLayout>
 
                         </Frame>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
+
             </CollectionView>
 
         </Grid>
@@ -71,7 +93,7 @@
             <Label Text="{Binding Status}"
                    TextColor="#CCCCCC"
                    FontSize="12"
-                   Margin="0,0,0,10"/>
+                   Margin="0,0,0,10" />
 
             <!-- Messages -->
             <CollectionView Grid.Row="1"
@@ -91,7 +113,7 @@
 
                                 <Label Text="{Binding Content}"
                                        TextColor="White"
-                                       LineBreakMode="WordWrap"/>
+                                       LineBreakMode="WordWrap" />
 
                             </Frame>
 
@@ -120,7 +142,7 @@
                         BackgroundColor="#6C5CE7"
                         TextColor="White"
                         CornerRadius="12"
-                        HeightRequest="44"/>
+                        HeightRequest="44" />
 
             </Grid>
 

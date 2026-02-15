@@ -15,15 +15,15 @@ public sealed class AiPeerItem
 }
 public sealed class AiConversationItem
 {
-    public Guid Id { get; set; }            
-
+    public Guid Id { get; set; }
     public Guid PeerId { get; set; }
 
     public string PeerName { get; set; } = "";
-
     public string Model { get; set; } = "";
 
-    public string DisplayName => PeerName;
+    public string? Summary { get; set; }
 
-    public string ModelDisplay => Model;
+    public string DisplayName => Summary ?? Model;
+
+    public string ModelDisplay => $"model={Model}";
 }

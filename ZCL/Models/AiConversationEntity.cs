@@ -11,11 +11,15 @@ namespace ZCL.Models
         public Guid Id { get; set; }
 
         public Guid PeerId { get; set; }
+
         public string Model { get; set; } = "";
 
         public DateTime CreatedAt { get; set; }
 
+        public string? Summary { get; set; }  
+
         public PeerNode? Peer { get; set; }
     }
+
 
 }

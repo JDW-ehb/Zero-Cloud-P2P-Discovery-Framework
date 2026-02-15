@@ -16,6 +16,7 @@ public sealed class AiChatService : IZcspService
     private Guid _currentSessionId;
 
     public event Action<string>? ResponseReceived;
+    public event Action<string>? SummaryReceived;
 
     public AiChatService()
     {
@@ -24,7 +25,6 @@ public sealed class AiChatService : IZcspService
             BaseAddress = new Uri("http://localhost:11434"),
             Timeout = TimeSpan.FromSeconds(60)
         };
-
     }
 
     public void BindStream(NetworkStream stream)
@@ -52,6 +52,11 @@ public sealed class AiChatService : IZcspService
             case "AiResponse":
                 var response = BinaryCodec.ReadString(reader);
                 ResponseReceived?.Invoke(response);
+                break;
+
+            case "AiSummary":
+                var summary = BinaryCodec.ReadString(reader);
+                SummaryReceived?.Invoke(summary);
                 break;
         }
     }
@@ -98,24 +103,11 @@ public sealed class AiChatService : IZcspService
             if (prompt.Length > 4000)
                 prompt = prompt[..4000];
 
-            var httpResponse = await _http.PostAsJsonAsync(
-                "/api/generate",
-                new
-                {
-                    model = "phi3:latest",
-                    prompt = prompt,
-                    stream = false
-                });
-
-            httpResponse.EnsureSuccessStatusCode();
-
-            var result = await httpResponse.Content
-                .ReadFromJsonAsync<OllamaResponse>();
-
-            var reply = result?.Response ?? "No response.";
+            // ---- MAIN AI REPLY ----
+            var reply = await GenerateLocalAsync(prompt);
 
             if (_stream == null)
-                return; // session may have closed
+                return;
 
             var responseMsg = BinaryCodec.Serialize(
                 ZcspMessageType.SessionData,
@@ -127,14 +119,34 @@ public sealed class AiChatService : IZcspService
                 });
 
             await Framing.WriteAsync(_stream, responseMsg);
+
+            // ---- SUMMARY GENERATION ----
+            var summaryPrompt =
+                $"Summarize this conversation in one short title (max 6 words):\n\nUser: {prompt}\nAI: {reply}";
+
+            var summary = await GenerateLocalAsync(summaryPrompt);
+
+            if (_stream == null)
+                return;
+
+            var summaryMsg = BinaryCodec.Serialize(
+                ZcspMessageType.SessionData,
+                sessionId,
+                w =>
+                {
+                    BinaryCodec.WriteString(w, "AiSummary");
+                    BinaryCodec.WriteString(w, summary.Trim());
+                });
+
+            await Framing.WriteAsync(_stream, summaryMsg);
         }
         catch (TaskCanceledException)
         {
-            // Ignore — usually client disconnected or timeout
+            // timeout or disconnect
         }
         catch (IOException)
         {
-            // Stream closed mid-send — normal in distributed systems
+            // stream closed mid-send
         }
         catch (Exception ex)
         {
@@ -142,6 +154,28 @@ public sealed class AiChatService : IZcspService
         }
     }
 
+    // =========================
+    // LOCAL OLLAMA CALL
+    // =========================
+
+    private async Task<string> GenerateLocalAsync(string prompt)
+    {
+        var httpResponse = await _http.PostAsJsonAsync(
+            "/api/generate",
+            new
+            {
+                model = "phi3:latest",
+                prompt = prompt,
+                stream = false
+            });
+
+        httpResponse.EnsureSuccessStatusCode();
+
+        var result = await httpResponse.Content
+            .ReadFromJsonAsync<OllamaResponse>();
+
+        return result?.Response?.Trim() ?? "No response.";
+    }
 
     private sealed class OllamaResponse
     {
