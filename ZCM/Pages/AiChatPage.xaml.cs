@@ -1,5 +1,6 @@
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
+using ZCL.Repositories.IA;
 using ZCL.Services.AI;
 using ZCM.ViewModels;
 
@@ -15,7 +16,9 @@ public partial class AiChatPage : ContentPage
 
         _vm = new AiChatViewModel(
             ServiceHelper.GetService<ZcspPeer>(),
-            ServiceHelper.GetService<AiChatService>());
+            ServiceHelper.GetService<AiChatService>(),
+            ServiceHelper.GetService<IAiChatRepository>());
+
 
         BindingContext = _vm;
 

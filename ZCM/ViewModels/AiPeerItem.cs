@@ -5,6 +5,9 @@ public sealed class AiPeerItem
     public PeerNode Peer { get; set; } = null!;
     public string? Model { get; set; }
 
-    public string Display =>
-        $"{Peer.HostName} (Model: {Model ?? "unknown"})";
+    public string Display => Peer.HostName;
+
+    public string ModelDisplay =>
+        Model ?? "unknown model";
+
 }

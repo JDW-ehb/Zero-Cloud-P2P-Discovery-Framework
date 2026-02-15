@@ -13,49 +13,36 @@
         <!-- LEFT PANEL -->
         <!-- ========================= -->
         <Grid Grid.Column="0"
-              RowDefinitions="Auto,*"
-              Padding="16"
-              BackgroundColor="#151515">
+      RowDefinitions="Auto,Auto,*"
+      Padding="16"
+      BackgroundColor="#151515">
 
             <!-- Peer Dropdown -->
             <Picker
-                Title="Select AI Peer"
-                ItemsSource="{Binding AiPeers}"
-                ItemDisplayBinding="{Binding Display}"
-                SelectedItem="{Binding SelectedPeer}"
-                BackgroundColor="#1F1F1F"
-                TextColor="White"
-                HeightRequest="44"/>
+        Grid.Row="0"
+        Title="Select AI Peer"
+        ItemsSource="{Binding AiPeers}"
+        ItemDisplayBinding="{Binding Display}"
+        SelectedItem="{Binding SelectedPeer}"
+        BackgroundColor="#1F1F1F"
+        TextColor="White"
+        HeightRequest="44"/>
 
-            <!-- Peer List -->
-            <CollectionView Grid.Row="1"
-                            Margin="0,12,0,0"
-                            ItemsSource="{Binding AiPeers}"
-                            SelectionMode="None">
+            <!-- Model display (for selected peer) -->
+            <Label Grid.Row="1"
+           Margin="0,8,0,0"
+           Text="{Binding SelectedPeer.ModelDisplay}"
+           TextColor="#999999"
+           FontSize="12"/>
 
-                <CollectionView.ItemTemplate>
-                    <DataTemplate>
-                        <Frame Padding="10"
-                               Margin="0,6"
-                               CornerRadius="12"
-                               BackgroundColor="#1F1F1F"
-                               HasShadow="False">
-
-                            <VerticalStackLayout Spacing="2">
-                                <Label Text="{Binding Peer.HostName}"
-                                       TextColor="White"
-                                       FontAttributes="Bold"/>
-                                <Label Text="{Binding Model}"
-                                       TextColor="#999999"
-                                       FontSize="12"/>
-                            </VerticalStackLayout>
-
-                        </Frame>
-                    </DataTemplate>
-                </CollectionView.ItemTemplate>
-
+            <!-- Conversation History (future) -->
+            <CollectionView Grid.Row="2"
+                    Margin="0,12,0,0"
+                    ItemsSource="{Binding Conversations}">
             </CollectionView>
+
         </Grid>
+
 
         <!-- ========================= -->
         <!-- RIGHT PANEL -->

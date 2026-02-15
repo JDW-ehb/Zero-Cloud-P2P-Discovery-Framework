@@ -7,6 +7,7 @@ using ZCL.API;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Protocol.ZCSP.Sessions;
+using ZCL.Repositories.IA;
 using ZCL.Repositories.Messages;
 using ZCL.Repositories.Peers;
 using ZCL.Services.AI;
@@ -70,6 +71,7 @@ public static class MauiProgram
         builder.Services.AddScoped<IPeerRepository, PeerRepository>();
         builder.Services.AddScoped<IMessageRepository, MessageRepository>();
         builder.Services.AddScoped<IChatQueryService, ChatQueryService>();
+        builder.Services.AddScoped<IAiChatRepository, AiChatRepository>();
 
 
         // =========================

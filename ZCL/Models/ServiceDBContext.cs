@@ -9,6 +9,7 @@ public class ServiceDBContext : DbContext
     public DbSet<MessageEntity> Messages => Set<MessageEntity>();
     public DbSet<SharedFileEntity> SharedFiles => Set<SharedFileEntity>();
     public DbSet<FileTransferEntity> FileTransfers => Set<FileTransferEntity>();
+    public DbSet<AiMessageEntity> AiMessages { get; set; }
 
 
     public ServiceDBContext(DbContextOptions<ServiceDBContext> options)
@@ -37,6 +38,12 @@ public class ServiceDBContext : DbContext
             .HasIndex(p => p.IsLocal)
             .IsUnique()
             .HasFilter("\"IsLocal\" = 1");
+
+        modelBuilder.Entity<AiMessageEntity>()
+            .HasOne(m => m.Peer)
+            .WithMany()
+            .HasForeignKey(m => m.PeerId);
+
 
         base.OnModelCreating(modelBuilder);
     }
