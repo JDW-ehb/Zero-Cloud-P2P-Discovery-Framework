@@ -12,75 +12,84 @@
         <!-- LEFT PANEL -->
         <!-- ===================================== -->
         <Grid Grid.Column="0"
-      RowDefinitions="Auto,Auto,Auto,Auto,*"
-      Padding="16"
-      BackgroundColor="#151515">
+              RowDefinitions="Auto,Auto,Auto,Auto,*"
+              Padding="16"
+              BackgroundColor="#151515">
 
             <!-- Title -->
             <Label Text="AI Conversations"
-           FontSize="20"
-           TextColor="White" />
+                   FontSize="20"
+                   TextColor="White" />
 
             <!-- Peer Dropdown -->
             <Picker Grid.Row="1"
-            Margin="0,12,0,0"
-            ItemsSource="{Binding AvailablePeers}"
-            SelectedItem="{Binding SelectedPeer}"
-            Title="Select AI Peer"
-            ItemDisplayBinding="{Binding Display}"
-            BackgroundColor="#2A2A2A"
-            TextColor="White" />
+                    Margin="0,12,0,0"
+                    ItemsSource="{Binding AvailablePeers}"
+                    SelectedItem="{Binding SelectedPeer}"
+                    Title="Select AI Peer"
+                    ItemDisplayBinding="{Binding Display}"
+                    BackgroundColor="#2A2A2A"
+                    TextColor="White" />
 
             <!-- Model Name -->
             <Label Grid.Row="2"
-           Text="{Binding SelectedPeer.ModelDisplay}"
-           TextColor="#999999"
-           FontSize="12"
-           Margin="4,4,0,0" />
+                   Text="{Binding SelectedPeer.ModelDisplay}"
+                   TextColor="#999999"
+                   FontSize="12"
+                   Margin="4,4,0,0" />
 
             <!-- New Conversation -->
             <Button Grid.Row="3"
-            Text="+ New Conversation"
-            Command="{Binding StartNewConversationCommand}"
-            Margin="0,12,0,0"
-            BackgroundColor="#2A2A2A"
-            TextColor="White"
-            CornerRadius="10" />
+                    Text="+ New Conversation"
+                    Command="{Binding StartNewConversationCommand}"
+                    Margin="0,12,0,0"
+                    BackgroundColor="#2A2A2A"
+                    TextColor="White"
+                    CornerRadius="12" />
 
             <!-- Conversations -->
             <CollectionView Grid.Row="4"
-                    Margin="0,12,0,0"
-                    ItemsSource="{Binding Conversations}"
-                    SelectionMode="Single"
-                    SelectedItem="{Binding SelectedConversation}">
+                            Margin="0,14,0,0"
+                            Padding="0,6"
+                            ItemsSource="{Binding Conversations}"
+                            SelectionMode="Single"
+                            SelectedItem="{Binding SelectedConversation}">
 
                 <CollectionView.ItemTemplate>
                     <DataTemplate>
-                        <Frame Padding="10"
-                       Margin="0,6"
-                       CornerRadius="12"
-                       BackgroundColor="#1F1F1F"
-                       HasShadow="False">
+                        <VerticalStackLayout Padding="0"
+                             Spacing="0">
 
-                            <VerticalStackLayout Spacing="2">
-                                <Label Text="{Binding DisplayTitle}"
-                                       TextColor="White"
-                                       FontAttributes="Bold" />
+                            <!-- Top Spacer -->
+                            <BoxView HeightRequest="12"
+                     Opacity="0" />
 
-                                <Label Text="{Binding Model}"
-                                       TextColor="#999999"
-                                       FontSize="12" />
+                            <Frame Padding="14"
+                   CornerRadius="16"
+                   BackgroundColor="#262626"
+                   HasShadow="False">
 
-                            </VerticalStackLayout>
+                                <VerticalStackLayout Spacing="4">
+                                    <Label Text="{Binding DisplayTitle}"
+                           TextColor="White"
+                           FontAttributes="Bold"
+                           LineBreakMode="TailTruncation" />
 
-                        </Frame>
+                                    <Label Text="{Binding Model}"
+                           TextColor="#999999"
+                           FontSize="12" />
+                                </VerticalStackLayout>
+
+                            </Frame>
+
+                        </VerticalStackLayout>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
+
 
             </CollectionView>
 
         </Grid>
-
 
         <!-- ===================================== -->
         <!-- RIGHT PANEL -->
@@ -103,10 +112,10 @@
 
                 <CollectionView.ItemTemplate>
                     <DataTemplate>
-                        <Grid Margin="0,6">
+                        <Grid Margin="0,8">
 
-                            <Frame Padding="12"
-                                   CornerRadius="16"
+                            <Frame Padding="14"
+                                   CornerRadius="18"
                                    HasShadow="False"
                                    MaximumWidthRequest="520"
                                    HorizontalOptions="{Binding IsUser, Converter={StaticResource BoolToLayoutConverter}}"
@@ -127,7 +136,7 @@
             <!-- Input -->
             <Grid Grid.Row="2"
                   ColumnDefinitions="*,Auto"
-                  Margin="0,12,0,0">
+                  Margin="0,16,0,0">
 
                 <Entry Text="{Binding Prompt}"
                        Placeholder="Type a message..."
@@ -142,7 +151,7 @@
                         Margin="8,0,0,0"
                         BackgroundColor="#6C5CE7"
                         TextColor="White"
-                        CornerRadius="12"
+                        CornerRadius="14"
                         HeightRequest="44" />
 
             </Grid>
