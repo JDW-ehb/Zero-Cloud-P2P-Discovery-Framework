@@ -11,13 +11,24 @@ using ZCM.Pages;
 
 namespace ZCM;
 
+/// <summary>
+/// Main discovery dashboard.
+/// Displays all discovered peers in the LAN and refreshes their status in real-time.
+/// </summary>
 public partial class MainPage : ContentPage
 {
     private readonly DataStore _store;
 
-
+    /// <summary>
+    /// UI collection bound to the CollectionView.
+    /// Contains lightweight wrapper objects (PeerNodeCard) instead of EF entities.
+    /// </summary>
     public ObservableCollection<PeerNodeCard> Peers { get; } = new();
 
+    /// <summary>
+    /// Periodic UI refresh timer.
+    /// Updates computed properties like "Status" and "LastSeen".
+    /// </summary>
     private IDispatcherTimer? _timer;
 
     public MainPage()
@@ -28,26 +39,41 @@ public partial class MainPage : ContentPage
 
         BindingContext = this;
 
-        // initial sync
+        // Initial population from DataStore
         SyncPeers();
 
-        // refresh computed fields (Status/LastSeen) + add/remove peers
+        // Create a timer that refreshes every second
         _timer = Dispatcher.CreateTimer();
         _timer.Interval = TimeSpan.FromSeconds(1);
+
         _timer.Tick += (_, __) =>
         {
+            // Sync new peers / remove disappeared peers
             SyncPeers();
+
+            // Refresh computed properties (UP/Down + time ago)
             foreach (var card in Peers)
                 card.RefreshComputedText();
         };
+
         _timer.Start();
     }
 
+    /// <summary>
+    /// When page disappears, stop UI timer to avoid background updates.
+    /// </summary>
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
+
+        _timer?.Stop();
+        _timer = null;
     }
 
+    /// <summary>
+    /// Synchronizes UI collection with in-memory DataStore.
+    /// Adds new peers, updates existing ones, removes missing peers.
+    /// </summary>
     private void SyncPeers()
     {
         MainThread.BeginInvokeOnMainThread(() =>
@@ -56,6 +82,7 @@ public partial class MainPage : ContentPage
                 Path.Combine(FileSystem.AppDataDirectory, Config.Instance.DBFileName)
             );
 
+            // Add or update peers
             foreach (var p in _store.Peers.Where(p => !p.IsLocal))
             {
                 var existing = Peers.FirstOrDefault(x => x.ProtocolPeerId == p.ProtocolPeerId);
@@ -70,52 +97,52 @@ public partial class MainPage : ContentPage
                 }
             }
 
+            // Remove peers no longer present
             for (int i = Peers.Count - 1; i >= 0; i--)
             {
                 var card = Peers[i];
+
                 if (!_store.Peers.Any(p => p.ProtocolPeerId == card.ProtocolPeerId))
                     Peers.RemoveAt(i);
             }
         });
     }
 
+    // ---------------------------
+    // Navigation Buttons
+    // ---------------------------
 
-    // ---------------------------
-    // Navigation buttons
-    // ---------------------------
     private async void MessagingButton_Clicked(object sender, EventArgs e)
-    {
-        await Navigation.PushAsync(new MessagingPage());
-    }
+        => await Navigation.PushAsync(new MessagingPage());
 
     private async void LlmButton_Clicked(object sender, EventArgs e)
-    {
-        await Navigation.PushAsync(new AiChatPage());
-    }
+        => await Navigation.PushAsync(new AiChatPage());
 
     private async void ShareButton_Clicked(object sender, EventArgs e)
-    {
-        await Navigation.PushAsync(new ZCM.Pages.FileSharingPage());
-    }
+        => await Navigation.PushAsync(new FileSharingPage());
 
     private async void SettingsButton_Clicked(object sender, EventArgs e)
-    {
-        await Navigation.PushAsync(new ZCM.Pages.SettingsPage());
-    }
+        => await Navigation.PushAsync(new SettingsPage());
 
-
+    /// <summary>
+    /// Opens modal peer detail view when user taps a peer card.
+    /// </summary>
     private async void OnPeerTapped(object sender, TappedEventArgs e)
     {
         if (e.Parameter is not PeerNodeCard card)
             return;
 
-        // modal "popup-like" page
         await Navigation.PushModalAsync(new PeerDetailsPage(card));
     }
 
-    // ---------------------------
-    // UI model (not EF entity)
-    // ---------------------------
+    // =====================================================
+    // UI Wrapper Model (NOT EF Entity)
+    // =====================================================
+
+    /// <summary>
+    /// Lightweight UI representation of a discovered peer.
+    /// Wraps EF entity but provides computed and bindable properties.
+    /// </summary>
     public sealed class PeerNodeCard : INotifyPropertyChanged
     {
         private PeerNode _peer;
@@ -132,14 +159,19 @@ public partial class MainPage : ContentPage
         public DateTime LastSeen => _peer.LastSeen;
         public PeerOnlineStatus OnlineStatus => _peer.OnlineStatus;
 
-        // Working rule: UP if seen in last 10 seconds
+        /// <summary>
+        /// Consider peer UP if last announce received within 10 seconds.
+        /// </summary>
         public bool IsUp => (DateTime.UtcNow - _peer.LastSeen).TotalSeconds <= 10;
 
         public string StatusText => $"Status: {(IsUp ? "UP" : "Down")}";
         public string LastSeenText => $"Lastseen: {ToTimeAgo(_peer.LastSeen)}";
 
-        // ✅ Services
+        /// <summary>
+        /// List of services announced by this peer.
+        /// </summary>
         public ObservableCollection<string> Services { get; } = new();
+
         public bool HasServices => Services.Count > 0;
 
         public PeerNodeCard(PeerNode peer, ServiceDBContext db)
@@ -147,7 +179,17 @@ public partial class MainPage : ContentPage
             _peer = peer;
             LoadServices(db);
         }
+        /// <summary>
+        /// Exposes underlying EF entity when navigation requires full PeerNode.
+        /// </summary>
+        public PeerNode ToPeerNode()
+        {
+            return _peer;
+        }
 
+        /// <summary>
+        /// Loads services from database and updates UI collection.
+        /// </summary>
         private void LoadServices(ServiceDBContext db)
         {
             var services = db.Services
@@ -156,20 +198,20 @@ public partial class MainPage : ContentPage
                     ? $"{s.Name} ({s.Metadata})"
                     : s.Name);
 
-
             if (Services.SequenceEqual(services))
                 return;
 
             Services.Clear();
+
             foreach (var s in services)
                 Services.Add(s);
 
             OnPropertyChanged(nameof(HasServices));
         }
 
-        public PeerNode ToPeerNode() => _peer;
-
-
+        /// <summary>
+        /// Update internal state when discovery updates peer info.
+        /// </summary>
         public void UpdateFrom(PeerNode peer, ServiceDBContext db)
         {
             _peer = peer;
@@ -185,17 +227,9 @@ public partial class MainPage : ContentPage
             OnPropertyChanged(nameof(LastSeenText));
         }
 
-
-        // Call this from your discovery layer whenever services change
-        public void UpdateServices(IEnumerable<string> services)
-        {
-            Services.Clear();
-            foreach (var s in services.Distinct())
-                Services.Add(s);
-
-            OnPropertyChanged(nameof(HasServices));
-        }
-
+        /// <summary>
+        /// Refresh computed text fields (time ago + UP/DOWN).
+        /// </summary>
         public void RefreshComputedText()
         {
             OnPropertyChanged(nameof(StatusText));
@@ -205,6 +239,9 @@ public partial class MainPage : ContentPage
         private void OnPropertyChanged([CallerMemberName] string? name = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
+        /// <summary>
+        /// Converts UTC timestamp into human-readable relative time.
+        /// </summary>
         private static string ToTimeAgo(DateTime utcTime)
         {
             var diff = DateTime.UtcNow - utcTime;
@@ -217,6 +254,7 @@ public partial class MainPage : ContentPage
             if (diff.TotalDays < 365) return $"{(int)Math.Round(diff.TotalDays / 30)}mo ago";
             return $"{(int)Math.Round(diff.TotalDays / 365)}y ago";
         }
-    }
 
+
+    }
 }

@@ -233,9 +233,32 @@ public sealed class AiChatViewModel : BindableObject
         {
             _activeConversation = convo;
 
-            var peer = await GetPeerByIdAsync(convo.PeerId);
-            if (peer == null)
+            using var scope = ServiceHelper.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+
+            var service = await db.Services
+                .FirstOrDefaultAsync(s =>
+                    s.PeerRefId == convo.PeerId &&
+                    s.Name == "AIChat" &&
+                    s.Metadata == convo.Model);
+
+
+            if (service == null)
+            {
+                Status = "AI service unavailable on this peer.";
+                IsConnected = false;
                 return;
+            }
+
+            var peer = await db.PeerNodes
+                .FirstOrDefaultAsync(p => p.PeerId == convo.PeerId);
+
+            if (peer == null)
+            {
+                Status = "Peer not found.";
+                IsConnected = false;
+                return;
+            }
 
             _activePeer = peer;
 
@@ -243,13 +266,13 @@ public sealed class AiChatViewModel : BindableObject
             IsConnected = false;
 
             await _peer.ConnectAsync(
-                peer.IpAddress,
-                5555,
+                service.Address,   
+                service.Port,      
                 peer.ProtocolPeerId,
                 _ai);
 
             IsConnected = true;
-            Status = "Connected";
+            Status = $"Connected ({service.Metadata})";
 
             await LoadHistoryAsync(convo.Id);
         }
@@ -263,6 +286,7 @@ public sealed class AiChatViewModel : BindableObject
             _lock.Release();
         }
     }
+
 
     private async Task LoadHistoryAsync(Guid conversationId)
     {

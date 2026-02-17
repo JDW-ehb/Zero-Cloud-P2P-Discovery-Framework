@@ -76,6 +76,61 @@ namespace ZCL.API
 
             return existing;
         }
+        private static async Task<List<string>> GetOllamaModelsAsync()
+        {
+            try
+            {
+                Debug.WriteLine("Querying Ollama at http://127.0.0.1:11434/api/tags");
+
+                using var http = new HttpClient
+                {
+                    BaseAddress = new Uri("http://127.0.0.1:11434"),
+                    Timeout = TimeSpan.FromSeconds(5)
+                };
+
+                var response = await http.GetAsync("api/tags");
+
+                if (!response.IsSuccessStatusCode)
+                    return new List<string>();
+
+                var json = await response.Content.ReadAsStringAsync();
+
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+
+                var models = new List<string>();
+
+                foreach (var model in doc.RootElement.GetProperty("models").EnumerateArray())
+                {
+                    if (model.TryGetProperty("name", out var nameProp))
+                        models.Add(nameProp.GetString() ?? "");
+                }
+
+                return models;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Ollama model discovery failed: {ex}");
+
+                Debug.WriteLine($"Ollama model discovery failed: {ex.Message}");
+                return new List<string>();
+            }
+        }
+        private static string GetBestLocalIPv4()
+        {
+            foreach (var ni in NetworkInterface.GetAllNetworkInterfaces()
+                .Where(n => n.OperationalStatus == OperationalStatus.Up)
+                .Where(n => n.NetworkInterfaceType != NetworkInterfaceType.Loopback))
+            {
+                var ip = ni.GetIPProperties().UnicastAddresses
+                    .FirstOrDefault(a => a.Address.AddressFamily == AddressFamily.InterNetwork)?.Address;
+
+                if (ip != null)
+                    return ip.ToString();
+            }
+
+            return "127.0.0.1";
+        }
+
 
         public static ServiceDBContext CreateDBContext(string dbPath)
         {
@@ -313,12 +368,28 @@ namespace ZCL.API
 
                         const ushort ZcspPort = 5555;
 
-                        Service[] services =
-                        [
+                        var servicesList = new List<Service>
+                        {
                             new Service { Name = "FileSharing", Address = "tcp", Port = ZcspPort },
-                            new Service { Name = "Messaging",  Address = "tcp", Port = ZcspPort },
-                            new Service { Name = "AIChat",     Address = "localhost", Port = 5555, Metadata = "model=phi3:latest"},
-                        ];
+                            new Service { Name = "Messaging",  Address = "tcp", Port = ZcspPort }
+                        };
+
+                        var models = GetOllamaModelsAsync().GetAwaiter().GetResult();
+                        var localIp = GetBestLocalIPv4();
+                        foreach (var modelName in models)
+                        {
+                            servicesList.Add(new Service
+                            {
+                                Name = "AIChat",
+                                Address = localIp,
+                                Port = 5555,
+                                Metadata = modelName
+                            });
+                        }
+
+
+                        Service[] services = servicesList.ToArray();
+
 
 
                         MsgHeader header = new MsgHeader

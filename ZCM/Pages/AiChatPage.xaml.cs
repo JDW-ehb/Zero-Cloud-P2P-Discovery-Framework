@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Repositories.IA;
@@ -44,13 +45,23 @@ public partial class AiChatPage : ContentPage
         }
         else
         {
-            // Optional: auto-create conversation container if none exists
+            using var scope = ServiceHelper.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+
+            var service = await db.Services
+                .FirstOrDefaultAsync(s =>
+                    s.PeerRefId == preselectPeer.PeerId &&
+                    s.Name == "AIChat");
+
+            var model = service?.Metadata ?? "unknown";
+
             _vm.Conversations.Add(new AiConversationItem
             {
                 PeerId = preselectPeer.PeerId,
                 PeerName = preselectPeer.HostName,
-                Model = "phi3:latest"
+                Model = model
             });
+
 
             _vm.SelectedConversation = _vm.Conversations.Last();
         }
