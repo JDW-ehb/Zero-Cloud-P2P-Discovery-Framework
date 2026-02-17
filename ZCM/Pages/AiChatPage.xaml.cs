@@ -44,7 +44,6 @@ public partial class AiChatPage : ContentPage
         }
         else
         {
-            // Optional: auto-create conversation container if none exists
             _vm.Conversations.Add(new AiConversationItem
             {
                 PeerId = preselectPeer.PeerId,
