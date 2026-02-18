@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="ZCM.Pages.LLMChatPage"
+    BackgroundColor="#1e1e1e">
+
+    <Grid ColumnDefinitions="320,*"
+          RowDefinitions="*">
+
+        <!-- ===================================== -->
+        <!-- LEFT PANEL -->
+        <!-- ===================================== -->
+        <Grid Grid.Column="0"
+              RowDefinitions="Auto,Auto,Auto,Auto,*"
+              Padding="16"
+              BackgroundColor="#151515">
+
+            <!-- Title -->
+            <Label Text="AI Conversations"
+                   FontSize="20"
+                   TextColor="White" />
+
+            <!-- Peer Dropdown -->
+            <Picker Grid.Row="1"
+                    Margin="0,12,0,0"
+                    ItemsSource="{Binding AvailablePeers}"
+                    SelectedItem="{Binding SelectedPeer}"
+                    Title="Select AI Peer"
+                    ItemDisplayBinding="{Binding Display}"
+                    BackgroundColor="#2A2A2A"
+                    TextColor="White" />
+
+            <!-- Model Name -->
+            <Label Grid.Row="2"
+                   Text="{Binding SelectedPeer.ModelDisplay}"
+                   TextColor="#999999"
+                   FontSize="12"
+                   Margin="4,4,0,0" />
+
+            <!-- New Conversation -->
+            <Button Grid.Row="3"
+                    Text="+ New Conversation"
+                    Command="{Binding StartNewConversationCommand}"
+                    Margin="0,12,0,0"
+                    BackgroundColor="#2A2A2A"
+                    TextColor="White"
+                    CornerRadius="12" />
+
+            <!-- Conversations -->
+            <CollectionView Grid.Row="4"
+                            Margin="0,14,0,0"
+                            Padding="0,6"
+                            ItemsSource="{Binding Conversations}"
+                            SelectionMode="Single"
+                            SelectedItem="{Binding SelectedConversation}">
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <VerticalStackLayout Padding="0"
+                             Spacing="0">
+
+                            <!-- Top Spacer -->
+                            <BoxView HeightRequest="12"
+                     Opacity="0" />
+
+                            <Frame Padding="14"
+                   CornerRadius="16"
+                   BackgroundColor="#262626"
+                   HasShadow="False">
+
+                                <VerticalStackLayout Spacing="4">
+                                    <Label Text="{Binding DisplayTitle}"
+                           TextColor="White"
+                           FontAttributes="Bold"
+                           LineBreakMode="TailTruncation" />
+
+                                    <Label Text="{Binding Model}"
+                           TextColor="#999999"
+                           FontSize="12" />
+                                </VerticalStackLayout>
+
+                            </Frame>
+
+                        </VerticalStackLayout>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+
+
+            </CollectionView>
+
+        </Grid>
+
+        <!-- ===================================== -->
+        <!-- RIGHT PANEL -->
+        <!-- ===================================== -->
+        <Grid Grid.Column="1"
+              RowDefinitions="Auto,*,Auto"
+              Padding="20"
+              BackgroundColor="#1e1e1e">
+
+            <!-- Status -->
+            <Label Text="{Binding Status}"
+                   TextColor="#CCCCCC"
+                   FontSize="12"
+                   Margin="0,0,0,10" />
+
+            <!-- Messages -->
+            <CollectionView Grid.Row="1"
+                            ItemsSource="{Binding Messages}"
+                            SelectionMode="None">
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="0,8">
+
+                            <Frame Padding="14"
+                                   CornerRadius="18"
+                                   HasShadow="False"
+                                   MaximumWidthRequest="520"
+                                   HorizontalOptions="{Binding IsUser, Converter={StaticResource BoolToLayoutConverter}}"
+                                   BackgroundColor="{Binding IsUser, Converter={StaticResource BoolToColorConverter}}">
+
+                                <Label Text="{Binding Content}"
+                                       TextColor="White"
+                                       LineBreakMode="WordWrap" />
+
+                            </Frame>
+
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+
+            </CollectionView>
+
+            <!-- Input -->
+            <Grid Grid.Row="2"
+                  ColumnDefinitions="*,Auto"
+                  Margin="0,16,0,0">
+
+                <Entry Text="{Binding Prompt}"
+                       Placeholder="Type a message..."
+                       BackgroundColor="#2A2A2A"
+                       TextColor="White"
+                       HeightRequest="44"
+                       ReturnType="Send" />
+
+                <Button Grid.Column="1"
+                        Text="Send"
+                        Command="{Binding SendCommand}"
+                        Margin="8,0,0,0"
+                        BackgroundColor="#6C5CE7"
+                        TextColor="White"
+                        CornerRadius="14"
+                        HeightRequest="44" />
+
+            </Grid>
+
+        </Grid>
+
+    </Grid>
+
+</ContentPage>

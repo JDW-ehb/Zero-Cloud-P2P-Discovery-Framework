@@ -10,6 +10,8 @@ public partial class PeerDetailsPage : ContentPage
         BindingContext = bindingContext;
     }
 
+
+
     private async void OnCloseClicked(object sender, EventArgs e)
         => await Navigation.PopModalAsync();
 
@@ -43,8 +45,9 @@ public partial class PeerDetailsPage : ContentPage
                 break;
 
             case "AIChat":
-                // future extension
+                await nav.PushAsync(new LLMChatPage(peer));
                 break;
+
         }
     }
 }

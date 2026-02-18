@@ -1,9 +1,7 @@
-﻿using System;
+﻿using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
-
-namespace ZCL.Models;
+using ZCL.Models;
 
 [Index(nameof(Name), nameof(Address), nameof(Port), nameof(PeerRefId), IsUnique = true)]
 public class Service
@@ -20,6 +18,8 @@ public class Service
     public ushort Port { get; set; }
 
     public Guid PeerRefId { get; set; }
+
+    public string? Metadata { get; set; }  
 
     [ForeignKey(nameof(PeerRefId))]
     public PeerNode? Peer { get; set; }

@@ -4,9 +4,9 @@ namespace ZCM.Pages;
 
 public partial class SettingsPage : ContentPage
 {
-	public SettingsPage()
-	{
-		InitializeComponent();
+    public SettingsPage()
+    {
+        InitializeComponent();
 
         BindingContext = Config.Instance;
     }
@@ -14,5 +14,5 @@ public partial class SettingsPage : ContentPage
     private void SaveButton_Clicked(object sender, EventArgs e)
     {
         Debug.WriteLine("Saved.");
-    }  
+    }
 }

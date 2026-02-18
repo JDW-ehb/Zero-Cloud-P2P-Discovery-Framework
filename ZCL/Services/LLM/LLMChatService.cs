@@ -1,0 +1,178 @@
+﻿using System.IO;
+using System.Net.Http.Json;
+using System.Net.Sockets;
+using ZCL.Protocol.ZCSP;
+using ZCL.Protocol.ZCSP.Protocol;
+using ZCL.Protocol.ZCSP.Transport;
+
+namespace ZCL.Services.LLM;
+
+public sealed class LLMChatService : IZcspService
+{
+    public string ServiceName => "LLMChat";
+
+    private readonly HttpClient _http;
+    private NetworkStream? _stream;
+    private Guid _currentSessionId;
+
+    public event Func<string, Task>? ResponseReceived;
+
+    public LLMChatService()
+    {
+        _http = new HttpClient
+        {
+            BaseAddress = new Uri("http://localhost:11434"),
+            Timeout = TimeSpan.FromSeconds(60)
+        };
+    }
+
+    public void BindStream(NetworkStream stream)
+    {
+        _stream = stream;
+    }
+
+    public Task OnSessionStartedAsync(Guid sessionId, string remotePeerId)
+    {
+        _currentSessionId = sessionId;
+        return Task.CompletedTask;
+    }
+
+    public async Task OnSessionDataAsync(Guid sessionId, BinaryReader reader)
+    {
+ 
+
+        var action = BinaryCodec.ReadString(reader);
+
+        switch (action)
+        {
+            case "AiQuery":
+                var prompt = BinaryCodec.ReadString(reader);
+                await HandleAiQueryAsync(sessionId, prompt);
+                break;
+
+            case "AiResponse":
+                {
+                    var response = BinaryCodec.ReadString(reader);
+
+                    if (ResponseReceived != null)
+                    {
+                        var handlers = ResponseReceived.GetInvocationList();
+
+                        foreach (Func<string, Task> handler in handlers)
+                            await handler(response);
+                    }
+
+
+                    break;
+                }
+        }
+    }
+
+    public Task OnSessionClosedAsync(Guid sessionId)
+    {
+        _stream = null;
+        _currentSessionId = Guid.Empty;
+        return Task.CompletedTask;
+    }
+
+    // =========================
+    // CLIENT SIDE
+    // =========================
+
+    public async Task SendQueryAsync(string prompt)
+    {
+        if (_stream == null)
+            throw new InvalidOperationException("AI session not active.");
+
+        var msg = BinaryCodec.Serialize(
+            ZcspMessageType.SessionData,
+            _currentSessionId,
+            w =>
+            {
+                BinaryCodec.WriteString(w, "AiQuery");
+                BinaryCodec.WriteString(w, prompt);
+            });
+
+        await Framing.WriteAsync(_stream, msg);
+    }
+
+    // =========================
+    // HOST SIDE
+    // =========================
+
+    private async Task HandleAiQueryAsync(Guid sessionId, string prompt)
+    {
+        try
+        {
+            if (_stream == null)
+                return;
+
+            if (prompt.Length > 4000)
+                prompt = prompt[..4000];
+
+            var reply = await GenerateLocalAsync(prompt);
+
+            if (_stream == null)
+                return;
+
+            var responseMsg = BinaryCodec.Serialize(
+                ZcspMessageType.SessionData,
+                sessionId,
+                w =>
+                {
+                    BinaryCodec.WriteString(w, "AiResponse");
+                    BinaryCodec.WriteString(w, reply);
+                });
+
+            await Framing.WriteAsync(_stream, responseMsg);
+        }
+        catch (TaskCanceledException)
+        {
+            // timeout or disconnect
+        }
+        catch (IOException)
+        {
+            // stream closed mid-send
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"AI error: {ex.Message}");
+        }
+    }
+
+    // =========================
+    // LOCAL OLLAMA CALL
+    // =========================
+
+    public async Task<string> GenerateLocalAsync(string prompt)
+    {
+        try
+        {
+            var httpResponse = await _http.PostAsJsonAsync(
+                "/api/generate",
+                new
+                {
+                    model = "phi3:latest",
+                    prompt = prompt,
+                    stream = false
+                });
+
+            httpResponse.EnsureSuccessStatusCode();
+
+            var result = await httpResponse.Content
+                .ReadFromJsonAsync<OllamaResponse>();
+
+            return result?.Response?.Trim() ?? "No response.";
+        }
+        catch (HttpRequestException)
+        {
+            return "AI service unavailable on this peer.";
+        }
+    }
+
+
+    private sealed class OllamaResponse
+    {
+        public string Response { get; set; } = "";
+    }
+}

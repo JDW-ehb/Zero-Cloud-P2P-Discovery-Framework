@@ -7,10 +7,12 @@ using ZCL.API;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Protocol.ZCSP.Sessions;
+using ZCL.Repositories.IA;
 using ZCL.Repositories.Messages;
 using ZCL.Repositories.Peers;
-using ZCL.Services.Messaging;
+using ZCL.Services.LLM;
 using ZCL.Services.FileSharing;
+using ZCL.Services.Messaging;
 
 namespace ZCM;
 
@@ -69,12 +71,16 @@ public static class MauiProgram
         builder.Services.AddScoped<IPeerRepository, PeerRepository>();
         builder.Services.AddScoped<IMessageRepository, MessageRepository>();
         builder.Services.AddScoped<IChatQueryService, ChatQueryService>();
+        builder.Services.AddScoped<ILLMChatRepository, LLMChatRepository>();
+
 
         // =========================
         // ZCSP core
         // =========================
         builder.Services.AddSingleton<SessionRegistry>();
         builder.Services.AddSingleton<ZcspPeer>();
+        builder.Services.AddSingleton<LLMChatService>();
+
 
         // =========================
         // Services
@@ -156,6 +162,7 @@ public static class MauiProgram
                     {
                         "Messaging" => app.Services.GetRequiredService<MessagingService>(),
                         "FileSharing" => app.Services.GetRequiredService<FileSharingService>(),
+                        "LLMChat" => app.Services.GetRequiredService<LLMChatService>(),
                         _ => null
                     };
                 })

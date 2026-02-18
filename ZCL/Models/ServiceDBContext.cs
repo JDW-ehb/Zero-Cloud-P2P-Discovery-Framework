@@ -9,6 +9,9 @@ public class ServiceDBContext : DbContext
     public DbSet<MessageEntity> Messages => Set<MessageEntity>();
     public DbSet<SharedFileEntity> SharedFiles => Set<SharedFileEntity>();
     public DbSet<FileTransferEntity> FileTransfers => Set<FileTransferEntity>();
+    public DbSet<LLMMessageEntity> LLMMessages => Set<LLMMessageEntity>();
+    public DbSet<LLMConversationEntity> LLMConversations => Set<LLMConversationEntity>();
+
 
 
     public ServiceDBContext(DbContextOptions<ServiceDBContext> options)
@@ -37,6 +40,29 @@ public class ServiceDBContext : DbContext
             .HasIndex(p => p.IsLocal)
             .IsUnique()
             .HasFilter("\"IsLocal\" = 1");
+
+        modelBuilder.Entity<LLMMessageEntity>()
+            .HasOne<LLMConversationEntity>()
+            .WithMany()
+            .HasForeignKey(m => m.ConversationId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+
+        modelBuilder.Entity<LLMConversationEntity>()
+            .HasOne(c => c.Peer)
+            .WithMany()
+            .HasForeignKey(c => c.PeerId);
+
+        modelBuilder.Entity<PeerNode>()
+            .HasIndex(p => p.ProtocolPeerId)
+            .IsUnique();
+
+        modelBuilder.Entity<Service>()
+            .HasIndex(s => new { s.PeerRefId, s.Name, s.Address, s.Port })
+            .IsUnique();
+
+
+
 
         base.OnModelCreating(modelBuilder);
     }
