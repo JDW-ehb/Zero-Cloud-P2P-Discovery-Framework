@@ -116,7 +116,7 @@ public partial class MainPage : ContentPage
         => await Navigation.PushAsync(new MessagingPage());
 
     private async void LlmButton_Clicked(object sender, EventArgs e)
-        => await Navigation.PushAsync(new AiChatPage());
+        => await Navigation.PushAsync(new LLMChatPage());
 
     private async void ShareButton_Clicked(object sender, EventArgs e)
         => await Navigation.PushAsync(new FileSharingPage());

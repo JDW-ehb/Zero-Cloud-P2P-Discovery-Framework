@@ -162,7 +162,7 @@ public static class MauiProgram
                     {
                         "Messaging" => app.Services.GetRequiredService<MessagingService>(),
                         "FileSharing" => app.Services.GetRequiredService<FileSharingService>(),
-                        "AIChat" => app.Services.GetRequiredService<LLMChatService>(),
+                        "LLMChat" => app.Services.GetRequiredService<LLMChatService>(),
                         _ => null
                     };
                 })

@@ -45,7 +45,7 @@ public partial class PeerDetailsPage : ContentPage
                 break;
 
             case "AIChat":
-                await nav.PushAsync(new AiChatPage(peer));
+                await nav.PushAsync(new LLMChatPage(peer));
                 break;
 
         }

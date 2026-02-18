@@ -39,8 +39,7 @@ public sealed class LLMChatService : IZcspService
 
     public async Task OnSessionDataAsync(Guid sessionId, BinaryReader reader)
     {
-        if (sessionId != _currentSessionId)
-            return;
+ 
 
         var action = BinaryCodec.ReadString(reader);
 
