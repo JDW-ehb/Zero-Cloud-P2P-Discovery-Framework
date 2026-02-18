@@ -5,19 +5,19 @@ using ZCL.Protocol.ZCSP;
 using ZCL.Protocol.ZCSP.Protocol;
 using ZCL.Protocol.ZCSP.Transport;
 
-namespace ZCL.Services.AI;
+namespace ZCL.Services.LLM;
 
-public sealed class AiChatService : IZcspService
+public sealed class LLMChatService : IZcspService
 {
-    public string ServiceName => "AIChat";
+    public string ServiceName => "LLMChat";
 
     private readonly HttpClient _http;
     private NetworkStream? _stream;
     private Guid _currentSessionId;
 
-    public event Action<string>? ResponseReceived;
+    public event Func<string, Task>? ResponseReceived;
 
-    public AiChatService()
+    public LLMChatService()
     {
         _http = new HttpClient
         {
@@ -39,6 +39,9 @@ public sealed class AiChatService : IZcspService
 
     public async Task OnSessionDataAsync(Guid sessionId, BinaryReader reader)
     {
+        if (sessionId != _currentSessionId)
+            return;
+
         var action = BinaryCodec.ReadString(reader);
 
         switch (action)
@@ -49,9 +52,20 @@ public sealed class AiChatService : IZcspService
                 break;
 
             case "AiResponse":
-                var response = BinaryCodec.ReadString(reader);
-                ResponseReceived?.Invoke(response);
-                break;
+                {
+                    var response = BinaryCodec.ReadString(reader);
+
+                    if (ResponseReceived != null)
+                    {
+                        var handlers = ResponseReceived.GetInvocationList();
+
+                        foreach (Func<string, Task> handler in handlers)
+                            await handler(response);
+                    }
+
+
+                    break;
+                }
         }
     }
 

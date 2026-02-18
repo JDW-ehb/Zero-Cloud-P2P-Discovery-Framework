@@ -12,7 +12,7 @@ namespace ZCL.Models
 
         public Guid PeerId { get; set; }
 
-        public string Model { get; set; } = "";
+        public string Model { get; set; } = string.Empty;
 
         public DateTime CreatedAt { get; set; }
 

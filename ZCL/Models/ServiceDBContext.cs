@@ -9,8 +9,8 @@ public class ServiceDBContext : DbContext
     public DbSet<MessageEntity> Messages => Set<MessageEntity>();
     public DbSet<SharedFileEntity> SharedFiles => Set<SharedFileEntity>();
     public DbSet<FileTransferEntity> FileTransfers => Set<FileTransferEntity>();
-    public DbSet<LLMMessageEntity> AiMessages { get; set; }
-    public DbSet<LLMConversationEntity> AiConversations => Set<LLMConversationEntity>();
+    public DbSet<LLMMessageEntity> LLMMessages => Set<LLMMessageEntity>();
+    public DbSet<LLMConversationEntity> LLMConversations => Set<LLMConversationEntity>();
 
 
 

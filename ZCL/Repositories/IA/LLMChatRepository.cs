@@ -6,11 +6,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ZCL.Repositories.IA
 {
-    public sealed class AiChatRepository : IAiChatRepository
+    public sealed class LLMChatRepository : ILLMChatRepository
     {
         private readonly ServiceDBContext _db;
 
-        public AiChatRepository(ServiceDBContext db)
+        public LLMChatRepository(ServiceDBContext db)
         {
             _db = db;
         }
@@ -25,7 +25,7 @@ namespace ZCL.Repositories.IA
                 CreatedAt = DateTime.UtcNow
             };
 
-            _db.AiConversations.Add(convo);
+            _db.LLMConversations.Add(convo);
             await _db.SaveChangesAsync();
 
             return convo.Id;
@@ -33,7 +33,7 @@ namespace ZCL.Repositories.IA
 
         public async Task StoreAsync(Guid conversationId, string content, bool isUser)
         {
-            _db.AiMessages.Add(new LLMMessageEntity
+            _db.LLMMessages.Add(new LLMMessageEntity
             {
                 Id = Guid.NewGuid(),
                 ConversationId = conversationId,
@@ -47,14 +47,14 @@ namespace ZCL.Repositories.IA
 
         public Task<List<LLMMessageEntity>> GetHistoryAsync(Guid conversationId)
         {
-            return _db.AiMessages
+            return _db.LLMMessages
                 .Where(x => x.ConversationId == conversationId)
                 .OrderBy(x => x.Timestamp)
                 .ToListAsync();
         }
         public async Task UpdateSummaryAsync(Guid conversationId, string summary)
         {
-            var convo = await _db.AiConversations
+            var convo = await _db.LLMConversations
                 .FirstOrDefaultAsync(c => c.Id == conversationId);
 
             if (convo == null)
@@ -62,6 +62,41 @@ namespace ZCL.Repositories.IA
 
             convo.Summary = summary;
             await _db.SaveChangesAsync();
+        }
+
+        public Task<List<LLMConversationEntity>> GetConversationsForPeerAsync(Guid peerId)
+        {
+            return _db.LLMConversations
+                .Where(c => c.PeerId == peerId)
+                .OrderByDescending(c => c.CreatedAt)
+                .ToListAsync();
+        }
+        public async Task<List<(PeerNode Peer, string Model)>> GetAvailablePeersAsync()
+        {
+            var services = await _db.Services
+                .Where(s => s.Name == "LLMChat")
+                .Include(s => s.Peer)
+                .ToListAsync();
+
+            return services
+                .Where(s => s.Peer != null)
+                .Select(s => (s.Peer!, s.Metadata ?? "unknown"))
+                .ToList();
+        }
+
+        public async Task<(PeerNode Peer, Service Service)?> GetLlmServiceForPeerAsync(Guid peerId, string model)
+        {
+            var service = await _db.Services
+                .Include(s => s.Peer)
+                .FirstOrDefaultAsync(s =>
+                    s.PeerRefId == peerId &&
+                    s.Name == "LLMChat" &&
+                    s.Metadata == model);
+
+            if (service?.Peer == null)
+                return null;
+
+            return (service.Peer, service);
         }
 
     }

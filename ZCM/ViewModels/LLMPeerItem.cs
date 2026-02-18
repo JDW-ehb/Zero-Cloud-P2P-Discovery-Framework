@@ -18,7 +18,7 @@ public sealed class LLMPeerItem
         Model ?? "unknown model";
 
 }
-public sealed class AiConversationItem : INotifyPropertyChanged
+public sealed class LLMConversationItem : INotifyPropertyChanged
 {
     private string? _summary;
 

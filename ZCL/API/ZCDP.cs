@@ -228,7 +228,7 @@ namespace ZCL.API
 
                 servicesList.Add(new Service
                 {
-                    Name = "AIChat",
+                    Name = "LLMChat",
                     Address = localIp,
                     Port = zcspPort,
                     Metadata = aiMetadataJson

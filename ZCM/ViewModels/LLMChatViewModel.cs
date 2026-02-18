@@ -1,44 +1,39 @@
-﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.Maui.Dispatching;
+﻿using Microsoft.Maui.Dispatching;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Repositories.IA;
-using ZCL.Services.AI;
+using ZCL.Services.LLM;
 
 namespace ZCM.ViewModels;
 
-public sealed class AiMessage
+public sealed class LLMMessage
 {
-    public string Content { get; set; } = "";
+    public string Content { get; set; } = string.Empty;
     public bool IsUser { get; set; }
 }
 
 public sealed class LLMChatViewModel : BindableObject
 {
     private readonly ZcspPeer _peer;
-    private readonly AiChatService _ai;
-    private readonly IAiChatRepository _repo;
+    private readonly LLMChatService _llm;
+    private readonly ILLMChatRepository _repo;
 
     private readonly SemaphoreSlim _lock = new(1, 1);
     private bool _isThinking;
 
     private PeerNode? _activePeer;
-    private AiConversationItem? _activeConversation;
+    private LLMConversationItem? _activeConversation;
     private LLMPeerItem? _selectedPeer;
-    private AiConversationItem? _selectedConversation;
+    private LLMConversationItem? _selectedConversation;
 
-    public ObservableCollection<AiMessage> Messages { get; } = new();
-    public ObservableCollection<AiConversationItem> Conversations { get; } = new();
+    public ObservableCollection<LLMMessage> Messages { get; } = new();
+    public ObservableCollection<LLMConversationItem> Conversations { get; } = new();
     public ObservableCollection<LLMPeerItem> AvailablePeers { get; } = new();
 
     public ICommand StartNewConversationCommand { get; }
     public ICommand SendCommand { get; }
-
-    // =========================================
-    // SELECTED PEER
-    // =========================================
 
     public LLMPeerItem? SelectedPeer
     {
@@ -56,11 +51,7 @@ public sealed class LLMChatViewModel : BindableObject
         }
     }
 
-    // =========================================
-    // SELECTED CONVERSATION
-    // =========================================
-
-    public AiConversationItem? SelectedConversation
+    public LLMConversationItem? SelectedConversation
     {
         get => _selectedConversation;
         set
@@ -76,10 +67,6 @@ public sealed class LLMChatViewModel : BindableObject
         }
     }
 
-    // =========================================
-    // PROMPT
-    // =========================================
-
     private string _prompt = string.Empty;
     public string Prompt
     {
@@ -91,10 +78,6 @@ public sealed class LLMChatViewModel : BindableObject
             ((Command)SendCommand).ChangeCanExecute();
         }
     }
-
-    // =========================================
-    // CONNECTION STATE
-    // =========================================
 
     private bool _isConnected;
     public bool IsConnected
@@ -119,20 +102,16 @@ public sealed class LLMChatViewModel : BindableObject
         }
     }
 
-    // =========================================
-    // CONSTRUCTOR
-    // =========================================
-
     public LLMChatViewModel(
         ZcspPeer peer,
-        AiChatService ai,
-        IAiChatRepository repo)
+        LLMChatService llm,
+        ILLMChatRepository repo)
     {
         _peer = peer;
-        _ai = ai;
+        _llm = llm;
         _repo = repo;
 
-        _ai.ResponseReceived += OnResponse;
+        _llm.ResponseReceived += OnResponseAsync;
 
         StartNewConversationCommand =
             new Command(async () => await StartNewConversationAsync());
@@ -142,10 +121,6 @@ public sealed class LLMChatViewModel : BindableObject
             () => IsConnected && !string.IsNullOrWhiteSpace(Prompt));
     }
 
-    // =========================================
-    // INITIALIZATION
-    // =========================================
-
     public async Task InitializeAsync()
     {
         await LoadPeersAsync();
@@ -153,7 +128,7 @@ public sealed class LLMChatViewModel : BindableObject
 
     private async Task LoadPeersAsync()
     {
-        var peers = await GetAvailablePeersAsync();
+        var peers = await _repo.GetAvailablePeersAsync();
 
         AvailablePeers.Clear();
 
@@ -169,19 +144,13 @@ public sealed class LLMChatViewModel : BindableObject
 
     private async Task LoadConversationsForPeerAsync(Guid peerId)
     {
-        using var scope = ServiceHelper.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
-
-        var conversations = await db.AiConversations
-            .Where(c => c.PeerId == peerId)
-            .OrderByDescending(c => c.CreatedAt)
-            .ToListAsync();
+        var conversations = await _repo.GetConversationsForPeerAsync(peerId);
 
         Conversations.Clear();
 
         foreach (var c in conversations)
         {
-            Conversations.Add(new AiConversationItem
+            Conversations.Add(new LLMConversationItem
             {
                 Id = c.Id,
                 PeerId = c.PeerId,
@@ -191,10 +160,6 @@ public sealed class LLMChatViewModel : BindableObject
             });
         }
     }
-
-    // =========================================
-    // NEW CONVERSATION
-    // =========================================
 
     private async Task StartNewConversationAsync()
     {
@@ -208,24 +173,19 @@ public sealed class LLMChatViewModel : BindableObject
             SelectedPeer.Peer.PeerId,
             SelectedPeer.Model ?? "unknown");
 
-        var convo = new AiConversationItem
+        var convo = new LLMConversationItem
         {
             Id = conversationId,
             PeerId = SelectedPeer.Peer.PeerId,
             PeerName = SelectedPeer.Peer.HostName,
-            Model = SelectedPeer.Model ?? "unknown",
-            Summary = null
+            Model = SelectedPeer.Model ?? "unknown"
         };
 
         Conversations.Insert(0, convo);
         SelectedConversation = convo;
     }
 
-    // =========================================
-    // ACTIVATE CONVERSATION
-    // =========================================
-
-    private async Task ActivateConversationAsync(AiConversationItem convo)
+    private async Task ActivateConversationAsync(LLMConversationItem convo)
     {
         await _lock.WaitAsync();
 
@@ -233,43 +193,27 @@ public sealed class LLMChatViewModel : BindableObject
         {
             _activeConversation = convo;
 
-            using var scope = ServiceHelper.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+            var result = await _repo
+                .GetLlmServiceForPeerAsync(convo.PeerId, convo.Model);
 
-            var service = await db.Services
-                .FirstOrDefaultAsync(s =>
-                    s.PeerRefId == convo.PeerId &&
-                    s.Name == "AIChat" &&
-                    s.Metadata == convo.Model);
-
-
-            if (service == null)
+            if (result == null)
             {
-                Status = "AI service unavailable on this peer.";
+                Status = "LLM service unavailable on this peer.";
                 IsConnected = false;
                 return;
             }
 
-            var peer = await db.PeerNodes
-                .FirstOrDefaultAsync(p => p.PeerId == convo.PeerId);
-
-            if (peer == null)
-            {
-                Status = "Peer not found.";
-                IsConnected = false;
-                return;
-            }
-
+            var (peer, service) = result.Value;
             _activePeer = peer;
 
             Status = "Connecting…";
             IsConnected = false;
 
             await _peer.ConnectAsync(
-                service.Address,   
-                service.Port,      
+                service.Address,
+                service.Port,
                 peer.ProtocolPeerId,
-                _ai);
+                _llm);
 
             IsConnected = true;
             Status = $"Connected ({service.Metadata})";
@@ -287,7 +231,6 @@ public sealed class LLMChatViewModel : BindableObject
         }
     }
 
-
     private async Task LoadHistoryAsync(Guid conversationId)
     {
         var history = await _repo.GetHistoryAsync(conversationId);
@@ -298,7 +241,7 @@ public sealed class LLMChatViewModel : BindableObject
 
             foreach (var msg in history)
             {
-                Messages.Add(new AiMessage
+                Messages.Add(new LLMMessage
                 {
                     Content = msg.Content,
                     IsUser = msg.IsUser
@@ -306,10 +249,6 @@ public sealed class LLMChatViewModel : BindableObject
             }
         });
     }
-
-    // =========================================
-    // SEND
-    // =========================================
 
     private async Task SendAsync()
     {
@@ -323,7 +262,7 @@ public sealed class LLMChatViewModel : BindableObject
         _isThinking = true;
         Prompt = string.Empty;
 
-        Messages.Add(new AiMessage
+        Messages.Add(new LLMMessage
         {
             Content = text,
             IsUser = true
@@ -331,24 +270,22 @@ public sealed class LLMChatViewModel : BindableObject
 
         await _repo.StoreAsync(_activeConversation.Id, text, true);
 
-        // 🔥 If this is the first message → use it as title
         if (string.IsNullOrWhiteSpace(_activeConversation.Summary))
         {
             var title = text.Length > 40
-                ? text.Substring(0, 40)
+                ? text[..40]
                 : text;
 
             title = title.Replace("\n", " ").Trim();
 
             _activeConversation.Summary = title;
-
             await _repo.UpdateSummaryAsync(_activeConversation.Id, title);
         }
 
         try
         {
             Status = "Thinking…";
-            await _ai.SendQueryAsync(text);
+            await _llm.SendQueryAsync(text);
         }
         catch
         {
@@ -361,12 +298,7 @@ public sealed class LLMChatViewModel : BindableObject
         }
     }
 
-
-    // =========================================
-    // RECEIVE RESPONSE
-    // =========================================
-
-    private async void OnResponse(string response)
+    private async Task OnResponseAsync(string response)
     {
         if (_activeConversation == null)
             return;
@@ -377,7 +309,7 @@ public sealed class LLMChatViewModel : BindableObject
 
         MainThread.BeginInvokeOnMainThread(() =>
         {
-            Messages.Add(new AiMessage
+            Messages.Add(new LLMMessage
             {
                 Content = clean,
                 IsUser = false
@@ -385,35 +317,5 @@ public sealed class LLMChatViewModel : BindableObject
 
             Status = "Connected";
         });
-
-    }
-
-
-
-    // =========================================
-    // HELPERS
-    // =========================================
-
-    private async Task<PeerNode?> GetPeerByIdAsync(Guid peerId)
-    {
-        using var scope = ServiceHelper.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
-        return await db.PeerNodes.FirstOrDefaultAsync(p => p.PeerId == peerId);
-    }
-
-    private async Task<List<(PeerNode Peer, string Model)>> GetAvailablePeersAsync()
-    {
-        using var scope = ServiceHelper.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
-
-        var services = await db.Services
-            .Where(s => s.Name == "AIChat")
-            .Include(s => s.Peer)
-            .ToListAsync();
-
-        return services
-            .Where(s => s.Peer != null)
-            .Select(s => (s.Peer!, s.Metadata ?? "unknown"))
-            .ToList();
     }
 }

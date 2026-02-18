@@ -2,23 +2,23 @@ using Microsoft.EntityFrameworkCore;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Repositories.IA;
-using ZCL.Services.AI;
+using ZCL.Services.LLM;
 using ZCM.ViewModels;
 
 namespace ZCM.Pages;
 
-public partial class AiChatPage : ContentPage
+public partial class LLMChatPage : ContentPage
 {
     private readonly LLMChatViewModel _vm;
 
-    public AiChatPage(PeerNode? preselectPeer = null)
+    public LLMChatPage(PeerNode? preselectPeer = null)
     {
         InitializeComponent();
 
         _vm = new LLMChatViewModel(
             ServiceHelper.GetService<ZcspPeer>(),
-            ServiceHelper.GetService<AiChatService>(),
-            ServiceHelper.GetService<IAiChatRepository>());
+            ServiceHelper.GetService<LLMChatService>(),
+            ServiceHelper.GetService<ILLMChatRepository>());
 
         BindingContext = _vm;
 
@@ -55,7 +55,7 @@ public partial class AiChatPage : ContentPage
 
             var model = service?.Metadata ?? "unknown";
 
-            _vm.Conversations.Add(new AiConversationItem
+            _vm.Conversations.Add(new LLMConversationItem
             {
                 PeerId = preselectPeer.PeerId,
                 PeerName = preselectPeer.HostName,

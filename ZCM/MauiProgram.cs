@@ -10,7 +10,7 @@ using ZCL.Protocol.ZCSP.Sessions;
 using ZCL.Repositories.IA;
 using ZCL.Repositories.Messages;
 using ZCL.Repositories.Peers;
-using ZCL.Services.AI;
+using ZCL.Services.LLM;
 using ZCL.Services.FileSharing;
 using ZCL.Services.Messaging;
 
@@ -71,7 +71,7 @@ public static class MauiProgram
         builder.Services.AddScoped<IPeerRepository, PeerRepository>();
         builder.Services.AddScoped<IMessageRepository, MessageRepository>();
         builder.Services.AddScoped<IChatQueryService, ChatQueryService>();
-        builder.Services.AddScoped<IAiChatRepository, AiChatRepository>();
+        builder.Services.AddScoped<ILLMChatRepository, LLMChatRepository>();
 
 
         // =========================
@@ -79,7 +79,7 @@ public static class MauiProgram
         // =========================
         builder.Services.AddSingleton<SessionRegistry>();
         builder.Services.AddSingleton<ZcspPeer>();
-        builder.Services.AddSingleton<AiChatService>();
+        builder.Services.AddSingleton<LLMChatService>();
 
 
         // =========================
@@ -162,7 +162,7 @@ public static class MauiProgram
                     {
                         "Messaging" => app.Services.GetRequiredService<MessagingService>(),
                         "FileSharing" => app.Services.GetRequiredService<FileSharingService>(),
-                        "AIChat" => app.Services.GetRequiredService<AiChatService>(),
+                        "AIChat" => app.Services.GetRequiredService<LLMChatService>(),
                         _ => null
                     };
                 })
