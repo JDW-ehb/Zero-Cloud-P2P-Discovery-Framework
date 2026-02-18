@@ -9,13 +9,13 @@ namespace ZCM.Pages;
 
 public partial class AiChatPage : ContentPage
 {
-    private readonly AiChatViewModel _vm;
+    private readonly LLMChatViewModel _vm;
 
     public AiChatPage(PeerNode? preselectPeer = null)
     {
         InitializeComponent();
 
-        _vm = new AiChatViewModel(
+        _vm = new LLMChatViewModel(
             ServiceHelper.GetService<ZcspPeer>(),
             ServiceHelper.GetService<AiChatService>(),
             ServiceHelper.GetService<IAiChatRepository>());

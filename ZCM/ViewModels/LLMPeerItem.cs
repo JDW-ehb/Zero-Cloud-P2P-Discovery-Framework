@@ -7,7 +7,7 @@ using System.Runtime.CompilerServices;
 
 namespace ZCM.ViewModels;
 
-public sealed class AiPeerItem
+public sealed class LLMPeerItem
 {
     public PeerNode Peer { get; set; } = null!;
     public string? Model { get; set; }

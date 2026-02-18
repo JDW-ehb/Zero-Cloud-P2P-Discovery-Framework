@@ -8,7 +8,7 @@ namespace ZCL.Repositories.IA
     {
         Task<Guid> CreateConversationAsync(Guid peerId, string model);
         Task StoreAsync(Guid conversationId, string content, bool isUser);
-        Task<List<AiMessageEntity>> GetHistoryAsync(Guid conversationId);
+        Task<List<LLMMessageEntity>> GetHistoryAsync(Guid conversationId);
         Task UpdateSummaryAsync(Guid conversationId, string summary);
 
     }

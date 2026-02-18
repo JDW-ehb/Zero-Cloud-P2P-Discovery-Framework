@@ -17,7 +17,7 @@ namespace ZCL.Repositories.IA
 
         public async Task<Guid> CreateConversationAsync(Guid peerId, string model)
         {
-            var convo = new AiConversationEntity
+            var convo = new LLMConversationEntity
             {
                 Id = Guid.NewGuid(),
                 PeerId = peerId,
@@ -33,7 +33,7 @@ namespace ZCL.Repositories.IA
 
         public async Task StoreAsync(Guid conversationId, string content, bool isUser)
         {
-            _db.AiMessages.Add(new AiMessageEntity
+            _db.AiMessages.Add(new LLMMessageEntity
             {
                 Id = Guid.NewGuid(),
                 ConversationId = conversationId,
@@ -45,7 +45,7 @@ namespace ZCL.Repositories.IA
             await _db.SaveChangesAsync();
         }
 
-        public Task<List<AiMessageEntity>> GetHistoryAsync(Guid conversationId)
+        public Task<List<LLMMessageEntity>> GetHistoryAsync(Guid conversationId)
         {
             return _db.AiMessages
                 .Where(x => x.ConversationId == conversationId)

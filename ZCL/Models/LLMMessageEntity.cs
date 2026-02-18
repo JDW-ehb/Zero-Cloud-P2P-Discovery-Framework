@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-public class AiMessageEntity
+public class LLMMessageEntity
 {
     [Key]
     public Guid Id { get; set; }

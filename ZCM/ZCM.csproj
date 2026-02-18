@@ -80,8 +80,8 @@
 	  <Compile Update="Pages\MySharedFilesPopup.xaml.cs">
 	    <DependentUpon>MySharedFilesPopup.xaml</DependentUpon>
 	  </Compile>
-	  <Compile Update="Pages\AiChatPage.xaml.cs">
-	    <DependentUpon>AiChatPage.xaml</DependentUpon>
+	  <Compile Update="Pages\LLMChatPage.xaml.cs">
+	    <DependentUpon>LLMChatPage.xaml</DependentUpon>
 	  </Compile>
 	  <Compile Update="Pages\SettingsPage.xaml.cs">
 	    <DependentUpon>SettingsPage.xaml</DependentUpon>
@@ -101,7 +101,7 @@
 	  <MauiXaml Update="Pages\MySharedFilesPopup.xaml">
 	    <Generator>MSBuild:Compile</Generator>
 	  </MauiXaml>
-	  <MauiXaml Update="Pages\AiChatPage.xaml">
+	  <MauiXaml Update="Pages\LLMChatPage.xaml">
 	    <Generator>MSBuild:Compile</Generator>
 	  </MauiXaml>
 	  <MauiXaml Update="Pages\SettingsPage.xaml">

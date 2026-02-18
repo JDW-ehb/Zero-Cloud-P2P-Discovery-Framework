@@ -5,7 +5,7 @@ using System.Text;
 
 namespace ZCL.Models
 {
-    public class AiConversationEntity
+    public class LLMConversationEntity
     {
         [Key]
         public Guid Id { get; set; }

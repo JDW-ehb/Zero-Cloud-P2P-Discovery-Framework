@@ -15,7 +15,7 @@ public sealed class AiMessage
     public bool IsUser { get; set; }
 }
 
-public sealed class AiChatViewModel : BindableObject
+public sealed class LLMChatViewModel : BindableObject
 {
     private readonly ZcspPeer _peer;
     private readonly AiChatService _ai;
@@ -26,12 +26,12 @@ public sealed class AiChatViewModel : BindableObject
 
     private PeerNode? _activePeer;
     private AiConversationItem? _activeConversation;
-    private AiPeerItem? _selectedPeer;
+    private LLMPeerItem? _selectedPeer;
     private AiConversationItem? _selectedConversation;
 
     public ObservableCollection<AiMessage> Messages { get; } = new();
     public ObservableCollection<AiConversationItem> Conversations { get; } = new();
-    public ObservableCollection<AiPeerItem> AvailablePeers { get; } = new();
+    public ObservableCollection<LLMPeerItem> AvailablePeers { get; } = new();
 
     public ICommand StartNewConversationCommand { get; }
     public ICommand SendCommand { get; }
@@ -40,7 +40,7 @@ public sealed class AiChatViewModel : BindableObject
     // SELECTED PEER
     // =========================================
 
-    public AiPeerItem? SelectedPeer
+    public LLMPeerItem? SelectedPeer
     {
         get => _selectedPeer;
         set
@@ -123,7 +123,7 @@ public sealed class AiChatViewModel : BindableObject
     // CONSTRUCTOR
     // =========================================
 
-    public AiChatViewModel(
+    public LLMChatViewModel(
         ZcspPeer peer,
         AiChatService ai,
         IAiChatRepository repo)
@@ -159,7 +159,7 @@ public sealed class AiChatViewModel : BindableObject
 
         foreach (var (peer, model) in peers)
         {
-            AvailablePeers.Add(new AiPeerItem
+            AvailablePeers.Add(new LLMPeerItem
             {
                 Peer = peer,
                 Model = model
