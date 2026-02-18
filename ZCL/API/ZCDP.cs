@@ -27,7 +27,6 @@ namespace ZCL.API
         private Config() { }
     }
 
-
     // Keeping it here as you asked
     public class DataStore
     {
@@ -76,6 +75,7 @@ namespace ZCL.API
 
             return existing;
         }
+
         private static async Task<List<string>> GetOllamaModelsAsync()
         {
             try
@@ -110,11 +110,10 @@ namespace ZCL.API
             catch (Exception ex)
             {
                 Debug.WriteLine($"Ollama model discovery failed: {ex}");
-
-                Debug.WriteLine($"Ollama model discovery failed: {ex.Message}");
                 return new List<string>();
             }
         }
+
         private static string GetBestLocalIPv4()
         {
             foreach (var ni in NetworkInterface.GetAllNetworkInterfaces()
@@ -130,7 +129,6 @@ namespace ZCL.API
 
             return "127.0.0.1";
         }
-
 
         public static ServiceDBContext CreateDBContext(string dbPath)
         {
@@ -176,7 +174,7 @@ namespace ZCL.API
                 }
                 catch (Exception e)
                 {
-                    Debug.WriteLine($"Error: {e.Message}");
+                    Debug.WriteLine($"Error: {e}");
                     sender = null;
                 }
             }
@@ -248,8 +246,6 @@ namespace ZCL.API
 
                     if (listener != null)
                     {
-                        Debug.WriteLine($"[{DateTime.Now:HH:mm:ss}] Waiting for data...");
-
                         if (listener.Available > 0)
                         {
                             byte[] bytes = listener.Receive(ref remoteEndPoint);
@@ -257,35 +253,25 @@ namespace ZCL.API
                             using MemoryStream memory = new MemoryStream(bytes);
                             using BinaryReader reader = new BinaryReader(memory, Encoding.UTF8, leaveOpen: true);
 
-                            MsgHeader header;
-
+                            MsgHeader header = new MsgHeader
                             {
-                                header = new MsgHeader
-                                {
-                                    Version = reader.ReadUInt16(),
-                                    Type = reader.ReadUInt32(),
-                                    MessageId = reader.ReadUInt64()
-                                };
+                                Version = reader.ReadUInt16(),
+                                Type = reader.ReadUInt32(),
+                                MessageId = reader.ReadUInt64()
+                            };
 
-                                Span<byte> guidBytes = stackalloc byte[16];
-                                reader.Read(guidBytes);
-                                header.PeerGuid = new Guid(guidBytes);
-                            }
+                            Span<byte> guidBytes = stackalloc byte[16];
+                            reader.Read(guidBytes);
+                            header.PeerGuid = new Guid(guidBytes);
 
                             if (header.PeerGuid == peerGuid)
-                            {
-                                Debug.WriteLine(">>> Ignored self announce.");
                                 goto AfterReceive;
-                            }
-
-                            Debug.WriteLine($"\n>>> Received from {remoteEndPoint} ({header.PeerGuid}):");
-                            Debug.WriteLine($">>> Length: {bytes.Length} bytes");
 
                             switch ((MsgType)header.Type)
                             {
                                 case MsgType.Announce:
                                     {
-                                        MsgPeerAnnounce message = new MsgPeerAnnounce
+                                        var message = new MsgPeerAnnounce
                                         {
                                             Name = reader.ReadString(),
                                             ServicesCount = reader.ReadUInt64(),
@@ -317,7 +303,6 @@ namespace ZCL.API
                                             db.PeerNodes.Add(peer);
 
                                         store.Peers.AddOrUpdatePeer(peer);
-
                                         db.SaveChanges();
 
                                         for (uint idx = 0; idx < message.ServicesCount; idx++)
@@ -331,21 +316,21 @@ namespace ZCL.API
                                                 PeerRefId = peer.PeerId
                                             };
 
-                                            var existing = db.Services.FirstOrDefault(s =>
-                                                s.PeerRefId == peer.PeerId &&
-                                                s.Name == service.Name &&
-                                                s.Address == service.Address &&
-                                                s.Port == service.Port);
+                                            var existing = db.Services
+                                                .AsNoTracking()
+                                                .FirstOrDefault(s =>
+                                                    s.PeerRefId == peer.PeerId &&
+                                                    s.Name == service.Name &&
+                                                    s.Address == service.Address &&
+                                                    s.Port == service.Port);
 
                                             if (existing == null)
-                                            {
                                                 db.Services.Add(service);
-                                            }
                                             else
                                             {
-                                                existing.Metadata = service.Metadata;
+                                                service.ServiceId = existing.ServiceId;
+                                                db.Services.Update(service);
                                             }
-
                                         }
 
                                         db.SaveChanges();
@@ -356,45 +341,39 @@ namespace ZCL.API
                         AfterReceive:
                             ;
                         }
-                        else
-                        {
-                            Debug.WriteLine("  (no data received, still listening...)");
-                        }
                     }
 
                     if (sender != null)
                     {
-                        Debug.WriteLine("Announcing...");
-
                         const ushort ZcspPort = 5555;
 
                         var servicesList = new List<Service>
                         {
                             new Service { Name = "FileSharing", Address = "tcp", Port = ZcspPort },
-                            new Service { Name = "Messaging",  Address = "tcp", Port = ZcspPort }
+                            new Service { Name = "Messaging", Address = "tcp", Port = ZcspPort }
                         };
 
                         var models = GetOllamaModelsAsync().GetAwaiter().GetResult();
                         var localIp = GetBestLocalIPv4();
-                        foreach (var modelName in models)
+
+                        if (models.Count > 0)
                         {
+                            var aiMetadataJson = System.Text.Json.JsonSerializer.Serialize(models);
+
                             servicesList.Add(new Service
                             {
                                 Name = "AIChat",
                                 Address = localIp,
-                                Port = 5555,
-                                Metadata = modelName
+                                Port = ZcspPort,
+                                Metadata = aiMetadataJson
                             });
                         }
 
-
                         Service[] services = servicesList.ToArray();
-
-
 
                         MsgHeader header = new MsgHeader
                         {
-                            Version = (ushort)ZCDPProtocolVersion,
+                            Version = ZCDPProtocolVersion,
                             Type = (uint)MsgType.Announce,
                             MessageId = MessageID++,
                             PeerGuid = peerGuid,
@@ -413,7 +392,6 @@ namespace ZCL.API
                         writer.Write(header.Type);
                         writer.Write(header.MessageId);
                         writer.Write(header.PeerGuid.ToByteArray());
-
                         writer.Write(message.Name);
                         writer.Write(message.ServicesCount);
 

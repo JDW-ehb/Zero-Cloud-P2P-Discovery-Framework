@@ -53,6 +53,13 @@ public class ServiceDBContext : DbContext
             .WithMany()
             .HasForeignKey(c => c.PeerId);
 
+        modelBuilder.Entity<PeerNode>()
+            .HasIndex(p => p.ProtocolPeerId)
+            .IsUnique();
+
+        modelBuilder.Entity<Service>()
+            .HasIndex(s => new { s.PeerRefId, s.Name, s.Address, s.Port })
+            .IsUnique();
 
 
 
