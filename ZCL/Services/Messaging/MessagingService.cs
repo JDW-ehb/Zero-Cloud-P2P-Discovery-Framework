@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using System.IO;
 using System.Net.Sockets;
 using ZCL.API;
 using ZCL.Models;
@@ -19,9 +18,6 @@ public sealed class MessagingService : IZcspService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly SemaphoreSlim _sessionLock = new(1, 1);
 
-    // Coordinator-only: track active client streams
-    private static readonly Dictionary<string, NetworkStream> _activeClients = new();
-
     private NetworkStream? _stream;
     private Guid _currentSessionId;
     private string? _remotePeerId;
@@ -35,6 +31,10 @@ public sealed class MessagingService : IZcspService
         _peer = peer;
         _scopeFactory = scopeFactory;
     }
+
+    // =====================================
+    // INTERNAL HELPER
+    // =====================================
 
     private async Task UseScopeAsync(Func<IServiceProvider, Task> action)
     {
@@ -89,8 +89,7 @@ public sealed class MessagingService : IZcspService
 
         await EnsureSessionAsync(remoteProtocolPeerId, ct);
 
-        var stream = _stream;
-        if (stream == null)
+        if (_stream == null)
             throw new InvalidOperationException("Messaging session is not active.");
 
         var clientMessageId = Guid.NewGuid();
@@ -99,7 +98,7 @@ public sealed class MessagingService : IZcspService
         MessageEntity entity = default!;
         string localProtocolId = string.Empty;
 
-        // Store locally (optimistic)
+        // Store locally (optimistic UI)
         await UseScopeAsync(async sp =>
         {
             var peers = sp.GetRequiredService<IPeerRepository>();
@@ -117,7 +116,7 @@ public sealed class MessagingService : IZcspService
                 content);
         });
 
-        // Optimistic UI update
+        // Emit optimistic outgoing message
         MessageReceived?.Invoke(
             ChatMessageMapper.Outgoing(
                 localProtocolId,
@@ -138,7 +137,7 @@ public sealed class MessagingService : IZcspService
                 w.Write(timestamp.Ticks);
             });
 
-        await Framing.WriteAsync(stream, data);
+        await Framing.WriteAsync(_stream, data);
     }
 
     // =====================================
@@ -155,14 +154,6 @@ public sealed class MessagingService : IZcspService
         _currentSessionId = sessionId;
         _remotePeerId = remotePeerId;
 
-        if (Config.Instance.IsCoordinator && _stream != null)
-        {
-            lock (_activeClients)
-            {
-                _activeClients[remotePeerId] = _stream;
-            }
-        }
-
         SessionStarted?.Invoke(remotePeerId);
         return Task.CompletedTask;
     }
@@ -173,96 +164,69 @@ public sealed class MessagingService : IZcspService
 
         // =====================================
         // COORDINATOR MODE
+        // (Store + ACK only — routing handled in ZcspPeer)
         // =====================================
         if (Config.Instance.IsCoordinator)
         {
-            if (action == "SendMessage")
-            {
-                var fromProtocolId = BinaryCodec.ReadString(reader);
-                var toProtocolId = BinaryCodec.ReadString(reader);
-                var clientMessageId = BinaryCodec.ReadString(reader);
-                var content = BinaryCodec.ReadString(reader);
-                var timestampTicks = reader.ReadInt64();
-
-                var serverMessageId = DateTime.UtcNow.Ticks;
-
-                // Store message in DB
-                await UseScopeAsync(async sp =>
-                {
-                    var peers = sp.GetRequiredService<IPeerRepository>();
-                    var messages = sp.GetRequiredService<IMessageRepository>();
-
-                    var fromPeer = await peers.GetOrCreateAsync(fromProtocolId);
-                    var toPeer = await peers.GetOrCreateAsync(toProtocolId);
-
-                    await messages.StoreAsync(
-                        sessionId,
-                        fromPeer.PeerId,
-                        toPeer.PeerId,
-                        content,
-                        MessageStatus.Sent);
-                });
-
-                // ACK sender
-                if (_stream != null)
-                {
-                    var ack = BinaryCodec.Serialize(
-                        ZcspMessageType.SessionData,
-                        sessionId,
-                        w =>
-                        {
-                            BinaryCodec.WriteString(w, "Ack");
-                            BinaryCodec.WriteString(w, clientMessageId);
-                            w.Write(serverMessageId);
-                        });
-
-                    await Framing.WriteAsync(_stream, ack);
-                }
-
-                // Push to recipient if online
-                NetworkStream? recipientStream = null;
-
-                lock (_activeClients)
-                {
-                    _activeClients.TryGetValue(toProtocolId, out recipientStream);
-                }
-
-                if (recipientStream != null)
-                {
-                    var push = BinaryCodec.Serialize(
-                        ZcspMessageType.SessionData,
-                        Guid.NewGuid(),
-                        w =>
-                        {
-                            BinaryCodec.WriteString(w, "IncomingMessage");
-                            BinaryCodec.WriteString(w, fromProtocolId);
-                            BinaryCodec.WriteString(w, toProtocolId);
-                            BinaryCodec.WriteString(w, content);
-                            w.Write(serverMessageId);
-                            w.Write(timestampTicks);
-                        });
-
-                    try
-                    {
-                        await Framing.WriteAsync(recipientStream, push);
-                    }
-                    catch
-                    {
-                        // recipient disconnected
-                    }
-                }
-
+            if (action != "SendMessage")
                 return;
+
+            var fromProtocolId = BinaryCodec.ReadString(reader);
+            var toProtocolId = BinaryCodec.ReadString(reader);
+            var clientMessageId = BinaryCodec.ReadString(reader);
+            var content = BinaryCodec.ReadString(reader);
+            var timestampTicks = reader.ReadInt64();
+
+            long serverTimestamp = DateTime.UtcNow.Ticks;
+
+            await UseScopeAsync(async sp =>
+            {
+                var peers = sp.GetRequiredService<IPeerRepository>();
+                var messages = sp.GetRequiredService<IMessageRepository>();
+
+                var fromPeer = await peers.GetOrCreateAsync(fromProtocolId);
+                var toPeer = await peers.GetOrCreateAsync(toProtocolId);
+
+                await messages.StoreAsync(
+                    sessionId,
+                    fromPeer.PeerId,
+                    toPeer.PeerId,
+                    content,
+                    MessageStatus.Sent);
+            });
+
+            // ACK sender
+            if (_stream != null)
+            {
+                var ack = BinaryCodec.Serialize(
+                    ZcspMessageType.SessionData,
+                    sessionId,
+                    w =>
+                    {
+                        BinaryCodec.WriteString(w, "Ack");
+                        BinaryCodec.WriteString(w, clientMessageId);
+                        w.Write(serverTimestamp);
+                    });
+
+                await Framing.WriteAsync(_stream, ack);
             }
 
             return;
         }
 
         // =====================================
-        // CLIENT MODE (including P2P fallback)
+        // CLIENT MODE
         // =====================================
 
-        // ----- DIRECT P2P MESSAGE -----
+        if (action == "Ack")
+        {
+            var clientMessageId = BinaryCodec.ReadString(reader);
+            var serverTimestamp = reader.ReadInt64();
+
+            // Optional: update message state to Delivered
+            return;
+        }
+
         if (action == "SendMessage")
         {
             var fromProtocolId = BinaryCodec.ReadString(reader);
@@ -289,50 +253,10 @@ public sealed class MessagingService : IZcspService
             });
 
             MessageReceived?.Invoke(
-                ChatMessageMapper.Incoming(fromProtocolId, toProtocolId, entity));
-
-            return;
-        }
-
-        // ----- ACK FROM COORDINATOR -----
-        if (action == "Ack")
-        {
-            var clientMessageId = BinaryCodec.ReadString(reader);
-            var serverMessageId = reader.ReadInt64();
-
-            // Optional: update message delivery state here
-
-            return;
-        }
-
-        // ----- INCOMING MESSAGE FROM COORDINATOR -----
-        if (action == "IncomingMessage")
-        {
-            var fromPeer = BinaryCodec.ReadString(reader);
-            var toPeer = BinaryCodec.ReadString(reader);
-            var content = BinaryCodec.ReadString(reader);
-            var serverMessageId = reader.ReadInt64();
-            var timestampTicks = reader.ReadInt64();
-
-            MessageEntity entity = default!;
-
-            await UseScopeAsync(async sp =>
-            {
-                var peers = sp.GetRequiredService<IPeerRepository>();
-                var messages = sp.GetRequiredService<IMessageRepository>();
-
-                var fromPeerEntity = await peers.GetOrCreateAsync(fromPeer);
-                var localPeer = await peers.GetLocalPeerAsync();
-
-                entity = await messages.StoreIncomingAsync(
-                    sessionId,
-                    fromPeerEntity.PeerId,
-                    localPeer.PeerId,
-                    content);
-            });
-
-            MessageReceived?.Invoke(
-                ChatMessageMapper.Incoming(fromPeer, toPeer, entity));
+                ChatMessageMapper.Incoming(
+                    fromProtocolId,
+                    toProtocolId,
+                    entity));
 
             return;
         }
@@ -341,14 +265,6 @@ public sealed class MessagingService : IZcspService
     public Task OnSessionClosedAsync(Guid sessionId)
     {
         var remote = _remotePeerId;
-
-        if (Config.Instance.IsCoordinator && remote != null)
-        {
-            lock (_activeClients)
-            {
-                _activeClients.Remove(remote);
-            }
-        }
 
         try { _stream?.Dispose(); } catch { }
 
