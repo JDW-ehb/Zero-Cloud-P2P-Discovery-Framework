@@ -89,7 +89,7 @@ namespace ZCL.API
         {
             try
             {
-                Debug.WriteLine("Querying Ollama at http://127.0.0.1:11434/api/tags");
+                //Debug.WriteLine("Querying Ollama at http://127.0.0.1:11434/api/tags");
 
                 using var response = await Http.GetAsync("api/tags", ct);
                 if (!response.IsSuccessStatusCode)
@@ -114,7 +114,7 @@ namespace ZCL.API
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Ollama model discovery failed: {ex}");
+                //Debug.WriteLine($"Ollama model discovery failed: {ex}");
                 return new List<string>();
             }
         }
@@ -148,19 +148,6 @@ namespace ZCL.API
 
         // NOTE(luca): ZCL is a class library, so we can't use Microsoft.Maui.Storage.Preferences here.
         // Persist a stable peer guid using a small file stored next to the DB file.
-        private static Guid GetOrCreateLocalPeerGuid(string dbPath)
-        {
-            using var db = CreateDBContext(dbPath);
-            var peersRepo = new PeerRepository(db);
-
-            var localProtocolPeerId = peersRepo
-                .GetOrCreateLocalProtocolPeerIdAsync(Config.Instance.PeerName, "127.0.0.1")
-                .GetAwaiter()
-                .GetResult();
-
-            return Guid.Parse(localProtocolPeerId);
-        }
-
         private static Socket CreateSenderSocket()
         {
             var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
@@ -390,12 +377,13 @@ namespace ZCL.API
             int port,
             string dbPath,
             DataStore store,
+            Guid localPeerGuid,
             CancellationToken ct = default)
         {
             ulong messageId = 0;
             ushort protocolVersion = Config.Instance.ZCDPProtocolVersion;
 
-            var peerGuid = GetOrCreateLocalPeerGuid(dbPath);
+            var peerGuid = localPeerGuid;
 
             Socket? sender;
             try
@@ -458,7 +446,22 @@ namespace ZCL.API
             try { sender?.Dispose(); } catch { }
         }
 
-        public static void StartAndRun(IPAddress multicastAddress, int port, string dbPath, DataStore store)
-            => StartAndRunAsync(multicastAddress, port, dbPath, store).GetAwaiter().GetResult();
+        public static void StartAndRun(
+            IPAddress multicastAddress,
+            int port,
+            string dbPath,
+            DataStore store,
+            Guid localPeerGuid)
+        {
+            StartAndRunAsync(
+                multicastAddress,
+                port,
+                dbPath,
+                store,
+                localPeerGuid,
+                CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+        }
     }
 }

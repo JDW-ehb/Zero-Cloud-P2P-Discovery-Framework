@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Logging;
 using Microsoft.Maui.Storage;
 using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using ZCL.API;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
@@ -10,8 +12,8 @@ using ZCL.Protocol.ZCSP.Sessions;
 using ZCL.Repositories.IA;
 using ZCL.Repositories.Messages;
 using ZCL.Repositories.Peers;
-using ZCL.Services.LLM;
 using ZCL.Services.FileSharing;
+using ZCL.Services.LLM;
 using ZCL.Services.Messaging;
 
 namespace ZCM;
@@ -64,7 +66,6 @@ public static class MauiProgram
 
         builder.Services.AddSingleton<DataStore>();
 
-
         // =========================
         // Repositories
         // =========================
@@ -73,14 +74,12 @@ public static class MauiProgram
         builder.Services.AddScoped<IChatQueryService, ChatQueryService>();
         builder.Services.AddScoped<ILLMChatRepository, LLMChatRepository>();
 
-
         // =========================
         // ZCSP core
         // =========================
         builder.Services.AddSingleton<SessionRegistry>();
         builder.Services.AddSingleton<ZcspPeer>();
         builder.Services.AddSingleton<LLMChatService>();
-
 
         // =========================
         // Services
@@ -129,6 +128,24 @@ public static class MauiProgram
         }
 
         // =========================
+        // Bootstrap local peer once
+        // =========================
+        Guid localPeerGuid;
+        using (var scope = app.Services.CreateScope())
+        {
+            var repo = scope.ServiceProvider.GetRequiredService<IPeerRepository>();
+
+            var protocolId = repo
+                .GetOrCreateLocalProtocolPeerIdAsync(
+                    Config.Instance.PeerName,
+                    GetBestLocalIPv4())
+                .GetAwaiter()
+                .GetResult();
+
+            localPeerGuid = Guid.Parse(protocolId);
+        }
+
+        // =========================
         // Start discovery (ZCDP)
         // =========================
         using (var scope = app.Services.CreateScope())
@@ -140,11 +157,13 @@ public static class MauiProgram
             string dbPath = db.Database.GetDbConnection().DataSource;
 
             Task.Run(() =>
-                ZCDPPeer.StartAndRun(
+                ZCDPPeer.StartAndRunAsync(
                     multicastAddress,
                     Config.Instance.DiscoveryPort,
                     dbPath,
-                    store)
+                    store,
+                    localPeerGuid,
+                    CancellationToken.None)
             );
         }
 
@@ -168,8 +187,6 @@ public static class MauiProgram
                 })
         );
 
-
-
         // =========================
         // Force service construction
         // =========================
@@ -177,5 +194,21 @@ public static class MauiProgram
         _ = app.Services.GetRequiredService<FileSharingService>();
 
         return app;
+    }
+
+    private static string GetBestLocalIPv4()
+    {
+        foreach (var ni in NetworkInterface.GetAllNetworkInterfaces()
+            .Where(n => n.OperationalStatus == OperationalStatus.Up)
+            .Where(n => n.NetworkInterfaceType != NetworkInterfaceType.Loopback))
+        {
+            var ip = ni.GetIPProperties().UnicastAddresses
+                .FirstOrDefault(a => a.Address.AddressFamily == AddressFamily.InterNetwork)?.Address;
+
+            if (ip != null)
+                return ip.ToString();
+        }
+
+        return "127.0.0.1";
     }
 }

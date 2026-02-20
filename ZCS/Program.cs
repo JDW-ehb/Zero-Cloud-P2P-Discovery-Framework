@@ -31,10 +31,8 @@ namespace ZCS
             // ==========================================
             var services = new ServiceCollection();
 
-            // Config
             services.AddSingleton<Config>();
 
-            // Database
             services.AddDbContext<ServiceDBContext>(options =>
             {
                 var dbPath = Path.Combine(
@@ -45,11 +43,7 @@ namespace ZCS
             });
 
             services.AddSingleton<DataStore>();
-
-            // Repositories
             services.AddScoped<IPeerRepository, PeerRepository>();
-
-            // ZCSP Core
             services.AddSingleton<SessionRegistry>();
             services.AddSingleton<ZcspPeer>();
 
@@ -62,6 +56,22 @@ namespace ZCS
             {
                 var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
                 db.Database.EnsureCreated();
+            }
+
+            // ==========================================
+            // Bootstrap local peer once
+            // ==========================================
+            Guid localPeerGuid;
+
+            using (var scope = provider.CreateScope())
+            {
+                var repo = scope.ServiceProvider.GetRequiredService<IPeerRepository>();
+
+                var protocolId = await repo.GetOrCreateLocalProtocolPeerIdAsync(
+                    Config.Instance.PeerName,
+                    "127.0.0.1");
+
+                localPeerGuid = Guid.Parse(protocolId);
             }
 
             // ==========================================
@@ -88,11 +98,13 @@ namespace ZCS
                 string dbPath = db.Database.GetDbConnection().DataSource;
 
                 _ = Task.Run(() =>
-                    ZCDPPeer.StartAndRun(
+                    ZCDPPeer.StartAndRunAsync(
                         multicastAddress,
                         Config.Instance.DiscoveryPort,
                         dbPath,
-                        store)
+                        store,
+                        localPeerGuid,
+                        CancellationToken.None)
                 );
             }
 
@@ -106,21 +118,13 @@ namespace ZCS
             _ = Task.Run(() =>
                 zcspPeer.StartRoutingHostAsync(
                     port: ZcspPort,
-                    serviceResolver: serviceName =>
-                    {
-                        // Coordinator is PURE router.
-                        // It does NOT host Messaging/LLM/FileSharing.
-                        return null;
-                    })
+                    serviceResolver: serviceName => null)
             );
 
             Console.WriteLine($"Routing host started on TCP {ZcspPort}");
             Console.WriteLine();
             Console.WriteLine("Press Ctrl+C to exit.");
 
-            // ==========================================
-            // Keep process alive
-            // ==========================================
             await Task.Delay(Timeout.Infinite);
         }
     }
