@@ -145,10 +145,7 @@ public sealed class MessagingViewModel : BindableObject
 
         try
         {
-            await _messaging.EnsureSessionAsync(
-                convo.Peer.ProtocolPeerId,
-                convo.Peer.IpAddress,
-                MessagingPort);
+            await _messaging.EnsureSessionAsync(convo.Peer.ProtocolPeerId);
 
             SetSessionConnected();
         }
@@ -182,8 +179,6 @@ public sealed class MessagingViewModel : BindableObject
         {
             await _messaging.SendMessageAsync(
                 _activeConversation.Peer.ProtocolPeerId,
-                _activeConversation.Peer.IpAddress,
-                MessagingPort,
                 text);
         }
         catch

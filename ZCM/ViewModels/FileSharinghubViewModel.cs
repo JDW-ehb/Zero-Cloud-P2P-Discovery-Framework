@@ -115,8 +115,7 @@ public sealed class FileSharingHubViewModel : BindableObject
 
         try
         {
-            await _service.EnsureSessionAsync(peer);
-            await _service.WaitForSessionBindingAsync();
+            await _service.EnsureSessionAsync(peer.ProtocolPeerId);
             await _service.RequestListAsync();
         }
         catch (SocketException)

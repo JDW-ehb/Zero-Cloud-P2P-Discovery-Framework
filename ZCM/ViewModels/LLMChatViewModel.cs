@@ -209,11 +209,7 @@ public sealed class LLMChatViewModel : BindableObject
             Status = "Connecting…";
             IsConnected = false;
 
-            await _peer.ConnectAsync(
-                service.Address,
-                service.Port,
-                peer.ProtocolPeerId,
-                _llm);
+            await _llm.EnsureSessionAsync(peer.ProtocolPeerId);
 
             IsConnected = true;
             Status = $"Connected ({service.Metadata})";
@@ -285,7 +281,10 @@ public sealed class LLMChatViewModel : BindableObject
         try
         {
             Status = "Thinking…";
-            await _llm.SendQueryAsync(text);
+
+            await _llm.SendQueryAsync(
+                _activePeer.ProtocolPeerId,
+                text);
         }
         catch
         {
