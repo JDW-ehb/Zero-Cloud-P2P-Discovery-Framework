@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace ZCL.Models;
 
@@ -12,8 +13,10 @@ public enum MessageDirection
 public enum MessageStatus
 {
     Sent = 0,
-    Received = 1,
-    Failed = 2
+    Stored = 1,
+    Delivered = 2,
+    Received = 3,
+    Failed = 4
 }
 
 public class MessageEntity
@@ -37,6 +40,12 @@ public class MessageEntity
 
     public MessageStatus Status { get; set; }
 
+    public string? ClientMessageId { get; set; }
+
+    // Optional future: server-side id
+    public long? ServerMessageId { get; set; }
+
+    // Navigation
     public PeerNode? FromPeer { get; set; }
     public PeerNode? ToPeer { get; set; }
 }

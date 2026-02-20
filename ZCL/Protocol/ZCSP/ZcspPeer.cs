@@ -1,5 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using System.IO;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using ZCL.API;
@@ -15,6 +15,10 @@ namespace ZCL.Protocol.ZCSP
         private string? _peerId;
         private readonly SessionRegistry _sessions;
         private readonly IServiceScopeFactory _scopeFactory;
+
+        // ACTIVE PEER MAP (ProtocolPeerId → Stream)
+        private readonly ConcurrentDictionary<string, NetworkStream> _activePeers
+            = new();
 
         private string? _coordinatorPeerId;
         private string? _coordinatorIp;
@@ -40,19 +44,20 @@ namespace ZCL.Protocol.ZCSP
             var peers = scope.ServiceProvider.GetRequiredService<IPeerRepository>();
 
             _peerId = await peers.GetOrCreateLocalProtocolPeerIdAsync(
-                hostName: Config.Instance.PeerName,
-                ipAddress: "127.0.0.1",
-                ct: ct);
+                Config.Instance.PeerName,
+                "127.0.0.1",
+                ct);
+
+            Console.WriteLine($"[ZCSP] Local PeerId resolved: {_peerId}");
 
             if (!Guid.TryParse(_peerId, out _))
-                throw new InvalidOperationException(
-                    $"Local protocol peer id must be a GUID string, got '{_peerId}'.");
+                throw new InvalidOperationException("Local protocol peer id must be GUID.");
 
             return _peerId!;
         }
 
         // =====================================
-        // HOSTING (Coordinator)
+        // HOSTING (Coordinator Mode)
         // =====================================
 
         public async Task StartHostingAsync(
@@ -64,7 +69,7 @@ namespace ZCL.Protocol.ZCSP
             var listener = new TcpListener(IPAddress.Any, port);
             listener.Start();
 
-            Console.WriteLine($"[{localId}] Hosting on TCP {port}");
+            Console.WriteLine($"[ZCSP] [{localId}] Hosting on TCP {port}");
 
             while (true)
             {
@@ -75,7 +80,7 @@ namespace ZCL.Protocol.ZCSP
                     try { await HandleClientAsync(client, serviceResolver); }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[{localId}] Client handler crashed:");
+                        Console.WriteLine("[ZCSP] Client handler crashed:");
                         Console.WriteLine(ex);
                     }
                 });
@@ -86,35 +91,34 @@ namespace ZCL.Protocol.ZCSP
             TcpClient client,
             Func<string, IZcspService?> serviceResolver)
         {
-            var localId = await EnsurePeerIdAsync();
-
             using (client)
             using (var stream = client.GetStream())
             {
                 var frame = await Framing.ReadAsync(stream);
-                if (frame == null) return;
+                if (frame == null)
+                    return;
 
                 var (type, _, _, reader) = BinaryCodec.Deserialize(frame);
-                if (type != ZcspMessageType.ServiceRequest) return;
 
-                reader.ReadBytes(16); // requestId
+                if (type != ZcspMessageType.ServiceRequest)
+                    return;
+
+                reader.ReadBytes(16); // correlation id
                 var fromPeer = BinaryCodec.ReadString(reader);
-                BinaryCodec.ReadString(reader); // toPeer (logical target)
+                BinaryCodec.ReadString(reader); // target peer (ignored here)
                 var serviceName = BinaryCodec.ReadString(reader);
+
+                Console.WriteLine($"[ZCSP] ServiceRequest from {fromPeer}");
 
                 var service = serviceResolver(serviceName);
                 if (service == null)
-                {
-                    var reject = BinaryCodec.Serialize(
-                        ZcspMessageType.ServiceResponse,
-                        Guid.Empty,
-                        w => { w.Write(false); w.Write(0L); });
-
-                    await Framing.WriteAsync(stream, reject);
                     return;
-                }
 
                 var session = _sessions.Create(fromPeer, TimeSpan.FromMinutes(30));
+
+                // REGISTER PEER
+                _activePeers[fromPeer] = stream;
+                Console.WriteLine($"[ZCSP] Peer registered → {fromPeer}");
 
                 var accept = BinaryCodec.Serialize(
                     ZcspMessageType.ServiceResponse,
@@ -130,57 +134,90 @@ namespace ZCL.Protocol.ZCSP
                 service.BindStream(stream);
                 await service.OnSessionStartedAsync(session.Id, fromPeer);
 
-                await RunSessionAsync(stream, session.Id, service);
+                await RunSessionAsync(stream, session.Id, fromPeer, service);
             }
         }
-        private async Task ConnectDirectAsync(
-            string host,
-            int port,
+
+        // =====================================
+        // SESSION LOOP
+        // =====================================
+
+        private async Task RunSessionAsync(
+    NetworkStream stream,
+    Guid sessionId,
+    string fromPeer,
+    IZcspService service)
+        {
+            try
+            {
+                while (true)
+                {
+                    byte[]? frame;
+
+                    try { frame = await Framing.ReadAsync(stream); }
+                    catch { break; }
+
+                    if (frame == null)
+                        break;
+
+                    var (type, _, _, reader) = BinaryCodec.Deserialize(frame);
+
+                    if (type == ZcspMessageType.SessionClose)
+                        break;
+
+                    if (type == ZcspMessageType.SessionData)
+                    {
+                        await service.OnSessionDataAsync(sessionId, reader);
+
+                        var (_, _, _, routeReader) = BinaryCodec.Deserialize(frame);
+
+                        var action = BinaryCodec.ReadString(routeReader);
+
+                        if (action == "SendMessage")
+                        {
+                            var fromPeerId = BinaryCodec.ReadString(routeReader);
+                            var toPeerId = BinaryCodec.ReadString(routeReader);
+
+                            if (_activePeers.TryGetValue(toPeerId, out var targetStream))
+                            {
+                                Console.WriteLine($"[ZCSP] Forwarding {fromPeerId} → {toPeerId}");
+                                await Framing.WriteAsync(targetStream, frame);
+                            }
+                            else
+                            {
+                                Console.WriteLine($"[ZCSP] Target {toPeerId} not connected.");
+                            }
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                Console.WriteLine($"[ZCSP] Session closed → {fromPeer}");
+
+                _activePeers.TryRemove(fromPeer, out _);
+                _sessions.Remove(sessionId);
+            }
+        }
+
+        // =====================================
+        // OPEN SESSION (Client Side)
+        // =====================================
+
+        public async Task OpenSessionAsync(
             string remoteProtocolPeerId,
             IZcspService service,
-            CancellationToken ct)
+            CancellationToken ct = default)
         {
-            var localId = await EnsurePeerIdAsync(ct);
+            await EnsurePeerIdAsync(ct);
 
-            var client = new TcpClient();
-            await client.ConnectAsync(host, port, ct);
-
-            var stream = client.GetStream();
-
-            var request = BinaryCodec.Serialize(
-                ZcspMessageType.ServiceRequest,
-                null,
-                w =>
-                {
-                    w.Write(Guid.NewGuid().ToByteArray());
-                    BinaryCodec.WriteString(w, localId);
-                    BinaryCodec.WriteString(w, remoteProtocolPeerId);
-                    BinaryCodec.WriteString(w, service.ServiceName);
-                });
-
-            await Framing.WriteAsync(stream, request);
-
-            var frame = await Framing.ReadAsync(stream);
-            if (frame == null)
-                throw new IOException("Direct connection closed.");
-
-            var (type, sessionId, _, _) = BinaryCodec.Deserialize(frame);
-
-            if (type != ZcspMessageType.ServiceResponse || sessionId == null)
-                throw new InvalidOperationException("Invalid service response.");
-
-            service.BindStream(stream);
-            await service.OnSessionStartedAsync(sessionId.Value, remoteProtocolPeerId);
-
-            _ = Task.Run(async () =>
+            if (await TryResolveCoordinatorAsync(ct) && _coordinatorIp != null)
             {
-                try { await RunSessionAsync(stream, sessionId.Value, service); }
-                finally
-                {
-                    stream.Dispose();
-                    client.Dispose();
-                }
-            });
+                await ConnectViaCoordinatorAsync(remoteProtocolPeerId, service, ct);
+                return;
+            }
+
+            throw new InvalidOperationException("Coordinator not available.");
         }
 
         private async Task ConnectViaCoordinatorAsync(
@@ -220,93 +257,7 @@ namespace ZCL.Protocol.ZCSP
             service.BindStream(stream);
             await service.OnSessionStartedAsync(sessionId.Value, remoteProtocolPeerId);
 
-            _ = Task.Run(async () =>
-            {
-                try { await RunSessionAsync(stream, sessionId.Value, service); }
-                finally
-                {
-                    stream.Dispose();
-                    client.Dispose();
-                }
-            });
-        }
-        // =====================================
-        // CLIENT CONNECT (always to coordinator)
-        // =====================================
-
-        public async Task OpenSessionAsync(
-    string remoteProtocolPeerId,
-    IZcspService service,
-    CancellationToken ct = default)
-        {
-            var localId = await EnsurePeerIdAsync(ct);
-
-            // 1️⃣ Try coordinator first
-            if (await TryResolveCoordinatorAsync(ct) && _coordinatorIp != null)
-            {
-                await ConnectViaCoordinatorAsync(remoteProtocolPeerId, service, ct);
-                return;
-            }
-
-            // 2️⃣ Fallback to direct P2P
-            using var scope = _scopeFactory.CreateScope();
-            var peers = scope.ServiceProvider.GetRequiredService<IPeerRepository>();
-
-            var peer = await peers.GetByProtocolPeerIdAsync(remoteProtocolPeerId, ct);
-            if (peer == null)
-                throw new InvalidOperationException("Remote peer not found.");
-
-            await ConnectDirectAsync(
-                peer.IpAddress,
-                5555,
-                remoteProtocolPeerId,
-                service,
-                ct);
-        }
-
-        // =====================================
-        // SESSION LOOP
-        // =====================================
-
-        private async Task RunSessionAsync(
-            NetworkStream stream,
-            Guid sessionId,
-            IZcspService service)
-        {
-            try
-            {
-                while (true)
-                {
-                    byte[]? frame;
-
-                    try
-                    {
-                        frame = await Framing.ReadAsync(stream);
-                    }
-                    catch
-                    {
-                        break;
-                    }
-
-                    if (frame == null)
-                        break;
-
-                    var (type, _, _, reader) = BinaryCodec.Deserialize(frame);
-
-                    if (type == ZcspMessageType.SessionClose)
-                        break;
-
-                    if (type == ZcspMessageType.SessionData)
-                        await service.OnSessionDataAsync(sessionId, reader);
-                }
-            }
-            finally
-            {
-                try { await service.OnSessionClosedAsync(sessionId); }
-                catch { }
-
-                _sessions.Remove(sessionId);
-            }
+            _ = Task.Run(() => RunSessionAsync(stream, sessionId.Value, localId, service));
         }
 
         // =====================================
@@ -327,17 +278,6 @@ namespace ZCL.Protocol.ZCSP
             _coordinatorIp = coordinator.IpAddress;
 
             return true;
-        }
-
-        // =====================================
-        // Semantic entry point
-        // =====================================
-
-        public async Task StartRoutingHostAsync(
-            int port,
-            Func<string, IZcspService?> serviceResolver)
-        {
-            await StartHostingAsync(port, serviceResolver);
         }
     }
 }
