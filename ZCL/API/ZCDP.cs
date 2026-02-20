@@ -24,7 +24,7 @@ namespace ZCL.API
         public ushort ZCDPProtocolVersion { get; set; } = 0;
         public int DiscoveryTimeoutMS { get; set; } = 3 * 1000;
         public string PeerName { get; set; } = Environment.MachineName;
-        public bool IsCoordinator { get; set; } = true;
+        public bool IsCoordinator { get; set; } = false;
 
         private Config() { }
     }

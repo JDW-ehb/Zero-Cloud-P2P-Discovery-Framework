@@ -5,7 +5,9 @@ using ZCL.API;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Protocol.ZCSP.Sessions;
+using ZCL.Repositories.Messages;
 using ZCL.Repositories.Peers;
+using ZCL.Services.Messaging;
 
 namespace ZCS
 {
@@ -44,8 +46,13 @@ namespace ZCS
 
             services.AddSingleton<DataStore>();
             services.AddScoped<IPeerRepository, PeerRepository>();
+            services.AddScoped<IMessageRepository, MessageRepository>();
+
             services.AddSingleton<SessionRegistry>();
             services.AddSingleton<ZcspPeer>();
+
+            // Messaging service is scoped (per connection/session)
+            services.AddScoped<MessagingService>();
 
             var provider = services.BuildServiceProvider();
 
@@ -111,14 +118,26 @@ namespace ZCS
             Console.WriteLine("Discovery started.");
 
             // ==========================================
-            // Start ZCSP Routing Host
+            // Start ZCSP Host (Hub Mode)
             // ==========================================
             var zcspPeer = provider.GetRequiredService<ZcspPeer>();
 
             _ = Task.Run(() =>
                 zcspPeer.StartRoutingHostAsync(
                     port: ZcspPort,
-                    serviceResolver: serviceName => null)
+                    serviceResolver: serviceName =>
+                    {
+                        if (serviceName == "Messaging")
+                        {
+                            // IMPORTANT:
+                            // New scope per service instance
+                            var scope = provider.CreateScope();
+                            return scope.ServiceProvider
+                                        .GetRequiredService<MessagingService>();
+                        }
+
+                        return null;
+                    })
             );
 
             Console.WriteLine($"Routing host started on TCP {ZcspPort}");
