@@ -123,7 +123,7 @@ namespace ZCS
             var zcspPeer = provider.GetRequiredService<ZcspPeer>();
 
             _ = Task.Run(() =>
-                zcspPeer.StartRoutingHostAsync(
+                zcspPeer.StartHostingAsync(
                     port: ZcspPort,
                     serviceResolver: serviceName =>
                     {
