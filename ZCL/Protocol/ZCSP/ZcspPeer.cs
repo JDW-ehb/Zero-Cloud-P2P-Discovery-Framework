@@ -133,27 +133,65 @@ namespace ZCL.Protocol.ZCSP
                 await RunSessionAsync(stream, session.Id, service);
             }
         }
-
-        // =====================================
-        // CLIENT CONNECT (always to coordinator)
-        // =====================================
-
-        public async Task OpenSessionAsync(
+        private async Task ConnectDirectAsync(
+            string host,
+            int port,
             string remoteProtocolPeerId,
             IZcspService service,
-            CancellationToken ct = default)
+            CancellationToken ct)
         {
             var localId = await EnsurePeerIdAsync(ct);
 
-            if (!await TryResolveCoordinatorAsync(ct))
-                throw new InvalidOperationException(
-                    "Coordinator unavailable. Hub model requires coordinator.");
+            var client = new TcpClient();
+            await client.ConnectAsync(host, port, ct);
 
-            if (_coordinatorIp == null)
-                throw new InvalidOperationException("Coordinator IP not resolved.");
+            var stream = client.GetStream();
+
+            var request = BinaryCodec.Serialize(
+                ZcspMessageType.ServiceRequest,
+                null,
+                w =>
+                {
+                    w.Write(Guid.NewGuid().ToByteArray());
+                    BinaryCodec.WriteString(w, localId);
+                    BinaryCodec.WriteString(w, remoteProtocolPeerId);
+                    BinaryCodec.WriteString(w, service.ServiceName);
+                });
+
+            await Framing.WriteAsync(stream, request);
+
+            var frame = await Framing.ReadAsync(stream);
+            if (frame == null)
+                throw new IOException("Direct connection closed.");
+
+            var (type, sessionId, _, _) = BinaryCodec.Deserialize(frame);
+
+            if (type != ZcspMessageType.ServiceResponse || sessionId == null)
+                throw new InvalidOperationException("Invalid service response.");
+
+            service.BindStream(stream);
+            await service.OnSessionStartedAsync(sessionId.Value, remoteProtocolPeerId);
+
+            _ = Task.Run(async () =>
+            {
+                try { await RunSessionAsync(stream, sessionId.Value, service); }
+                finally
+                {
+                    stream.Dispose();
+                    client.Dispose();
+                }
+            });
+        }
+
+        private async Task ConnectViaCoordinatorAsync(
+            string remoteProtocolPeerId,
+            IZcspService service,
+            CancellationToken ct)
+        {
+            var localId = await EnsurePeerIdAsync(ct);
 
             var client = new TcpClient();
-            await client.ConnectAsync(_coordinatorIp, 5555, ct);
+            await client.ConnectAsync(_coordinatorIp!, 5555, ct);
 
             var stream = client.GetStream();
 
@@ -184,16 +222,46 @@ namespace ZCL.Protocol.ZCSP
 
             _ = Task.Run(async () =>
             {
-                try
-                {
-                    await RunSessionAsync(stream, sessionId.Value, service);
-                }
+                try { await RunSessionAsync(stream, sessionId.Value, service); }
                 finally
                 {
                     stream.Dispose();
                     client.Dispose();
                 }
             });
+        }
+        // =====================================
+        // CLIENT CONNECT (always to coordinator)
+        // =====================================
+
+        public async Task OpenSessionAsync(
+    string remoteProtocolPeerId,
+    IZcspService service,
+    CancellationToken ct = default)
+        {
+            var localId = await EnsurePeerIdAsync(ct);
+
+            // 1️⃣ Try coordinator first
+            if (await TryResolveCoordinatorAsync(ct) && _coordinatorIp != null)
+            {
+                await ConnectViaCoordinatorAsync(remoteProtocolPeerId, service, ct);
+                return;
+            }
+
+            // 2️⃣ Fallback to direct P2P
+            using var scope = _scopeFactory.CreateScope();
+            var peers = scope.ServiceProvider.GetRequiredService<IPeerRepository>();
+
+            var peer = await peers.GetByProtocolPeerIdAsync(remoteProtocolPeerId, ct);
+            if (peer == null)
+                throw new InvalidOperationException("Remote peer not found.");
+
+            await ConnectDirectAsync(
+                peer.IpAddress,
+                5555,
+                remoteProtocolPeerId,
+                service,
+                ct);
         }
 
         // =====================================
