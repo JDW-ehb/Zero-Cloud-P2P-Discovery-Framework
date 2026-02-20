@@ -5,6 +5,9 @@
         ServiceRequest = 1,
         ServiceResponse = 2,
         SessionData = 3,
-        SessionClose = 4
+        SessionClose = 4,
+
+        RoutedSessionData = 5,
+        RoutedSessionClose = 6
     }
 }

@@ -30,4 +30,6 @@ public class PeerNode
 
     public PeerOnlineStatus OnlineStatus { get; set; }
     public bool IsLocal { get; set; }
+    public bool IsCoordinator { get; set; }
+
 }

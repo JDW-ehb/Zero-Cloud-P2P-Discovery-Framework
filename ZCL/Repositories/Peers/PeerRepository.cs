@@ -199,5 +199,11 @@ public sealed class PeerRepository : IPeerRepository
                 p => p.ProtocolPeerId == protocolPeerId,
                 ct);
     }
-
+    public async Task<PeerNode?> GetCoordinatorAsync(CancellationToken ct = default)
+    {
+        return await _db.PeerNodes
+            .Where(p => p.IsCoordinator && p.OnlineStatus == PeerOnlineStatus.Online)
+            .OrderByDescending(p => p.LastSeen)
+            .FirstOrDefaultAsync(ct);
+    }
 }

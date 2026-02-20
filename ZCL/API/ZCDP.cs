@@ -24,6 +24,7 @@ namespace ZCL.API
         public ushort ZCDPProtocolVersion { get; set; } = 0;
         public int DiscoveryTimeoutMS { get; set; } = 3 * 1000;
         public string PeerName { get; set; } = Environment.MachineName;
+        public bool IsCoordinator { get; set; } = false;
 
         private Config() { }
     }
@@ -51,6 +52,7 @@ namespace ZCL.API
     {
         public required string Name;
         public required ulong ServicesCount;
+        public bool IsCoordinator;
     }
 
     public static class ZCDPPeer
@@ -78,6 +80,7 @@ namespace ZCL.API
             existing.IpAddress = incoming.IpAddress;
             existing.LastSeen = incoming.LastSeen;
             existing.OnlineStatus = incoming.OnlineStatus;
+            existing.IsCoordinator = incoming.IsCoordinator;
 
             return existing;
         }
@@ -173,7 +176,6 @@ namespace ZCL.API
             listener.ExclusiveAddressUse = false;
             listener.MulticastLoopback = false;
 
-            // Join multicast on each active IPv4 interface
             var joinedAtLeastOne = false;
 
             foreach (var ni in NetworkInterface.GetAllNetworkInterfaces()
@@ -215,12 +217,13 @@ namespace ZCL.API
             const ushort zcspPort = 5555;
 
             var servicesList = new List<Service>
-            {
-                new() { Name = "FileSharing", Address = "tcp", Port = zcspPort },
-                new() { Name = "Messaging", Address = "tcp", Port = zcspPort }
-            };
+    {
+        new() { Name = "FileSharing", Address = "tcp", Port = zcspPort },
+        new() { Name = "Messaging", Address = "tcp", Port = zcspPort }
+    };
 
             var models = await GetOllamaModelsAsync(ct);
+
             if (models.Count > 0)
             {
                 var localIp = GetBestLocalIPv4();
@@ -232,6 +235,20 @@ namespace ZCL.API
                     Address = localIp,
                     Port = zcspPort,
                     Metadata = aiMetadataJson
+                });
+            }
+
+            // ===============================
+            // NEW: Advertise Coordinator role
+            // ===============================
+            if (Config.Instance.IsCoordinator)
+            {
+                servicesList.Add(new Service
+                {
+                    Name = "Coordinator",
+                    Address = GetBestLocalIPv4(),
+                    Port = zcspPort,
+                    Metadata = "routing"
                 });
             }
 
@@ -247,7 +264,8 @@ namespace ZCL.API
             var message = new MsgPeerAnnounce
             {
                 Name = Config.Instance.PeerName,
-                ServicesCount = (ulong)services.Length
+                ServicesCount = (ulong)services.Length,
+                IsCoordinator = Config.Instance.IsCoordinator
             };
 
             using var memory = new MemoryStream();
@@ -259,6 +277,7 @@ namespace ZCL.API
             writer.Write(peerGuid.ToByteArray());
             writer.Write(message.Name);
             writer.Write(message.ServicesCount);
+            writer.Write(message.IsCoordinator);
 
             foreach (var service in services)
             {
@@ -299,6 +318,7 @@ namespace ZCL.API
 
             var name = reader.ReadString();
             var servicesCount = reader.ReadUInt64();
+            var isCoordinator = reader.ReadBoolean();
 
             using var db = CreateDBContext(dbPath);
 
@@ -323,6 +343,7 @@ namespace ZCL.API
             peer.IpAddress = remoteEndPoint.Address.ToString();
             peer.LastSeen = now;
             peer.OnlineStatus = PeerOnlineStatus.Online;
+            peer.IsCoordinator = isCoordinator;
 
             if (db.Entry(peer).State == EntityState.Detached)
                 db.PeerNodes.Add(peer);
@@ -330,7 +351,6 @@ namespace ZCL.API
             store.Peers.AddOrUpdatePeer(peer);
             await db.SaveChangesAsync(ct);
 
-            // Read services and upsert
             for (ulong idx = 0; idx < servicesCount; idx++)
             {
                 var service = new Service
@@ -375,8 +395,6 @@ namespace ZCL.API
             ulong messageId = 0;
             ushort protocolVersion = Config.Instance.ZCDPProtocolVersion;
 
-            // NOTE(luca): If you hardcode the same Guid on multiple machines, they will appear as ONE peer.
-            // Persist a unique id per installation so each PC is discoverable.
             var peerGuid = GetOrCreateLocalPeerGuid(dbPath);
 
             Socket? sender;
@@ -440,7 +458,6 @@ namespace ZCL.API
             try { sender?.Dispose(); } catch { }
         }
 
-        // Backwards-compatible wrapper so you don't have to touch every call site yet.
         public static void StartAndRun(IPAddress multicastAddress, int port, string dbPath, DataStore store)
             => StartAndRunAsync(multicastAddress, port, dbPath, store).GetAwaiter().GetResult();
     }
