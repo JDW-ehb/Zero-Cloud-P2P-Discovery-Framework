@@ -1,39 +1,41 @@
-﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Design;
-using System.Diagnostics;
-using System.Net;
+﻿using Microsoft.Extensions.DependencyInjection;
 using ZCL.API;
 using ZCL.Models;
+using ZCL.Protocol.ZCSP;
+using ZCL.Protocol.ZCSP.Sessions;
+using ZCL.Repositories.Peers;
 
-namespace ZCM_Console
-{
-    internal class Program
+var services = new ServiceCollection();
+
+// ===============================
+// Register dependencies
+// ===============================
+services.AddDbContext<ServiceDBContext>();
+services.AddScoped<IPeerRepository, PeerRepository>();
+services.AddSingleton<SessionRegistry>();
+services.AddSingleton<ZcspPeer>();
+
+var provider = services.BuildServiceProvider();
+
+// ===============================
+// Enable coordinator mode
+// ===============================
+Config.Instance.IsCoordinator = true;
+
+Console.WriteLine("Zero-Cloud Coordinator starting...");
+Console.WriteLine($"Machine: {Environment.MachineName}");
+Console.WriteLine("Coordinator mode ENABLED");
+
+// ===============================
+// Start hosting (routing mode)
+// ===============================
+var zcspPeer = provider.GetRequiredService<ZcspPeer>();
+
+await zcspPeer.StartRoutingHostAsync(
+    port: 5555,
+    serviceResolver: serviceName =>
     {
-        public class ServiceDBContextFactory : IDesignTimeDbContextFactory<ServiceDBContext>
-        {
-            // dotnet ef migrations add InitialCreate --no-build
-            // dotnet ef database update --no-build
-
-            public ServiceDBContext CreateDbContext(string[] args)
-            {
-                var optionsBuilder = new DbContextOptionsBuilder<ServiceDBContext>();
-                var dbPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Config.DBFileName);
-
-                optionsBuilder.UseSqlite($"Data Source={dbPath}", b => b.MigrationsAssembly("ZCM-Console"));
-
-                return new ServiceDBContext(optionsBuilder.Options);
-            }
-        }
-        static void Main(string[] args)
-        { 
-            int port = Config.Port;
-            var multicastAddress = IPAddress.Parse(Config.MulticastAddress);
-            var dbPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Config.DBFileName);
-            Debug.WriteLine($"dbPath: {dbPath}");
-
-            var store = new DataStore();
-
-            ZCDPPeer.StartAndRun(multicastAddress, port, dbPath, store);
-        }
-    }
-}
+        // Coordinator does not host real services.
+        // It only forwards routed sessions.
+        return null;
+    });

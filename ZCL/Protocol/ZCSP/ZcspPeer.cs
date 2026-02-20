@@ -20,6 +20,8 @@ namespace ZCL.Protocol.ZCSP
         private readonly ConcurrentDictionary<string, NetworkStream> _connectedPeers = new();
         private readonly ConcurrentDictionary<Guid, (string A, string B)> _routes = new();
 
+        private string? _coordinatorPeerId;
+        private string? _coordinatorIp;
         public string PeerId => _peerId ?? "(unresolved)";
 
         public ZcspPeer(IServiceScopeFactory scopeFactory, SessionRegistry sessions)
@@ -307,5 +309,117 @@ namespace ZCL.Protocol.ZCSP
                 // target stream broken
             }
         }
+
+        private async Task<bool> TryResolveCoordinatorAsync(CancellationToken ct = default)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var peers = scope.ServiceProvider.GetRequiredService<IPeerRepository>();
+
+            var coordinator = await peers.GetCoordinatorAsync(ct);
+            if (coordinator == null)
+                return false;
+
+            _coordinatorPeerId = coordinator.ProtocolPeerId;
+            _coordinatorIp = coordinator.IpAddress;
+
+            return true;
+        }
+
+
+
+
+
+
+        public async Task OpenSessionAsync(
+            string remoteProtocolPeerId,
+            IZcspService service,
+            CancellationToken ct = default)
+        {
+            var localId = await EnsurePeerIdAsync(ct);
+
+            if (await TryResolveCoordinatorAsync(ct))
+            {
+                await ConnectViaCoordinatorAsync(
+                    localId,
+                    remoteProtocolPeerId,
+                    service,
+                    ct);
+                return;
+            }
+
+            using var scope = _scopeFactory.CreateScope();
+            var peers = scope.ServiceProvider.GetRequiredService<IPeerRepository>();
+            var peer = await peers.GetByProtocolPeerIdAsync(remoteProtocolPeerId);
+
+            if (peer == null)
+                throw new InvalidOperationException("Remote peer not found.");
+
+            await ConnectAsync(peer.IpAddress, 5555, remoteProtocolPeerId, service);
+        }
+
+
+        private async Task ConnectViaCoordinatorAsync(
+                string localPeerId,
+                string remotePeerId,
+                IZcspService service,
+                CancellationToken ct)
+        {
+            if (_coordinatorIp == null || _coordinatorPeerId == null)
+                throw new InvalidOperationException("Coordinator not resolved.");
+
+            var client = new TcpClient();
+            await client.ConnectAsync(_coordinatorIp, 5555, ct);
+
+            var stream = client.GetStream();
+
+            var request = BinaryCodec.Serialize(
+                ZcspMessageType.ServiceRequest,
+                null,
+                w =>
+                {
+                    w.Write(Guid.NewGuid().ToByteArray());
+                    BinaryCodec.WriteString(w, localPeerId);
+                    BinaryCodec.WriteString(w, remotePeerId);
+                    BinaryCodec.WriteString(w, service.ServiceName);
+                });
+
+            await Framing.WriteAsync(stream, request);
+
+            var frame = await Framing.ReadAsync(stream);
+            if (frame == null)
+                throw new IOException("Coordinator closed connection.");
+
+            var (type, sessionId, _, _) = BinaryCodec.Deserialize(frame);
+
+            if (type != ZcspMessageType.ServiceResponse || sessionId == null)
+                throw new InvalidOperationException("Invalid coordinator response.");
+
+            service.BindStream(stream);
+            await service.OnSessionStartedAsync(sessionId.Value, remotePeerId);
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await RunSessionAsync(
+                        stream,
+                        sessionId.Value,
+                        service,
+                        remotePeerId,
+                        service.ServiceName);
+                }
+                finally
+                {
+                    stream.Dispose();
+                    client.Dispose();
+                }
+            });
+        }
+
+
+
+
+
+
     }
 }

@@ -43,10 +43,12 @@ public sealed class MessagingService : IZcspService
            _currentSessionId != Guid.Empty &&
            _remotePeerId == remoteProtocolPeerId;
 
+    // =====================================
+    // SESSION MANAGEMENT (Topology-Agnostic)
+    // =====================================
+
     public async Task EnsureSessionAsync(
         string remoteProtocolPeerId,
-        string remoteIp,
-        int port,
         CancellationToken ct = default)
     {
         if (IsSessionActiveWith(remoteProtocolPeerId))
@@ -58,10 +60,11 @@ public sealed class MessagingService : IZcspService
             if (IsSessionActiveWith(remoteProtocolPeerId))
                 return;
 
-            await _peer.ConnectAsync(remoteIp, port, remoteProtocolPeerId, this);
+            await _peer.OpenSessionAsync(remoteProtocolPeerId, this, ct);
 
             if (!IsSessionActiveWith(remoteProtocolPeerId))
-                throw new InvalidOperationException("Connect completed but session not active.");
+                throw new InvalidOperationException(
+                    "Session opened but not active.");
         }
         finally
         {
@@ -69,17 +72,19 @@ public sealed class MessagingService : IZcspService
         }
     }
 
+    // =====================================
+    // SEND MESSAGE
+    // =====================================
+
     public async Task SendMessageAsync(
         string remoteProtocolPeerId,
-        string remoteIp,
-        int port,
         string content,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(content))
             return;
 
-        await EnsureSessionAsync(remoteProtocolPeerId, remoteIp, port, ct);
+        await EnsureSessionAsync(remoteProtocolPeerId, ct);
 
         if (_stream == null)
             throw new InvalidOperationException("Messaging session is not active.");
@@ -92,10 +97,7 @@ public sealed class MessagingService : IZcspService
             var messages = sp.GetRequiredService<IMessageRepository>();
 
             var localPeer = await peers.GetLocalPeerAsync(ct);
-            var remotePeer = await peers.GetOrCreateAsync(
-                remoteProtocolPeerId,
-                ipAddress: remoteIp,
-                ct: ct);
+            var remotePeer = await peers.GetOrCreateAsync(remoteProtocolPeerId, ct: ct);
 
             entity = await messages.StoreOutgoingAsync(
                 _currentSessionId,
@@ -104,8 +106,12 @@ public sealed class MessagingService : IZcspService
                 content);
         });
 
+        // Notify UI immediately (optimistic update)
         MessageReceived?.Invoke(
-            ChatMessageMapper.Outgoing(_peer.PeerId, remoteProtocolPeerId, entity));
+            ChatMessageMapper.Outgoing(
+                _peer.PeerId,
+                remoteProtocolPeerId,
+                entity));
 
         var data = BinaryCodec.Serialize(
             ZcspMessageType.SessionData,
@@ -119,6 +125,10 @@ public sealed class MessagingService : IZcspService
 
         await Framing.WriteAsync(_stream, data);
     }
+
+    // =====================================
+    // IZcspService IMPLEMENTATION
+    // =====================================
 
     public void BindStream(NetworkStream stream)
     {
@@ -180,6 +190,4 @@ public sealed class MessagingService : IZcspService
 
         return Task.CompletedTask;
     }
-
-
 }

@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System.Net.Http.Json;
 using System.Net.Sockets;
+using Microsoft.Extensions.DependencyInjection;
 using ZCL.Protocol.ZCSP;
 using ZCL.Protocol.ZCSP.Protocol;
 using ZCL.Protocol.ZCSP.Transport;
@@ -11,14 +12,20 @@ public sealed class LLMChatService : IZcspService
 {
     public string ServiceName => "LLMChat";
 
+    private readonly ZcspPeer _peer;
     private readonly HttpClient _http;
+    private readonly SemaphoreSlim _sessionLock = new(1, 1);
+
     private NetworkStream? _stream;
     private Guid _currentSessionId;
+    private string? _remotePeerId;
 
     public event Func<string, Task>? ResponseReceived;
 
-    public LLMChatService()
+    public LLMChatService(ZcspPeer peer)
     {
+        _peer = peer;
+
         _http = new HttpClient
         {
             BaseAddress = new Uri("http://localhost:11434"),
@@ -26,61 +33,53 @@ public sealed class LLMChatService : IZcspService
         };
     }
 
-    public void BindStream(NetworkStream stream)
+    // =====================================================
+    // SESSION MANAGEMENT (Transport-Agnostic)
+    // =====================================================
+
+    private bool IsSessionActiveWith(string remoteProtocolPeerId)
+        => _stream != null &&
+           _currentSessionId != Guid.Empty &&
+           _remotePeerId == remoteProtocolPeerId;
+
+    public async Task EnsureSessionAsync(
+        string remoteProtocolPeerId,
+        CancellationToken ct = default)
     {
-        _stream = stream;
-    }
+        if (IsSessionActiveWith(remoteProtocolPeerId))
+            return;
 
-    public Task OnSessionStartedAsync(Guid sessionId, string remotePeerId)
-    {
-        _currentSessionId = sessionId;
-        return Task.CompletedTask;
-    }
-
-    public async Task OnSessionDataAsync(Guid sessionId, BinaryReader reader)
-    {
- 
-
-        var action = BinaryCodec.ReadString(reader);
-
-        switch (action)
+        await _sessionLock.WaitAsync(ct);
+        try
         {
-            case "AiQuery":
-                var prompt = BinaryCodec.ReadString(reader);
-                await HandleAiQueryAsync(sessionId, prompt);
-                break;
+            if (IsSessionActiveWith(remoteProtocolPeerId))
+                return;
 
-            case "AiResponse":
-                {
-                    var response = BinaryCodec.ReadString(reader);
+            await _peer.OpenSessionAsync(remoteProtocolPeerId, this, ct);
 
-                    if (ResponseReceived != null)
-                    {
-                        var handlers = ResponseReceived.GetInvocationList();
-
-                        foreach (Func<string, Task> handler in handlers)
-                            await handler(response);
-                    }
-
-
-                    break;
-                }
+            if (!IsSessionActiveWith(remoteProtocolPeerId))
+                throw new InvalidOperationException("LLM session not active after connect.");
+        }
+        finally
+        {
+            _sessionLock.Release();
         }
     }
 
-    public Task OnSessionClosedAsync(Guid sessionId)
-    {
-        _stream = null;
-        _currentSessionId = Guid.Empty;
-        return Task.CompletedTask;
-    }
-
-    // =========================
+    // =====================================================
     // CLIENT SIDE
-    // =========================
+    // =====================================================
 
-    public async Task SendQueryAsync(string prompt)
+    public async Task SendQueryAsync(
+        string remoteProtocolPeerId,
+        string prompt,
+        CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(prompt))
+            return;
+
+        await EnsureSessionAsync(remoteProtocolPeerId, ct);
+
         if (_stream == null)
             throw new InvalidOperationException("AI session not active.");
 
@@ -96,9 +95,62 @@ public sealed class LLMChatService : IZcspService
         await Framing.WriteAsync(_stream, msg);
     }
 
-    // =========================
-    // HOST SIDE
-    // =========================
+    // =====================================================
+    // IZcspService IMPLEMENTATION
+    // =====================================================
+
+    public void BindStream(NetworkStream stream)
+    {
+        _stream = stream;
+    }
+
+    public Task OnSessionStartedAsync(Guid sessionId, string remotePeerId)
+    {
+        _currentSessionId = sessionId;
+        _remotePeerId = remotePeerId;
+        return Task.CompletedTask;
+    }
+
+    public async Task OnSessionDataAsync(Guid sessionId, BinaryReader reader)
+    {
+        var action = BinaryCodec.ReadString(reader);
+
+        switch (action)
+        {
+            case "AiQuery":
+                {
+                    var prompt = BinaryCodec.ReadString(reader);
+                    await HandleAiQueryAsync(sessionId, prompt);
+                    break;
+                }
+
+            case "AiResponse":
+                {
+                    var response = BinaryCodec.ReadString(reader);
+
+                    if (ResponseReceived != null)
+                    {
+                        var handlers = ResponseReceived.GetInvocationList();
+                        foreach (Func<string, Task> handler in handlers)
+                            await handler(response);
+                    }
+
+                    break;
+                }
+        }
+    }
+
+    public Task OnSessionClosedAsync(Guid sessionId)
+    {
+        _stream = null;
+        _currentSessionId = Guid.Empty;
+        _remotePeerId = null;
+        return Task.CompletedTask;
+    }
+
+    // =====================================================
+    // HOST SIDE (Local Ollama Execution)
+    // =====================================================
 
     private async Task HandleAiQueryAsync(Guid sessionId, string prompt)
     {
@@ -128,11 +180,11 @@ public sealed class LLMChatService : IZcspService
         }
         catch (TaskCanceledException)
         {
-            // timeout or disconnect
+            // timeout
         }
         catch (IOException)
         {
-            // stream closed mid-send
+            // stream closed
         }
         catch (Exception ex)
         {
@@ -140,9 +192,9 @@ public sealed class LLMChatService : IZcspService
         }
     }
 
-    // =========================
+    // =====================================================
     // LOCAL OLLAMA CALL
-    // =========================
+    // =====================================================
 
     public async Task<string> GenerateLocalAsync(string prompt)
     {
@@ -169,7 +221,6 @@ public sealed class LLMChatService : IZcspService
             return "AI service unavailable on this peer.";
         }
     }
-
 
     private sealed class OllamaResponse
     {
