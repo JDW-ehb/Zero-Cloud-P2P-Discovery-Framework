@@ -4,4 +4,5 @@
   <Project Path="ZCM/ZCM.csproj">
     <Deploy Solution="Debug|*" />
   </Project>
+  <Project Path="ZCSM/ZCSM.csproj" Id="3c89e0ae-fac4-4d5d-b761-051e125aec3e" />
 </Solution>

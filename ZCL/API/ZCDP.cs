@@ -78,6 +78,7 @@ namespace ZCL.API
             existing.IpAddress = incoming.IpAddress;
             existing.LastSeen = incoming.LastSeen;
             existing.OnlineStatus = incoming.OnlineStatus;
+            existing.Role = incoming.Role;
 
             return existing;
         }
@@ -242,6 +243,7 @@ namespace ZCL.API
             ushort protocolVersion,
             ulong messageId,
             Guid peerGuid,
+            NodeRole role,
             Service[] services)
         {
             var message = new MsgPeerAnnounce
@@ -257,6 +259,7 @@ namespace ZCL.API
             writer.Write((uint)MsgType.Announce);
             writer.Write(messageId);
             writer.Write(peerGuid.ToByteArray());
+            writer.Write((int)role);
             writer.Write(message.Name);
             writer.Write(message.ServicesCount);
 
@@ -290,6 +293,7 @@ namespace ZCL.API
                 MessageId = reader.ReadUInt64(),
                 PeerGuid = new Guid(reader.ReadBytes(16))
             };
+            var role = (NodeRole)reader.ReadInt32();
 
             if (header.PeerGuid == localPeerGuid)
                 return;
@@ -316,14 +320,15 @@ namespace ZCL.API
                     FirstSeen = now,
                     LastSeen = now,
                     OnlineStatus = PeerOnlineStatus.Unknown,
-                    IsLocal = false
+                    IsLocal = false,
+                    Role = role
                 };
 
             peer.HostName = name;
             peer.IpAddress = remoteEndPoint.Address.ToString();
             peer.LastSeen = now;
             peer.OnlineStatus = PeerOnlineStatus.Online;
-
+            peer.Role = role;
             if (db.Entry(peer).State == EntityState.Detached)
                 db.PeerNodes.Add(peer);
 
@@ -370,6 +375,8 @@ namespace ZCL.API
             int port,
             string dbPath,
             DataStore store,
+            RoutingState routingState,
+            NodeRole localRole,
             CancellationToken ct = default)
         {
             ulong messageId = 0;
@@ -407,6 +414,9 @@ namespace ZCL.API
 
             var remoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
 
+            var discoveryStart = DateTime.UtcNow;
+            var routingDecided = false;
+
             while (!ct.IsCancellationRequested)
             {
                 try
@@ -420,8 +430,37 @@ namespace ZCL.API
                     if (sender != null)
                     {
                         var services = await BuildAnnouncedServicesAsync(ct);
-                        var payload = BuildAnnouncePacket(protocolVersion, messageId++, peerGuid, services);
+                        var payload = BuildAnnouncePacket(
+                            protocolVersion,
+                            messageId++,
+                            peerGuid,
+                            localRole,
+                            services);
                         sender.SendTo(payload, new IPEndPoint(multicastAddress, port));
+                    }
+                    if (!routingDecided && (DateTime.UtcNow - discoveryStart).TotalSeconds >= 10)
+                    {
+                        var server = store.Peers
+                            .Where(p => p.Role == NodeRole.Server)
+                            .OrderByDescending(p => p.LastSeen)
+                            .FirstOrDefault();
+
+                        if (server != null)
+                        {
+                            routingState.SetServer(
+                                host: server.IpAddress,
+                                port: 5555, // ZCSP hosting port
+                                protocolPeerId: server.ProtocolPeerId);
+
+                            Debug.WriteLine($"Routing switched to ViaServer: {server.HostName}");
+                        }
+                        else
+                        {
+                            routingState.SetDirect();
+                            Debug.WriteLine("Routing set to Direct (no server found)");
+                        }
+
+                        routingDecided = true;
                     }
                 }
                 catch (OperationCanceledException)
@@ -440,8 +479,21 @@ namespace ZCL.API
             try { sender?.Dispose(); } catch { }
         }
 
-        // Backwards-compatible wrapper so you don't have to touch every call site yet.
-        public static void StartAndRun(IPAddress multicastAddress, int port, string dbPath, DataStore store)
-            => StartAndRunAsync(multicastAddress, port, dbPath, store).GetAwaiter().GetResult();
+        public static void StartAndRun(
+            IPAddress multicastAddress,
+            int port,
+            string dbPath,
+            DataStore store,
+            RoutingState routingState,
+            NodeRole localRole)
+            => StartAndRunAsync(
+                multicastAddress,
+                port,
+                dbPath,
+                store,
+                routingState,
+                localRole)
+            .GetAwaiter()
+            .GetResult();
     }
 }

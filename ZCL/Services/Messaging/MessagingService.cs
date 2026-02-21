@@ -1,6 +1,7 @@
-﻿using System.IO;
+﻿using Microsoft.Extensions.DependencyInjection;
+using System.Collections.Concurrent;
+using System.IO;
 using System.Net.Sockets;
-using Microsoft.Extensions.DependencyInjection;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Protocol.ZCSP.Protocol;
@@ -17,6 +18,7 @@ public sealed class MessagingService : IZcspService
     private readonly ZcspPeer _peer;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly SemaphoreSlim _sessionLock = new(1, 1);
+    private readonly ConcurrentDictionary<string, (Guid sessionId, NetworkStream stream)> _activePeers = new();
 
     private NetworkStream? _stream;
     private Guid _currentSessionId;
@@ -25,6 +27,7 @@ public sealed class MessagingService : IZcspService
     public event Action<string>? SessionStarted;
     public event Action<ChatMessage>? MessageReceived;
     public event Action<string>? SessionClosed;
+
 
     public MessagingService(ZcspPeer peer, IServiceScopeFactory scopeFactory)
     {
@@ -130,6 +133,8 @@ public sealed class MessagingService : IZcspService
         _currentSessionId = sessionId;
         _remotePeerId = remotePeerId;
 
+        _activePeers[remotePeerId] = (sessionId, _stream!);
+
         SessionStarted?.Invoke(remotePeerId);
         return Task.CompletedTask;
     }
@@ -142,20 +147,44 @@ public sealed class MessagingService : IZcspService
 
         MessageEntity entity = default!;
 
+        NetworkStream? targetStream = null;
+        byte[]? forwardBytes = null;
+
+
         await UseScopeAsync(async sp =>
         {
             var peers = sp.GetRequiredService<IPeerRepository>();
             var messages = sp.GetRequiredService<IMessageRepository>();
 
             var fromPeerEntity = await peers.GetOrCreateAsync(fromPeer);
-            var toPeerEntity = await peers.GetLocalPeerAsync();
+            var toPeerEntity = await peers.GetOrCreateAsync(toPeer); 
 
             entity = await messages.StoreIncomingAsync(
                 sessionId,
                 fromPeerEntity.PeerId,
                 toPeerEntity.PeerId,
                 content);
+
+            if (_activePeers.TryGetValue(toPeer, out var target))
+            {
+                targetStream = target.stream;
+
+                forwardBytes = BinaryCodec.Serialize(
+                    ZcspMessageType.SessionData,
+                    target.sessionId,
+                    w =>
+                    {
+                        BinaryCodec.WriteString(w, fromPeer);
+                        BinaryCodec.WriteString(w, toPeer);
+                        BinaryCodec.WriteString(w, content);
+                    });
+            }
         });
+
+        if (targetStream != null && forwardBytes != null)
+        {
+            await Framing.WriteAsync(targetStream, forwardBytes);
+        }
 
         MessageReceived?.Invoke(
             ChatMessageMapper.Incoming(fromPeer, toPeer, entity));
@@ -164,6 +193,11 @@ public sealed class MessagingService : IZcspService
     public Task OnSessionClosedAsync(Guid sessionId)
     {
         var remote = _remotePeerId;
+
+        if (_remotePeerId != null)
+        {
+            _activePeers.TryRemove(_remotePeerId, out _);
+        }
 
         try
         {
@@ -174,6 +208,8 @@ public sealed class MessagingService : IZcspService
         _stream = null;
         _currentSessionId = Guid.Empty;
         _remotePeerId = null;
+
+
 
         if (remote != null)
             SessionClosed?.Invoke(remote);

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Logging;
 using Microsoft.Maui.Storage;
 using System.Net;
+using System.Threading;
 using ZCL.API;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
@@ -10,8 +11,8 @@ using ZCL.Protocol.ZCSP.Sessions;
 using ZCL.Repositories.IA;
 using ZCL.Repositories.Messages;
 using ZCL.Repositories.Peers;
-using ZCL.Services.LLM;
 using ZCL.Services.FileSharing;
+using ZCL.Services.LLM;
 using ZCL.Services.Messaging;
 
 namespace ZCM;
@@ -78,8 +79,9 @@ public static class MauiProgram
         // ZCSP core
         // =========================
         builder.Services.AddSingleton<SessionRegistry>();
-        builder.Services.AddSingleton<ZcspPeer>();
         builder.Services.AddSingleton<LLMChatService>();
+        builder.Services.AddSingleton<RoutingState>();
+        builder.Services.AddSingleton<ZcspPeer>();
 
 
         // =========================
@@ -137,15 +139,21 @@ public static class MauiProgram
             var store = scope.ServiceProvider.GetRequiredService<DataStore>();
 
             var multicastAddress = IPAddress.Parse(Config.Instance.MulticastAddress);
+            var port = Config.Instance.DiscoveryPort;
             string dbPath = db.Database.GetDbConnection().DataSource;
 
-            Task.Run(() =>
-                ZCDPPeer.StartAndRun(
-                    multicastAddress,
-                    Config.Instance.DiscoveryPort,
-                    dbPath,
-                    store)
-            );
+            var routingState = scope.ServiceProvider.GetRequiredService<RoutingState>();
+
+            var cts = new CancellationTokenSource();
+
+            _ = ZCDPPeer.StartAndRunAsync(
+                multicastAddress,
+                port,
+                dbPath,
+                store,
+                routingState,
+                NodeRole.Peer,
+                cts.Token);
         }
 
         // =========================

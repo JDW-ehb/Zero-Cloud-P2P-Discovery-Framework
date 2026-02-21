@@ -30,4 +30,5 @@ public class PeerNode
 
     public PeerOnlineStatus OnlineStatus { get; set; }
     public bool IsLocal { get; set; }
+    public NodeRole Role { get; set; } = NodeRole.Peer;
 }
