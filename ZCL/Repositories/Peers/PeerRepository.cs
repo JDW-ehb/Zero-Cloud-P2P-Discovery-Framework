@@ -144,7 +144,22 @@ public sealed class PeerRepository : IPeerRepository
             };
 
             _db.PeerNodes.Add(peer);
-            await _db.SaveChangesAsync(ct);
+
+            try
+            {
+                await _db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException ex) when
+            (
+                ex.InnerException is Microsoft.Data.Sqlite.SqliteException sqlite &&
+                sqlite.SqliteErrorCode == 19 // UNIQUE constraint violation
+            )
+            {
+                // Another concurrent context inserted the same ProtocolPeerId.
+                // Re-read the existing row and return that instead.
+                peer = await _db.PeerNodes
+                    .FirstAsync(p => p.ProtocolPeerId == protocolPeerId, ct);
+            }
 
             return peer;
         }

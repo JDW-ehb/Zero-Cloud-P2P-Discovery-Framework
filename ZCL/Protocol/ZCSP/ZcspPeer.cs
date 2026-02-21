@@ -166,6 +166,7 @@ namespace ZCL.Protocol.ZCSP
 
             try
             {
+                Console.WriteLine($"[CONNECT] Mode={_routing.Mode} Connecting to {connectHost}:{connectPort} (finalTo={finalToPeerId})");
                 await client.ConnectAsync(connectHost, connectPort);
                 stream = client.GetStream();
 

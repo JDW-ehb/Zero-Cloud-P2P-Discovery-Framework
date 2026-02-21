@@ -87,7 +87,7 @@ namespace ZCL.API
         {
             try
             {
-                Debug.WriteLine("Querying Ollama at http://127.0.0.1:11434/api/tags");
+                //Debug.WriteLine("Querying Ollama at http://127.0.0.1:11434/api/tags");
 
                 using var response = await Http.GetAsync("api/tags", ct);
                 if (!response.IsSuccessStatusCode)
@@ -112,7 +112,7 @@ namespace ZCL.API
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Ollama model discovery failed: {ex}");
+                //Debug.WriteLine($"Ollama model discovery failed: {ex}");
                 return new List<string>();
             }
         }
