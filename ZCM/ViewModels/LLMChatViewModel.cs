@@ -27,6 +27,7 @@ public sealed class LLMChatViewModel : BindableObject
     private LLMConversationItem? _activeConversation;
     private LLMPeerItem? _selectedPeer;
     private LLMConversationItem? _selectedConversation;
+    private Guid _activeSessionId = Guid.Empty;
 
     public ObservableCollection<LLMMessage> Messages { get; } = new();
     public ObservableCollection<LLMConversationItem> Conversations { get; } = new();
@@ -110,7 +111,11 @@ public sealed class LLMChatViewModel : BindableObject
         _peer = peer;
         _llm = llm;
         _repo = repo;
-
+        _llm.SessionStarted += (sessionId, remotePeerId) =>
+        {
+            if (_activePeer?.ProtocolPeerId == remotePeerId)
+                _activeSessionId = sessionId;
+        };
         _llm.ResponseReceived += OnResponseAsync;
 
         StartNewConversationCommand =
@@ -209,11 +214,20 @@ public sealed class LLMChatViewModel : BindableObject
             Status = "Connecting…";
             IsConnected = false;
 
+            _activeSessionId = Guid.Empty;
+
             await _peer.ConnectAsync(
                 service.Address,
                 service.Port,
                 peer.ProtocolPeerId,
                 _llm);
+
+            if (_activeSessionId == Guid.Empty)
+            {
+                Status = "Connected, but session not initialized.";
+                IsConnected = false;
+                return;
+            }
 
             IsConnected = true;
             Status = $"Connected ({service.Metadata})";
@@ -285,7 +299,10 @@ public sealed class LLMChatViewModel : BindableObject
         try
         {
             Status = "Thinking…";
-            await _llm.SendQueryAsync(text);
+            if (_activeSessionId == Guid.Empty)
+                throw new InvalidOperationException("No active LLM session.");
+
+            await _llm.SendQueryAsync(_activeSessionId, text);
         }
         catch
         {

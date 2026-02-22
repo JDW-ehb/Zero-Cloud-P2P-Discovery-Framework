@@ -16,6 +16,7 @@ public sealed class LLMChatService : IZcspService
     private readonly ConcurrentDictionary<Guid, NetworkStream> _sessions = new();
 
     public event Func<string, Task>? ResponseReceived;
+    public event Action<Guid, string>? SessionStarted; 
 
     public LLMChatService()
     {
@@ -29,6 +30,7 @@ public sealed class LLMChatService : IZcspService
     public Task OnSessionStartedAsync(Guid sessionId, string remotePeerId, NetworkStream stream)
     {
         _sessions[sessionId] = stream;
+        SessionStarted?.Invoke(sessionId, remotePeerId);
         return Task.CompletedTask;
     }
 
