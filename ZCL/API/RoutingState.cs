@@ -12,6 +12,8 @@ namespace ZCL.API
         public int ServerPort { get; private set; }
         public string? ServerProtocolPeerId { get; private set; }
 
+        public NodeRole Role { get; private set; }
+
         public void SetDirect()
         {
             lock (_lock)
@@ -33,5 +35,12 @@ namespace ZCL.API
                 ServerProtocolPeerId = protocolPeerId;
             }
         }
+
+        public void Initialize(NodeRole role)
+        {
+            Role = role;
+        }
+
+
     }
 }

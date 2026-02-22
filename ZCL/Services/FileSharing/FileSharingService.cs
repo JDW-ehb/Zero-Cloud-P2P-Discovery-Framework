@@ -27,14 +27,28 @@ public sealed class FileSharingService : IZcspService
     private readonly Func<string> _downloadDirectoryProvider;
     private readonly ZcspPeer _peer;
     private readonly Dictionary<Guid, string> _downloadTargets = new();
-
     private readonly SemaphoreSlim _sessionLock = new(1, 1);
+    private sealed record UploadState(
+    string OwnerProtocolPeerId,
+    Guid OwnerPeerDbId,
+    Guid FileId,
+    string FileName,
+    string FileType,
+    long FileSize,
+    string Checksum,
+    DateTime SharedSinceUtc,
+    FileStream Stream,
+    string TargetPath);
 
+    private readonly ConcurrentDictionary<Guid, UploadState> _uploads = new();
     private const int ChunkSize = 64 * 1024;
 
     private readonly Dictionary<Guid, SharedFileDto> _knownFiles = new();
     private readonly Dictionary<Guid, FileStream> _activeDownloads = new();
     private readonly Dictionary<Guid, long> _receivedBytes = new();
+
+
+
     private sealed record SessionContext(
     NetworkStream Stream,
     string RemoteProtocolPeerId,
@@ -146,9 +160,11 @@ public sealed class FileSharingService : IZcspService
                 break;
 
             case "RequestFile":
-                var fileId = new Guid(reader.ReadBytes(16));
-                await HandleFileRequestAsync(sessionId, fileId);
-                break;
+                {
+                    var requestFileId = new Guid(reader.ReadBytes(16));
+                    await HandleFileRequestAsync(sessionId, requestFileId);
+                    break;
+                }
 
             case "FileChunk":
                 HandleFileChunk(reader);
@@ -156,6 +172,29 @@ public sealed class FileSharingService : IZcspService
 
             case "FileComplete":
                 HandleFileComplete(reader);
+                break;
+
+            case "ListFilesFor":
+                {
+                    var targetProtocolPeerId = BinaryCodec.ReadString(reader);
+                    await HandleListFilesForAsync(sessionId, targetProtocolPeerId);
+                    break;
+                }
+            case "RequestFileFor":
+                {
+                    var targetProtocolPeerId = BinaryCodec.ReadString(reader);
+                    var fileId = new Guid(reader.ReadBytes(16));
+                    await HandleFileRequestForAsync(sessionId, targetProtocolPeerId, fileId);
+                    break;
+                }
+            case "UploadStart":
+                await HandleUploadStartAsync(sessionId, reader);
+                break;
+            case "UploadChunk":
+                await HandleUploadChunkAsync(sessionId, reader);
+                break;
+            case "UploadComplete":
+                await HandleUploadCompleteAsync(sessionId, reader);
                 break;
         }
     }
@@ -170,41 +209,51 @@ public sealed class FileSharingService : IZcspService
     // =========================
     // REQUESTS (CLIENT SIDE)
     // =========================
-    public async Task RequestListAsync()
+    public async Task RequestListAsync(string? targetProtocolPeerId = null)
     {
-        if (_clientSessionId == Guid.Empty)
-            return;
-
-        if (!_sessions.TryGetValue(_clientSessionId, out var ctx))
-            return;
-
-        Debug.WriteLine("[FileSharing] Requesting file list");
-
-        var msg = BinaryCodec.Serialize(
-            ZcspMessageType.SessionData,
-            _clientSessionId,
-            w => BinaryCodec.WriteString(w, "ListFiles"));
-
-        await Framing.WriteAsync(ctx.Stream, msg);
-    }
-
-    public async Task RequestFileAsync(Guid fileId)
-    {
-        if (_clientSessionId == Guid.Empty)
-            return;
-
-        if (!_sessions.TryGetValue(_clientSessionId, out var ctx))
-            return;
-
-        Debug.WriteLine($"[FileSharing] Requesting file {fileId}");
+        if (_clientSessionId == Guid.Empty) return;
+        if (!_sessions.TryGetValue(_clientSessionId, out var ctx)) return;
 
         var msg = BinaryCodec.Serialize(
             ZcspMessageType.SessionData,
             _clientSessionId,
             w =>
             {
-                BinaryCodec.WriteString(w, "RequestFile");
-                w.Write(fileId.ToByteArray());
+                if (string.IsNullOrWhiteSpace(targetProtocolPeerId))
+                {
+                    BinaryCodec.WriteString(w, "ListFiles");
+                }
+                else
+                {
+                    BinaryCodec.WriteString(w, "ListFilesFor");
+                    BinaryCodec.WriteString(w, targetProtocolPeerId);
+                }
+            });
+
+        await Framing.WriteAsync(ctx.Stream, msg);
+    }
+
+    public async Task RequestFileAsync(Guid fileId, string? targetProtocolPeerId = null)
+    {
+        if (_clientSessionId == Guid.Empty) return;
+        if (!_sessions.TryGetValue(_clientSessionId, out var ctx)) return;
+
+        var msg = BinaryCodec.Serialize(
+            ZcspMessageType.SessionData,
+            _clientSessionId,
+            w =>
+            {
+                if (string.IsNullOrWhiteSpace(targetProtocolPeerId))
+                {
+                    BinaryCodec.WriteString(w, "RequestFile");
+                    w.Write(fileId.ToByteArray());
+                }
+                else
+                {
+                    BinaryCodec.WriteString(w, "RequestFileFor");
+                    BinaryCodec.WriteString(w, targetProtocolPeerId);
+                    w.Write(fileId.ToByteArray());
+                }
             });
 
         await Framing.WriteAsync(ctx.Stream, msg);
@@ -422,6 +471,290 @@ public sealed class FileSharingService : IZcspService
         }
 
         throw new TimeoutException("FileSharing session bind timeout");
+    }
+
+    private async Task HandleListFilesForAsync(Guid sessionId, string targetProtocolPeerId)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var peers = scope.ServiceProvider.GetRequiredService<IPeerRepository>();
+        var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+
+        if (!_sessions.TryGetValue(sessionId, out var ctx))
+            return;
+
+        var target = await peers.GetByProtocolPeerIdAsync(targetProtocolPeerId);
+        if (target == null) return;
+
+        var files = await db.SharedFiles
+            .Where(f => f.PeerRefId == target.PeerId)
+            .ToListAsync();
+
+        var payload = BinaryCodec.Serialize(
+            ZcspMessageType.SessionData,
+            sessionId,
+            w =>
+            {
+                BinaryCodec.WriteString(w, "Files");
+                w.Write(files.Count);
+                foreach (var f in files)
+                {
+                    w.Write(f.FileId.ToByteArray());
+                    BinaryCodec.WriteString(w, f.FileName);
+                    BinaryCodec.WriteString(w, f.FileType);
+                    w.Write(f.FileSize);
+                    BinaryCodec.WriteString(w, f.Checksum);
+                    w.Write(f.SharedSince.Ticks);
+                }
+            });
+
+        await Framing.WriteAsync(ctx.Stream, payload);
+    }
+    private async Task HandleFileRequestForAsync(Guid sessionId, string targetProtocolPeerId, Guid fileId)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var peers = scope.ServiceProvider.GetRequiredService<IPeerRepository>();
+        var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+
+        if (!_sessions.TryGetValue(sessionId, out var ctx))
+            return;
+
+        var target = await peers.GetByProtocolPeerIdAsync(targetProtocolPeerId);
+        if (target == null) return;
+
+        var file = await db.SharedFiles.FirstOrDefaultAsync(f =>
+            f.FileId == fileId &&
+            f.PeerRefId == target.PeerId &&
+            f.IsAvailable);
+
+        if (file == null || string.IsNullOrWhiteSpace(file.LocalPath) || !File.Exists(file.LocalPath))
+            return;
+
+        await StreamFileAsync(ctx.Stream, sessionId, fileId, file.LocalPath, file.Checksum);
+    }
+
+    private async Task StreamFileAsync(NetworkStream stream, Guid sessionId, Guid fileId, string path, string checksum)
+    {
+        using var fs = File.OpenRead(path);
+        var buffer = new byte[ChunkSize];
+
+        int read;
+        while ((read = await fs.ReadAsync(buffer)) > 0)
+        {
+            var chunk = BinaryCodec.Serialize(
+                ZcspMessageType.SessionData,
+                sessionId,
+                w =>
+                {
+                    BinaryCodec.WriteString(w, "FileChunk");
+                    w.Write(fileId.ToByteArray());
+                    w.Write(read);
+                    w.Write(buffer, 0, read);
+                });
+
+            await Framing.WriteAsync(stream, chunk);
+        }
+
+        var done = BinaryCodec.Serialize(
+            ZcspMessageType.SessionData,
+            sessionId,
+            w =>
+            {
+                BinaryCodec.WriteString(w, "FileComplete");
+                w.Write(fileId.ToByteArray());
+                BinaryCodec.WriteString(w, checksum);
+            });
+
+        await Framing.WriteAsync(stream, done);
+    }
+
+    public async Task<bool> EnsureServerSessionAsync(CancellationToken ct = default)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var peers = scope.ServiceProvider.GetRequiredService<IPeerRepository>();
+
+        var server = (await peers.GetAllAsync())
+            .FirstOrDefault(p => !p.IsLocal && p.OnlineStatus == PeerOnlineStatus.Online);
+
+        if (server == null)
+            return false;
+
+        try
+        {
+            await EnsureSessionAsync(server, ct);
+            await WaitForSessionBindingAsync(ct);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public async Task MirrorUploadToServerAsync(
+    Guid fileId,
+    string ownerProtocolPeerId,
+    string fileName,
+    string fileType,
+    long fileSize,
+    string checksum,
+    DateTime sharedSinceUtc,
+    string localPath,
+    CancellationToken ct = default)
+    {
+        if (!await EnsureServerSessionAsync(ct))
+            return; // fallback: server not available
+
+        if (_clientSessionId == Guid.Empty) return;
+        if (!_sessions.TryGetValue(_clientSessionId, out var ctx)) return;
+
+        // 1) UploadStart
+        var start = BinaryCodec.Serialize(
+            ZcspMessageType.SessionData,
+            _clientSessionId,
+            w =>
+            {
+                BinaryCodec.WriteString(w, "UploadStart");
+                BinaryCodec.WriteString(w, ownerProtocolPeerId);
+                w.Write(fileId.ToByteArray());
+                BinaryCodec.WriteString(w, fileName);
+                BinaryCodec.WriteString(w, fileType);
+                w.Write(fileSize);
+                BinaryCodec.WriteString(w, checksum);
+                w.Write(sharedSinceUtc.Ticks);
+            });
+
+        await Framing.WriteAsync(ctx.Stream, start);
+
+        // 2) chunks
+        using var fs = File.OpenRead(localPath);
+        var buffer = new byte[ChunkSize];
+        int read;
+
+        while ((read = await fs.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
+        {
+            var chunk = BinaryCodec.Serialize(
+                ZcspMessageType.SessionData,
+                _clientSessionId,
+                w =>
+                {
+                    BinaryCodec.WriteString(w, "UploadChunk");
+                    w.Write(fileId.ToByteArray());
+                    w.Write(read);
+                    w.Write(buffer, 0, read);
+                });
+
+            await Framing.WriteAsync(ctx.Stream, chunk);
+        }
+
+        // 3) complete
+        var done = BinaryCodec.Serialize(
+            ZcspMessageType.SessionData,
+            _clientSessionId,
+            w =>
+            {
+                BinaryCodec.WriteString(w, "UploadComplete");
+                w.Write(fileId.ToByteArray());
+                BinaryCodec.WriteString(w, checksum);
+            });
+
+        await Framing.WriteAsync(ctx.Stream, done);
+    }
+
+    private async Task HandleUploadStartAsync(Guid sessionId, BinaryReader reader)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var peersRepo = scope.ServiceProvider.GetRequiredService<IPeerRepository>();
+
+        var ownerProtocolPeerId = BinaryCodec.ReadString(reader);
+        var fileId = new Guid(reader.ReadBytes(16));
+        var name = BinaryCodec.ReadString(reader);
+        var type = BinaryCodec.ReadString(reader);
+        var size = reader.ReadInt64();
+        var checksum = BinaryCodec.ReadString(reader);
+        var sharedSince = new DateTime(reader.ReadInt64(), DateTimeKind.Utc);
+
+        var owner = await peersRepo.GetByProtocolPeerIdAsync(ownerProtocolPeerId);
+        if (owner == null) return;
+
+        var mirrorDir = Path.Combine(AppContext.BaseDirectory, "mirror", ownerProtocolPeerId);
+        Directory.CreateDirectory(mirrorDir);
+
+        var safeName = string.Join("_", name.Split(Path.GetInvalidFileNameChars()));
+        var targetPath = Path.Combine(mirrorDir, $"{fileId:N}_{safeName}");
+
+        var fs = File.Create(targetPath);
+
+        _uploads[fileId] = new UploadState(
+            OwnerProtocolPeerId: ownerProtocolPeerId,
+            OwnerPeerDbId: owner.PeerId,
+            FileId: fileId,
+            FileName: name,
+            FileType: type,
+            FileSize: size,
+            Checksum: checksum,
+            SharedSinceUtc: sharedSince,
+            Stream: fs,
+            TargetPath: targetPath);
+    }
+
+    private Task HandleUploadChunkAsync(Guid sessionId, BinaryReader reader)
+    {
+        var fileId = new Guid(reader.ReadBytes(16));
+        var length = reader.ReadInt32();
+        var data = reader.ReadBytes(length);
+
+        if (_uploads.TryGetValue(fileId, out var up))
+            up.Stream.Write(data, 0, data.Length);
+
+        return Task.CompletedTask;
+    }
+
+    private async Task HandleUploadCompleteAsync(Guid sessionId, BinaryReader reader)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+
+        var fileId = new Guid(reader.ReadBytes(16));
+        var checksum = BinaryCodec.ReadString(reader);
+
+        if (!_uploads.TryRemove(fileId, out var up))
+            return;
+
+        up.Stream.Dispose();
+
+        // Optional: verify checksum here by hashing up.TargetPath
+
+        // Upsert SharedFiles row ON SERVER, but owned by the ORIGINAL peer (Jonas)
+        var existing = await db.SharedFiles.FirstOrDefaultAsync(f =>
+            f.FileId == fileId && f.PeerRefId == up.OwnerPeerDbId);
+
+        if (existing == null)
+        {
+            db.SharedFiles.Add(new SharedFileEntity
+            {
+                FileId = up.FileId,
+                PeerRefId = up.OwnerPeerDbId,          // <-- this is the “pretend Jonas owns it”
+                FileName = up.FileName,
+                FileSize = up.FileSize,
+                FileType = up.FileType,
+                Checksum = up.Checksum,
+                LocalPath = up.TargetPath,             // <-- stored on SERVER disk
+                SharedSince = up.SharedSinceUtc,
+                IsAvailable = true
+            });
+        }
+        else
+        {
+            existing.FileName = up.FileName;
+            existing.FileSize = up.FileSize;
+            existing.FileType = up.FileType;
+            existing.Checksum = up.Checksum;
+            existing.LocalPath = up.TargetPath;
+            existing.SharedSince = up.SharedSinceUtc;
+            existing.IsAvailable = true;
+        }
+
+        await db.SaveChangesAsync();
     }
 
     public void SetDownloadTarget(Guid fileId, string path)

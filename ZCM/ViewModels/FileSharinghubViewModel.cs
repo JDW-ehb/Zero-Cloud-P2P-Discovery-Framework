@@ -75,7 +75,11 @@ public sealed class FileSharingHubViewModel : BindableObject
     _service.SetDownloadTarget(file.FileId, result.Path);
 #endif
 
-            await _service.RequestFileAsync(file.FileId);
+            if (_activePeer == null)
+                return;
+
+            // Try server-mode first (if connected to server)
+            await _service.RequestFileAsync(file.FileId, _activePeer.ProtocolPeerId);
         });
 
 
@@ -117,7 +121,7 @@ public sealed class FileSharingHubViewModel : BindableObject
         {
             await _service.EnsureSessionAsync(peer);
             await _service.WaitForSessionBindingAsync();
-            await _service.RequestListAsync();
+            await _service.RequestListAsync(peer.ProtocolPeerId);
         }
         catch (SocketException)
         {
@@ -231,14 +235,16 @@ public sealed class FileSharingHubViewModel : BindableObject
         var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
 
         var localPeerId = await _peers.GetLocalPeerIdAsync();
-        if (localPeerId == null)
+        var localProtocolId = await _peers.GetLocalProtocolPeerIdAsync();
+
+        if (localPeerId == null || localProtocolId == null)
             return;
 
         foreach (var file in result)
         {
             var info = new FileInfo(file.FullPath);
 
-            db.SharedFiles.Add(new SharedFileEntity
+            var entity = new SharedFileEntity
             {
                 FileId = Guid.NewGuid(),
                 PeerRefId = localPeerId.Value,
@@ -249,7 +255,20 @@ public sealed class FileSharingHubViewModel : BindableObject
                 LocalPath = file.FullPath,
                 SharedSince = DateTime.UtcNow,
                 IsAvailable = true
-            });
+            };
+
+            db.SharedFiles.Add(entity);
+
+            // Mirror immediately (non-blocking server fallback safe)
+            await _service.MirrorUploadToServerAsync(
+                fileId: entity.FileId,
+                ownerProtocolPeerId: localProtocolId,
+                fileName: entity.FileName,
+                fileType: entity.FileType,
+                fileSize: entity.FileSize,
+                checksum: entity.Checksum,
+                sharedSinceUtc: entity.SharedSince,
+                localPath: entity.LocalPath);
         }
 
         await db.SaveChangesAsync();

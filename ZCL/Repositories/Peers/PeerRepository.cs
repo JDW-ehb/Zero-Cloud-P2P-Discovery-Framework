@@ -218,4 +218,14 @@ public sealed class PeerRepository : IPeerRepository
     {
         return _db.PeerNodes.FirstOrDefaultAsync(p => p.PeerId == peerId);
     }
+
+    public async Task<string?> GetLocalProtocolPeerIdAsync(CancellationToken ct = default)
+    {
+        var local = await _db.PeerNodes
+            .Where(p => p.IsLocal)
+            .OrderByDescending(p => p.LastSeen)
+            .FirstOrDefaultAsync(ct);
+
+        return local?.ProtocolPeerId;
+    }
 }

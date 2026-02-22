@@ -74,6 +74,9 @@ internal static class Program
             })
             .Build();
 
+        var routingState = host.Services.GetRequiredService<RoutingState>();
+        routingState.Initialize(NodeRole.Server);
+
         // Ensure DB exists
         using (var scope = host.Services.CreateScope())
         {
@@ -102,7 +105,6 @@ internal static class Program
         }
 
         var store = host.Services.GetRequiredService<DataStore>();
-        var routingState = host.Services.GetRequiredService<RoutingState>();
 
         // ZCDP announce as SERVER
         _ = Task.Run(() =>

@@ -16,7 +16,8 @@ public sealed class LLMChatService : IZcspService
     private readonly ConcurrentDictionary<Guid, NetworkStream> _sessions = new();
 
     public event Func<string, Task>? ResponseReceived;
-    public event Action<Guid, string>? SessionStarted; 
+    public event Action<Guid, string>? SessionStarted;
+
 
     public LLMChatService()
     {
@@ -36,7 +37,7 @@ public sealed class LLMChatService : IZcspService
 
     public async Task OnSessionDataAsync(Guid sessionId, BinaryReader reader)
     {
- 
+
 
         var action = BinaryCodec.ReadString(reader);
 

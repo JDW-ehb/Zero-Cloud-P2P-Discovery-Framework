@@ -107,6 +107,9 @@ public static class MauiProgram
 
         var app = builder.Build();
 
+        var routingState = app.Services.GetRequiredService<RoutingState>();
+        routingState.Initialize(NodeRole.Peer);
+
         // =========================
         // Ensure DB exists
         // =========================
@@ -142,7 +145,6 @@ public static class MauiProgram
             var port = Config.Instance.DiscoveryPort;
             string dbPath = db.Database.GetDbConnection().DataSource;
 
-            var routingState = scope.ServiceProvider.GetRequiredService<RoutingState>();
 
             var cts = new CancellationTokenSource();
 

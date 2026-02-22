@@ -24,4 +24,6 @@ public interface IPeerRepository
     Task<List<PeerNode>> GetAllAsync(CancellationToken ct = default);
     Task<Guid?> GetLocalPeerIdAsync(CancellationToken ct = default);
     Task<PeerNode?> GetByIdAsync(Guid peerId);
+
+    Task<string?> GetLocalProtocolPeerIdAsync(CancellationToken ct = default);
 }
