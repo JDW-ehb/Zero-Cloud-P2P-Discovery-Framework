@@ -1,6 +1,7 @@
 ﻿using Microsoft.Maui.Dispatching;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using ZCL.API;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Services.Messaging;
@@ -13,6 +14,7 @@ public sealed class MessagingViewModel : BindableObject
     private readonly ZcspPeer _peer;
     private readonly MessagingService _messaging;
     private readonly IChatQueryService _chatQueries;
+    private readonly DataStore _store;
 
     public event Action? MessagesChanged;
 
@@ -20,7 +22,6 @@ public sealed class MessagingViewModel : BindableObject
     private ConversationItem? _activeConversation;
     private string? _activeProtocolPeerId;
     private bool _sessionReady;
-
     private const int MessagingPort = 5555;
 
     public ObservableCollection<ConversationItem> Conversations { get; } = new();
@@ -49,14 +50,17 @@ public sealed class MessagingViewModel : BindableObject
 
     public ICommand SendMessageCommand { get; }
 
+
     public MessagingViewModel(
         ZcspPeer peer,
         MessagingService messaging,
-        IChatQueryService chatQueries)
+        IChatQueryService chatQueries,
+        DataStore store)
     {
         _peer = peer;
         _messaging = messaging;
         _chatQueries = chatQueries;
+        _store = store;
 
         SendMessageCommand =
             new Command(async () => await SendAsync(), () => _sessionReady);
@@ -72,7 +76,31 @@ public sealed class MessagingViewModel : BindableObject
     {
         _localPeerDbId = await _chatQueries.GetLocalPeerIdAsync();
         await LoadConversationsAsync();
-        StatusMessage = "Ready";
+
+        await Task.Delay(500);
+
+        var server = _store.Peers.FirstOrDefault(p => p.Role == NodeRole.Server);
+
+        if (server != null)
+        {
+            try
+            {
+                await _messaging.EnsureSessionAsync(
+                    server.ProtocolPeerId,
+                    server.IpAddress,
+                    MessagingPort);
+
+                StatusMessage = "Connected to server";
+            }
+            catch
+            {
+                StatusMessage = "Server offline";
+            }
+        }
+        else
+        {
+            StatusMessage = "No server discovered";
+        }
     }
 
     // ===============================

@@ -20,10 +20,6 @@ public sealed class MessagingService : IZcspService
     private readonly SemaphoreSlim _sessionLock = new(1, 1);
     private readonly ConcurrentDictionary<string, (Guid sessionId, NetworkStream stream)> _activePeers = new();
 
-    private NetworkStream? _stream;
-    private Guid _currentSessionId;
-    private string? _remotePeerId;
-
     public event Action<string>? SessionStarted;
     public event Action<ChatMessage>? MessageReceived;
     public event Action<string>? SessionClosed;
@@ -42,9 +38,7 @@ public sealed class MessagingService : IZcspService
     }
 
     private bool IsSessionActiveWith(string remoteProtocolPeerId)
-        => _stream != null &&
-           _currentSessionId != Guid.Empty &&
-           _remotePeerId == remoteProtocolPeerId;
+        => _activePeers.ContainsKey(remoteProtocolPeerId);
 
     public async Task EnsureSessionAsync(
         string remoteProtocolPeerId,
@@ -84,7 +78,7 @@ public sealed class MessagingService : IZcspService
 
         await EnsureSessionAsync(remoteProtocolPeerId, remoteIp, port, ct);
 
-        if (_stream == null)
+        if (!_activePeers.TryGetValue(remoteProtocolPeerId, out var conn))
             throw new InvalidOperationException("Messaging session is not active.");
 
         MessageEntity entity = default!;
@@ -101,7 +95,7 @@ public sealed class MessagingService : IZcspService
                 ct: ct);
 
             entity = await messages.StoreOutgoingAsync(
-                _currentSessionId,
+                conn.sessionId,
                 localPeer.PeerId,
                 remotePeer.PeerId,
                 content);
@@ -110,33 +104,29 @@ public sealed class MessagingService : IZcspService
         MessageReceived?.Invoke(
             ChatMessageMapper.Outgoing(_peer.PeerId, remoteProtocolPeerId, entity));
 
-        var data = BinaryCodec.Serialize(
+            var data = BinaryCodec.Serialize(
             ZcspMessageType.SessionData,
-            _currentSessionId,
-            w =>
+            conn.sessionId,
+                    w =>
             {
                 BinaryCodec.WriteString(w, _peer.PeerId);
                 BinaryCodec.WriteString(w, remoteProtocolPeerId);
                 BinaryCodec.WriteString(w, content);
             });
 
-        await Framing.WriteAsync(_stream, data);
+        await Framing.WriteAsync(conn.stream, data);
     }
 
-    public void BindStream(NetworkStream stream)
-    {
-        _stream = stream;
-    }
 
-    public Task OnSessionStartedAsync(Guid sessionId, string remotePeerId)
+    public async Task OnSessionStartedAsync(Guid sessionId, string remotePeerId, NetworkStream stream)
     {
-        _currentSessionId = sessionId;
-        _remotePeerId = remotePeerId;
+        _activePeers[remotePeerId] = (sessionId, stream);
 
-        _activePeers[remotePeerId] = (sessionId, _stream!);
+        Console.WriteLine($"[Messaging] Session started with {remotePeerId}");
+
+        await DeliverPendingMessagesAsync(remotePeerId);
 
         SessionStarted?.Invoke(remotePeerId);
-        return Task.CompletedTask;
     }
 
     public async Task OnSessionDataAsync(Guid sessionId, BinaryReader reader)
@@ -157,7 +147,7 @@ public sealed class MessagingService : IZcspService
             var messages = sp.GetRequiredService<IMessageRepository>();
 
             var fromPeerEntity = await peers.GetOrCreateAsync(fromPeer);
-            var toPeerEntity = await peers.GetOrCreateAsync(toPeer); 
+            var toPeerEntity = await peers.GetOrCreateAsync(toPeer);
 
             entity = await messages.StoreIncomingAsync(
                 sessionId,
@@ -183,7 +173,20 @@ public sealed class MessagingService : IZcspService
 
         if (targetStream != null && forwardBytes != null)
         {
-            await Framing.WriteAsync(targetStream, forwardBytes);
+            try
+            {
+                await Framing.WriteAsync(targetStream, forwardBytes);
+
+                await UseScopeAsync(async sp =>
+                {
+                    var messages = sp.GetRequiredService<IMessageRepository>();
+                    await messages.MarkAsDeliveredAsync(entity.MessageId);
+                });
+            }
+            catch
+            {
+                // do NOT mark delivered
+            }
         }
 
         MessageReceived?.Invoke(
@@ -192,30 +195,56 @@ public sealed class MessagingService : IZcspService
 
     public Task OnSessionClosedAsync(Guid sessionId)
     {
-        var remote = _remotePeerId;
-
-        if (_remotePeerId != null)
+        foreach (var kvp in _activePeers)
         {
-            _activePeers.TryRemove(_remotePeerId, out _);
+            if (kvp.Value.sessionId == sessionId)
+            {
+                _activePeers.TryRemove(kvp.Key, out _);
+                SessionClosed?.Invoke(kvp.Key);
+                break;
+            }
         }
-
-        try
-        {
-            _stream?.Dispose();
-        }
-        catch { }
-
-        _stream = null;
-        _currentSessionId = Guid.Empty;
-        _remotePeerId = null;
-
-
-
-        if (remote != null)
-            SessionClosed?.Invoke(remote);
 
         return Task.CompletedTask;
     }
 
+    private async Task DeliverPendingMessagesAsync(string protocolPeerId)
+    {
+        if (!_activePeers.TryGetValue(protocolPeerId, out var target))
+            return;
 
+        await UseScopeAsync(async sp =>
+        {
+            var peers = sp.GetRequiredService<IPeerRepository>();
+            var messages = sp.GetRequiredService<IMessageRepository>();
+
+            var peerEntity = await peers.GetOrCreateAsync(protocolPeerId);
+
+            // You need a query like this in IMessageRepository
+            var pending = await messages.GetUndeliveredMessagesAsync(peerEntity.PeerId);
+
+            foreach (var msg in pending)
+            {
+                var fromPeer = await peers.GetByIdAsync(msg.FromPeerId);
+                var toPeer = await peers.GetByIdAsync(msg.ToPeerId);
+
+                if (fromPeer == null || toPeer == null)
+                    continue;
+
+                var forward = BinaryCodec.Serialize(
+                    ZcspMessageType.SessionData,
+                    target.sessionId,
+                    w =>
+                    {
+                        BinaryCodec.WriteString(w, fromPeer.ProtocolPeerId);
+                        BinaryCodec.WriteString(w, toPeer.ProtocolPeerId);
+                        BinaryCodec.WriteString(w, msg.Content);
+                    });
+
+                await Framing.WriteAsync(target.stream, forward);
+
+                await messages.MarkAsDeliveredAsync(msg.MessageId);
+            }
+        });
+    }
 }

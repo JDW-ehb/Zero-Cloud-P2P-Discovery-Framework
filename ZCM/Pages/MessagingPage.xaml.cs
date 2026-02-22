@@ -1,3 +1,4 @@
+using ZCL.API;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Services.Messaging;
@@ -16,9 +17,10 @@ public partial class MessagingPage : ContentPage
         InitializeComponent();
 
         _vm = new MessagingViewModel(
-            ServiceHelper.GetService<ZcspPeer>(),
-            ServiceHelper.GetService<MessagingService>(),
-            ServiceHelper.GetService<IChatQueryService>());
+           ServiceHelper.GetService<ZcspPeer>(),
+           ServiceHelper.GetService<MessagingService>(),
+           ServiceHelper.GetService<IChatQueryService>(),
+           ServiceHelper.GetService<DataStore>());
 
         _vm.MessagesChanged += ScrollToBottomIfAllowed;
         BindingContext = _vm;

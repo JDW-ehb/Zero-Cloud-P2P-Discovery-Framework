@@ -115,8 +115,7 @@ namespace ZCL.Protocol.ZCSP
 
                     await Framing.WriteAsync(stream, accept);
 
-                    service.BindStream(stream);
-                    await service.OnSessionStartedAsync(session.Id, fromPeer);
+                    await service.OnSessionStartedAsync(session.Id, fromPeer, stream);
 
                     await RunSessionAsync(stream, session.Id, service);
                 }
@@ -191,10 +190,7 @@ namespace ZCL.Protocol.ZCSP
                 if (type != ZcspMessageType.ServiceResponse || sessionId == null)
                     throw new InvalidOperationException("Invalid service response.");
 
-                service.BindStream(stream);
-
-                // From the service's point of view: session is with the final peer
-                await service.OnSessionStartedAsync(sessionId.Value, finalToPeerId);
+                await service.OnSessionStartedAsync(sessionId.Value, finalToPeerId, stream);
 
                 _ = Task.Run(async () =>
                 {

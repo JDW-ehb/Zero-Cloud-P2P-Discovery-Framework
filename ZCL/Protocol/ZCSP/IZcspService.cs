@@ -9,10 +9,7 @@ namespace ZCL.Protocol.ZCSP
     {
         string ServiceName { get; }
 
-        void BindStream(NetworkStream stream);
-
-        Task OnSessionStartedAsync(Guid sessionId, string remotePeerId);
-
+        Task OnSessionStartedAsync(Guid sessionId, string remotePeerId, NetworkStream stream);
         Task OnSessionDataAsync(Guid sessionId, BinaryReader reader);
 
         Task OnSessionClosedAsync(Guid sessionId);

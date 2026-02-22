@@ -6,11 +6,11 @@ public interface IMessageRepository
 {
     Task<MessageEntity> StoreOutgoingAsync(
         Guid sessionId,
-        Guid fromPeerId, 
-        Guid toPeerId, 
+        Guid fromPeerId,
+        Guid toPeerId,
         string content);
     Task<MessageEntity> StoreIncomingAsync(
-        Guid sessionId, 
+        Guid sessionId,
         Guid fromPeerId,
         Guid toPeerId,
         string content);
@@ -23,5 +23,6 @@ public interface IMessageRepository
     MessageStatus status);
 
     Task UpdateStatusAsync(Guid messageId, MessageStatus status);
-
+    Task<List<MessageEntity>> GetUndeliveredMessagesAsync(Guid toPeerId);
+    Task MarkAsDeliveredAsync(Guid messageId);
 }

@@ -84,4 +84,25 @@ public sealed class MessageRepository : IMessageRepository
         await _db.SaveChangesAsync();
     }
 
+    public async Task<List<MessageEntity>> GetUndeliveredMessagesAsync(Guid toPeerId)
+    {
+        return await _db.Messages
+            .Where(m => m.ToPeerId == toPeerId && !m.Delivered)
+            .OrderBy(m => m.Timestamp)
+            .ToListAsync();
+    }
+
+    public async Task MarkAsDeliveredAsync(Guid messageId)
+    {
+        var msg = await _db.Messages.FirstOrDefaultAsync(m => m.MessageId == messageId);
+        if (msg == null)
+            return;
+
+        msg.Delivered = true;
+        await _db.SaveChangesAsync();
+    }
+
+
+
+
 }

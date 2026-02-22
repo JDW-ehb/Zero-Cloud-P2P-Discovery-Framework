@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Collections.Concurrent;
+using System.IO;
 using System.Net.Http.Json;
 using System.Net.Sockets;
 using ZCL.Protocol.ZCSP;
@@ -12,8 +13,7 @@ public sealed class LLMChatService : IZcspService
     public string ServiceName => "LLMChat";
 
     private readonly HttpClient _http;
-    private NetworkStream? _stream;
-    private Guid _currentSessionId;
+    private readonly ConcurrentDictionary<Guid, NetworkStream> _sessions = new();
 
     public event Func<string, Task>? ResponseReceived;
 
@@ -26,14 +26,9 @@ public sealed class LLMChatService : IZcspService
         };
     }
 
-    public void BindStream(NetworkStream stream)
+    public Task OnSessionStartedAsync(Guid sessionId, string remotePeerId, NetworkStream stream)
     {
-        _stream = stream;
-    }
-
-    public Task OnSessionStartedAsync(Guid sessionId, string remotePeerId)
-    {
-        _currentSessionId = sessionId;
+        _sessions[sessionId] = stream;
         return Task.CompletedTask;
     }
 
@@ -70,8 +65,7 @@ public sealed class LLMChatService : IZcspService
 
     public Task OnSessionClosedAsync(Guid sessionId)
     {
-        _stream = null;
-        _currentSessionId = Guid.Empty;
+        _sessions.TryRemove(sessionId, out _);
         return Task.CompletedTask;
     }
 
@@ -79,21 +73,21 @@ public sealed class LLMChatService : IZcspService
     // CLIENT SIDE
     // =========================
 
-    public async Task SendQueryAsync(string prompt)
+    public async Task SendQueryAsync(Guid sessionId, string prompt)
     {
-        if (_stream == null)
+        if (!_sessions.TryGetValue(sessionId, out var stream))
             throw new InvalidOperationException("AI session not active.");
 
         var msg = BinaryCodec.Serialize(
             ZcspMessageType.SessionData,
-            _currentSessionId,
+            sessionId,
             w =>
             {
                 BinaryCodec.WriteString(w, "AiQuery");
                 BinaryCodec.WriteString(w, prompt);
             });
 
-        await Framing.WriteAsync(_stream, msg);
+        await Framing.WriteAsync(stream, msg);
     }
 
     // =========================
@@ -104,16 +98,13 @@ public sealed class LLMChatService : IZcspService
     {
         try
         {
-            if (_stream == null)
+            if (!_sessions.TryGetValue(sessionId, out var stream))
                 return;
 
             if (prompt.Length > 4000)
                 prompt = prompt[..4000];
 
             var reply = await GenerateLocalAsync(prompt);
-
-            if (_stream == null)
-                return;
 
             var responseMsg = BinaryCodec.Serialize(
                 ZcspMessageType.SessionData,
@@ -124,7 +115,7 @@ public sealed class LLMChatService : IZcspService
                     BinaryCodec.WriteString(w, reply);
                 });
 
-            await Framing.WriteAsync(_stream, responseMsg);
+            await Framing.WriteAsync(stream, responseMsg);
         }
         catch (TaskCanceledException)
         {

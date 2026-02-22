@@ -193,7 +193,7 @@ public sealed class PeerRepository : IPeerRepository
     /// Keeps newest local row, demotes extras. Also ensures the kept row matches the provided localProtocolPeerId.
     /// Note: if you move fully to GetOrCreateLocalProtocolPeerIdAsync, this method becomes mostly redundant.
     /// </summary>
-    
+
 
     public Task<Guid?> GetLocalPeerIdAsync(CancellationToken ct = default)
     {
@@ -214,5 +214,8 @@ public sealed class PeerRepository : IPeerRepository
                 p => p.ProtocolPeerId == protocolPeerId,
                 ct);
     }
-
+    public Task<PeerNode?> GetByIdAsync(Guid peerId)
+    {
+        return _db.PeerNodes.FirstOrDefaultAsync(p => p.PeerId == peerId);
+    }
 }

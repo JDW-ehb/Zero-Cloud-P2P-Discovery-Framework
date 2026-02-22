@@ -37,6 +37,8 @@ public class MessageEntity
 
     public MessageStatus Status { get; set; }
 
+    public bool Delivered { get; set; } = false;
+
     public PeerNode? FromPeer { get; set; }
     public PeerNode? ToPeer { get; set; }
 }
