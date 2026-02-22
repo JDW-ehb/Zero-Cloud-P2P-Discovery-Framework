@@ -61,7 +61,9 @@ public class ServiceDBContext : DbContext
             .HasIndex(s => new { s.PeerRefId, s.Name, s.Address, s.Port })
             .IsUnique();
 
-
+        modelBuilder.Entity<SharedFileEntity>()
+            .HasIndex(f => new { f.PeerRefId, f.RemoteFileId })
+            .IsUnique();
 
 
         base.OnModelCreating(modelBuilder);

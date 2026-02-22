@@ -7,7 +7,10 @@ namespace ZCL.Models;
 public sealed class SharedFileEntity
 {
     [Key]
-    public Guid FileId { get; set; }
+    public Guid Id { get; set; }
+
+    [Required]
+    public Guid RemoteFileId { get; set; }
 
     [Required]
     public Guid PeerRefId { get; set; }

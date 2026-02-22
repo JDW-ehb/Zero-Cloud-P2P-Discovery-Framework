@@ -17,10 +17,11 @@ public sealed class FileTransferEntity
     [Key]
     public Guid TransferId { get; set; }
 
+    // FK -> SharedFileEntity.Id (local PK)
     [Required]
-    public Guid FileId { get; set; }
+    public Guid SharedFileId { get; set; }
 
-    [ForeignKey(nameof(FileId))]
+    [ForeignKey(nameof(SharedFileId))]
     public SharedFileEntity File { get; set; } = null!;
 
     [Required]

@@ -17,7 +17,8 @@ public sealed class SharedDirectoryScanner
 
             yield return new SharedFileEntity
             {
-                FileId = Guid.NewGuid(),
+                Id = Guid.NewGuid(),               
+                RemoteFileId = Guid.NewGuid(),    
                 PeerRefId = localPeerId,
                 FileName = info.Name,
                 FileSize = info.Length,
