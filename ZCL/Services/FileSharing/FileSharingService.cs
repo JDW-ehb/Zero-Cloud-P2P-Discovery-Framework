@@ -411,7 +411,7 @@ public sealed class FileSharingService : IZcspService
             db.SharedFiles.Add(new SharedFileEntity
             {
                 Id = Guid.NewGuid(),
-                RemoteFileId = dto.FileId,          
+                RemoteFileId = dto.FileId,
                 PeerRefId = ctx.RemotePeerDbId,
                 FileName = dto.Name,
                 FileSize = dto.Size,
@@ -742,6 +742,7 @@ public sealed class FileSharingService : IZcspService
     private async Task HandleUploadStartAsync(Guid sessionId, BinaryReader reader)
     {
         using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
         var peersRepo = scope.ServiceProvider.GetRequiredService<IPeerRepository>();
 
         var ownerProtocolPeerId = BinaryCodec.ReadString(reader);
@@ -753,7 +754,24 @@ public sealed class FileSharingService : IZcspService
         var sharedSince = new DateTime(reader.ReadInt64(), DateTimeKind.Utc);
 
         var owner = await peersRepo.GetByProtocolPeerIdAsync(ownerProtocolPeerId);
-        if (owner == null) return;
+
+        if (owner == null)
+        {
+            owner = new PeerNode
+            {
+                PeerId = Guid.NewGuid(),
+                ProtocolPeerId = ownerProtocolPeerId,
+                HostName = ownerProtocolPeerId,
+                IpAddress = "server-mirrored",
+                FirstSeen = DateTime.UtcNow,
+                LastSeen = DateTime.UtcNow,
+                IsLocal = false,
+                OnlineStatus = PeerOnlineStatus.Online
+            };
+
+            db.PeerNodes.Add(owner);
+            await db.SaveChangesAsync();
+        }
 
         var mirrorDir = Path.Combine(AppContext.BaseDirectory, "mirror", ownerProtocolPeerId);
         Directory.CreateDirectory(mirrorDir);
@@ -840,7 +858,7 @@ public sealed class FileSharingService : IZcspService
 
     public void SetDownloadTarget(Guid fileId, string path)
     {
-        _downloadTargets[fileId] = path; 
+        _downloadTargets[fileId] = path;
     }
 
 
