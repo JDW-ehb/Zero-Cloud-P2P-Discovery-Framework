@@ -20,23 +20,18 @@ public sealed class LLMChatService : IZcspService
     private readonly ConcurrentDictionary<Guid, Stream> _sessions = new();
     private readonly IServiceScopeFactory _scopeFactory;
 
-    // Routing (server-first, fallback direct)
     private readonly ZcspPeer _peer;
     private readonly RoutingState _routingState;
     private readonly SemaphoreSlim _sessionLock = new(1, 1);
 
     private Guid? _serverSessionId;
 
-    // remoteProtocolPeerId -> sessionId
     private readonly ConcurrentDictionary<string, Guid> _directSessions = new();
 
-    // sessionId -> stream + remote peer id
     private readonly ConcurrentDictionary<Guid, SessionContext> _contexts = new();
 
-    // requestId -> requesterSessionId (ONLY when acting as server router)
     private readonly ConcurrentDictionary<Guid, Guid> _pendingRequests = new();
 
-    // sessionId -> conversationId (host-side persistence)
     private readonly ConcurrentDictionary<Guid, Guid> _sessionConversations = new();
 
     private sealed record SessionContext(Stream Stream, string RemoteProtocolPeerId);
@@ -60,16 +55,12 @@ public sealed class LLMChatService : IZcspService
         };
     }
 
-    // =====================================================
-    // IZcspService callbacks
-    // =====================================================
 
     public async Task OnSessionStartedAsync(Guid sessionId, string remotePeerId, Stream stream)
     {
         _sessions[sessionId] = stream;
         _contexts[sessionId] = new SessionContext(stream, remotePeerId);
 
-        // If we are connecting to the server (in ViaServer mode), remember this as server session
         if (_routingState.Mode == RoutingMode.ViaServer &&
             !string.IsNullOrWhiteSpace(_routingState.ServerProtocolPeerId) &&
             remotePeerId == _routingState.ServerProtocolPeerId)
@@ -78,13 +69,11 @@ public sealed class LLMChatService : IZcspService
         }
         else
         {
-            // otherwise it's a direct session to some peer
             _directSessions[remotePeerId] = sessionId;
         }
 
         SessionStarted?.Invoke(sessionId, remotePeerId);
 
-        // Only create local conversation if THIS node actually has Ollama
         if (await IsOllamaAvailableAsync())
             await TryCreateHostConversationAsync(sessionId, remotePeerId);
     }
@@ -96,11 +85,9 @@ public sealed class LLMChatService : IZcspService
 
         if (_contexts.TryRemove(sessionId, out var ctx))
         {
-            // remove direct session mapping (remotePeerId -> sessionId)
             _directSessions.TryRemove(ctx.RemoteProtocolPeerId, out _);
         }
 
-        // if server session closed, forget it
         if (_serverSessionId == sessionId)
             _serverSessionId = null;
 
@@ -113,7 +100,6 @@ public sealed class LLMChatService : IZcspService
 
         switch (action)
         {
-            // CLIENT -> HOST (direct) OR SERVER -> HOST (forwarded)
             case "AiQuery2":
                 {
                     var requestId = BinaryCodec.ReadGuid(reader);
@@ -122,7 +108,6 @@ public sealed class LLMChatService : IZcspService
                     break;
                 }
 
-            // CLIENT -> SERVER (route to host)
             case "AiQueryFor2":
                 {
                     var requestId = BinaryCodec.ReadGuid(reader);
@@ -136,13 +121,11 @@ public sealed class LLMChatService : IZcspService
                     break;
                 }
 
-            // HOST -> CLIENT (direct) OR HOST -> SERVER (route back)
             case "AiResponse2":
                 {
                     var requestId = BinaryCodec.ReadGuid(reader);
                     var response = BinaryCodec.ReadString(reader);
 
-                    // If we are the server router: forward response back to requester
                     if (_routingState.Role == NodeRole.Server &&
                         _pendingRequests.TryRemove(requestId, out var requesterSessionId) &&
                         _contexts.TryGetValue(requesterSessionId, out var requesterCtx))
@@ -161,7 +144,6 @@ public sealed class LLMChatService : IZcspService
                         return;
                     }
 
-                    // Normal receive on a client
                     if (ResponseReceived != null)
                     {
                         foreach (Func<string, Task> handler in ResponseReceived.GetInvocationList())
@@ -172,9 +154,6 @@ public sealed class LLMChatService : IZcspService
         }
     }
 
-    // =====================================================
-    // Server router path
-    // =====================================================
 
     private async Task HandleAiQueryForAsync(
         Guid requesterSessionId,
@@ -192,7 +171,6 @@ public sealed class LLMChatService : IZcspService
         if (targetPeer == null)
             return;
 
-        // Ensure server -> host session exists
         await EnsureSessionAsync(targetPeer);
 
         if (!_directSessions.TryGetValue(targetProtocolPeerId, out var serverToHostSessionId))
@@ -201,10 +179,8 @@ public sealed class LLMChatService : IZcspService
         if (!_contexts.TryGetValue(serverToHostSessionId, out var hostCtx))
             return;
 
-        // Remember where to route the response back to
         _pendingRequests[requestId] = requesterSessionId;
 
-        // Forward request to host as AiQuery2
         var forward = BinaryCodec.Serialize(
             ZcspMessageType.SessionData,
             serverToHostSessionId,
@@ -218,9 +194,6 @@ public sealed class LLMChatService : IZcspService
         await Framing.WriteAsync(hostCtx.Stream, forward);
     }
 
-    // =====================================================
-    // Host path (runs Ollama)
-    // =====================================================
 
     private async Task HandleAiQueryAsync(Guid sessionId, Guid requestId, string prompt)
     {
@@ -232,7 +205,6 @@ public sealed class LLMChatService : IZcspService
             if (prompt.Length > 4000)
                 prompt = prompt[..4000];
 
-            // Save prompt (host-side, if conversation exists)
             Guid? convoId = null;
             using (var scope = _scopeFactory.CreateScope())
             {
@@ -255,7 +227,6 @@ public sealed class LLMChatService : IZcspService
 
             var reply = await GenerateLocalAsync(prompt);
 
-            // Save response
             if (convoId.HasValue)
             {
                 using var scope2 = _scopeFactory.CreateScope();
@@ -273,7 +244,6 @@ public sealed class LLMChatService : IZcspService
                 await db2.SaveChangesAsync();
             }
 
-            // Reply (AiResponse2 + requestId)
             var responseMsg = BinaryCodec.Serialize(
                 ZcspMessageType.SessionData,
                 sessionId,
@@ -332,13 +302,9 @@ public sealed class LLMChatService : IZcspService
         }
         catch
         {
-            // persistence optional
         }
     }
 
-    // =====================================================
-    // Client API
-    // =====================================================
 
     public async Task SendQueryRoutedAsync(
         PeerNode? ownerPeer,
@@ -452,9 +418,6 @@ public sealed class LLMChatService : IZcspService
         }
     }
 
-    // =====================================================
-    // Local Ollama call
-    // =====================================================
 
     public async Task<string> GenerateLocalAsync(string prompt)
     {

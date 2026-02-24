@@ -100,23 +100,16 @@ public sealed class MessagingViewModel : BindableObject
         }
     }
 
-    // ===============================
-    // SESSION EVENTS
-    // ===============================
 
     private void OnSessionStarted(string remoteProtocolPeerId)
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
-            // If the started session matches the active conversation,
-            // enable sending immediately.
             if (_activeProtocolPeerId == remoteProtocolPeerId)
             {
                 SetSessionConnected();
             }
 
-            // If session started before user clicked conversation,
-            // we do nothing here — activation logic will re-check state.
         });
     }
 
@@ -152,9 +145,6 @@ public sealed class MessagingViewModel : BindableObject
         ((Command)SendMessageCommand).ChangeCanExecute();
     }
 
-    // ===============================
-    // ACTIVATION
-    // ===============================
 
     public async Task ActivateConversationFromUIAsync(ConversationItem convo)
     {
@@ -186,9 +176,6 @@ public sealed class MessagingViewModel : BindableObject
     }
 
 
-    // ===============================
-    // SENDING
-    // ===============================
 
     private async Task SendAsync()
     {
@@ -217,9 +204,6 @@ public sealed class MessagingViewModel : BindableObject
         }
     }
 
-    // ===============================
-    // INCOMING MESSAGES
-    // ===============================
 
     private void OnMessageReceived(ChatMessage msg)
     {
@@ -239,9 +223,6 @@ public sealed class MessagingViewModel : BindableObject
         });
     }
 
-    // ===============================
-    // DATA LOADING
-    // ===============================
 
     private async Task LoadConversationsAsync()
     {

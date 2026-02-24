@@ -16,7 +16,6 @@ public sealed class SharedFileItem
     {
         get
         {
-            // nicer than integer MB rounding
             double mb = Size / (1024.0 * 1024.0);
             return mb >= 1024
                 ? $"{mb / 1024.0:0.##} GB"

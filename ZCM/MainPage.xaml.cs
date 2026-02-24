@@ -8,24 +8,12 @@ using ZCM.Pages;
 
 namespace ZCM;
 
-/// <summary>
-/// Main discovery dashboard.
-/// Displays all discovered peers in the LAN and refreshes their status in real-time.
-/// </summary>
 public partial class MainPage : ContentPage
 {
     private readonly DataStore _store;
 
-    /// <summary>
-    /// UI collection bound to the CollectionView.
-    /// Contains lightweight wrapper objects (PeerNodeCard) instead of EF entities.
-    /// </summary>
     public ObservableCollection<PeerNodeCard> Peers { get; } = new();
 
-    /// <summary>
-    /// Periodic UI refresh timer.
-    /// Updates computed properties like "Status" and "LastSeen".
-    /// </summary>
     private IDispatcherTimer? _timer;
 
     public MainPage()
@@ -67,10 +55,6 @@ public partial class MainPage : ContentPage
         _timer = null;
     }
 
-    /// <summary>
-    /// Synchronizes UI collection with in-memory DataStore.
-    /// Adds new peers, updates existing ones, removes missing peers.
-    /// </summary>
     private void SyncPeers()
     {
         using var scope = ServiceHelper.Services.CreateScope();
@@ -95,9 +79,6 @@ public partial class MainPage : ContentPage
         }
     }
 
-    // ---------------------------
-    // Navigation Buttons
-    // ---------------------------
 
     private async void MessagingButton_Clicked(object sender, EventArgs e)
         => await Shell.Current.GoToAsync(nameof(MessagingPage));
@@ -123,9 +104,6 @@ public partial class MainPage : ContentPage
             });
     }
 
-    // =====================================================
-    // UI Wrapper Model (NOT EF Entity)
-    // =====================================================
 
     public sealed class PeerNodeCard : INotifyPropertyChanged
     {

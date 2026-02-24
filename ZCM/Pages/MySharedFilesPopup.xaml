@@ -8,14 +8,12 @@
 
     <Grid>
 
-        <!-- Backdrop -->
         <BoxView BackgroundColor="Transparent">
             <BoxView.GestureRecognizers>
                 <TapGestureRecognizer Tapped="OnBackdropTapped" />
             </BoxView.GestureRecognizers>
         </BoxView>
 
-        <!-- Modal card -->
         <Frame
             WidthRequest="640"
             Padding="20"
@@ -27,7 +25,6 @@
 
             <VerticalStackLayout Spacing="16">
 
-                <!-- Header -->
                 <Grid ColumnDefinitions="*,Auto">
                     <VerticalStackLayout Spacing="2">
                         <Label
@@ -52,7 +49,6 @@
                         HeightRequest="36" />
                 </Grid>
 
-                <!-- Drop zone -->
                 <Border
                     Stroke="#27AE60"
                     StrokeThickness="2"
@@ -60,7 +56,6 @@
                     BackgroundColor="#1A2E22"
                     Padding="24">
 
-                    <!-- THIS IS CRITICAL -->
                     <Border.GestureRecognizers>
                         <DropGestureRecognizer
                             AllowDrop="True"
@@ -88,7 +83,6 @@
                     </VerticalStackLayout>
                 </Border>
 
-                <!-- Local shared files -->
                 <Label
                     Text="Currently shared"
                     FontSize="14"

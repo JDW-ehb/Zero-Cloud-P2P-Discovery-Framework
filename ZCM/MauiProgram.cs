@@ -74,9 +74,6 @@ public static class MauiProgram
 
         builder.Services.AddSingleton<Config>();
 
-        // =========================
-        // Database
-        // =========================
         builder.Services.AddDbContext<ServiceDBContext>((sp, options) =>
         {
             var dbPath = Path.Combine(FileSystem.AppDataDirectory, Config.Instance.DBFileName);
@@ -92,7 +89,6 @@ public static class MauiProgram
                 cmd.CommandText = $"PRAGMA key = '{key}';";
                 cmd.ExecuteNonQuery();
 
-                // Optional validation (remove later if you want)
                 cmd.CommandText = "PRAGMA cipher_version;";
                 var version = cmd.ExecuteScalar();
 
@@ -106,27 +102,18 @@ public static class MauiProgram
         builder.Services.AddSingleton<DataStore>();
 
 
-        // =========================
-        // Repositories
-        // =========================
         builder.Services.AddScoped<IPeerRepository, PeerRepository>();
         builder.Services.AddScoped<IMessageRepository, MessageRepository>();
         builder.Services.AddScoped<IChatQueryService, ChatQueryService>();
         builder.Services.AddScoped<ILLMChatRepository, LLMChatRepository>();
 
 
-        // =========================
-        // ZCSP core
-        // =========================
         builder.Services.AddSingleton<SessionRegistry>();
         builder.Services.AddSingleton<LLMChatService>();
         builder.Services.AddSingleton<RoutingState>();
         builder.Services.AddSingleton<ZcspPeer>();
 
 
-        // =========================
-        // Services
-        // =========================
         builder.Services.AddSingleton<MessagingService>();
 
         builder.Services.AddSingleton<Func<string>>(_ =>
@@ -150,9 +137,6 @@ public static class MauiProgram
         var routingState = app.Services.GetRequiredService<RoutingState>();
         routingState.Initialize(NodeRole.Peer);
 
-        // =========================
-        // Ensure DB exists
-        // =========================
         using (var scope = app.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
@@ -161,9 +145,6 @@ public static class MauiProgram
 
         ServiceHelper.Initialize(app.Services);
 
-        // =========================
-        // Init DataStore from DB
-        // =========================
         using (var scope = app.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
@@ -173,9 +154,6 @@ public static class MauiProgram
                 store.Peers.Add(dbPeer);
         }
 
-        // =========================
-        // Start discovery (ZCDP)
-        // =========================
         using (var scope = app.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
@@ -202,9 +180,6 @@ public static class MauiProgram
                 cts.Token);
         }
 
-        // =========================
-        // Start ZCSP hosting
-        // =========================
         var zcspPeer = app.Services.GetRequiredService<ZcspPeer>();
 
         Task.Run(() =>
@@ -224,9 +199,6 @@ public static class MauiProgram
 
 
 
-        // =========================
-        // Force service construction
-        // =========================
         _ = app.Services.GetRequiredService<MessagingService>();
         _ = app.Services.GetRequiredService<FileSharingService>();
         _ = app.Services.GetRequiredService<LLMChatService>();

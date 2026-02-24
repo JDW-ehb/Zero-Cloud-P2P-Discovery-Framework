@@ -82,9 +82,6 @@ public sealed class FileSharingService : IZcspService
         Debug.WriteLine("[FileSharing] Service constructed");
     }
 
-    // =========================
-    // SESSION MANAGEMENT
-    // =========================
 
     private async Task<(Guid sessionId, SessionContext ctx, bool viaServer)>
     GetRouteAsync(PeerNode? directPeer, CancellationToken ct)
@@ -97,7 +94,6 @@ public sealed class FileSharingService : IZcspService
                 return (sid, serverCtx, true);
             }
 
-            // Try to establish server session
             if (await EnsureServerSessionAsync(ct) &&
                 _serverSessionId is Guid sid2 &&
                 _sessions.TryGetValue(sid2, out var serverCtx2))
@@ -131,8 +127,6 @@ public sealed class FileSharingService : IZcspService
     string? targetProtocolPeerId = null,
     CancellationToken ct = default)
     {
-        // If targetProtocolPeerId is set: you want "list files for that peer"
-        // If null: you want "list files of whoever you're connected to"
 
         var (sid, ctx, viaServer) = await GetRouteAsync(ownerPeer, ct);
 
@@ -180,9 +174,6 @@ public sealed class FileSharingService : IZcspService
         }
     }
 
-    // =========================
-    // IZcspService
-    // =========================
 
     public async Task OnSessionStartedAsync(Guid sessionId, string remotePeerId, Stream stream)
     {
@@ -329,14 +320,6 @@ public sealed class FileSharingService : IZcspService
             Debug.WriteLine($"[FileSharing] Direct reconnect failed: {ex.Message}");
         }
     }
-    // =========================
-    // REQUESTS (CLIENT SIDE)
-    // =========================
-
-
-    // =========================
-    // HANDLERS (SERVER SIDE)
-    // =========================
 
     private async Task HandleListFilesAsync(Guid sessionId)
     {
@@ -678,7 +661,7 @@ public sealed class FileSharingService : IZcspService
     CancellationToken ct = default)
     {
         if (!await EnsureServerSessionAsync(ct))
-            return; // fallback: server not available
+            return;
 
         if (_serverSessionId is not Guid sid)
             return;
@@ -686,7 +669,6 @@ public sealed class FileSharingService : IZcspService
         if (!_sessions.TryGetValue(sid, out var ctx))
             return;
 
-        // 1) UploadStart
         var start = BinaryCodec.Serialize(
             ZcspMessageType.SessionData,
             sid,
@@ -704,7 +686,6 @@ public sealed class FileSharingService : IZcspService
 
         await Framing.WriteAsync(ctx.Stream, start);
 
-        // 2) chunks
         using var fs = File.OpenRead(localPath);
         var buffer = new byte[ChunkSize];
         int read;
@@ -725,7 +706,6 @@ public sealed class FileSharingService : IZcspService
             await Framing.WriteAsync(ctx.Stream, chunk);
         }
 
-        // 3) complete
         var done = BinaryCodec.Serialize(
             ZcspMessageType.SessionData,
             sid,
@@ -819,9 +799,6 @@ public sealed class FileSharingService : IZcspService
 
         up.Stream.Dispose();
 
-        // Optional: verify checksum here by hashing up.TargetPath
-
-        // Upsert SharedFiles row ON SERVER, but owned by the ORIGINAL peer (Jonas)
         var existing = await db.SharedFiles.FirstOrDefaultAsync(f =>
             f.RemoteFileId == fileId && f.PeerRefId == up.OwnerPeerDbId);
 
@@ -873,7 +850,6 @@ public sealed class FileSharingService : IZcspService
     string ownerProtocolPeerId,
     CancellationToken ct = default)
     {
-        // Try server first (RequestFileFor), else direct (RequestFile)
         var (sid, ctx, viaServer) = await GetRouteAsync(ownerPeer, ct);
 
         var msg = BinaryCodec.Serialize(

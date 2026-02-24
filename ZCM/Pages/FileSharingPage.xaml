@@ -7,21 +7,16 @@
 
     <Grid ColumnDefinitions="320,*">
 
-        <!-- ===================== -->
-        <!-- LEFT: peers + local entry + download progress -->
-        <!-- ===================== -->
         <Grid Grid.Column="0"
               RowDefinitions="Auto,Auto,*,Auto"
               Padding="16"
               BackgroundColor="#151515">
 
-            <!-- Title -->
             <Label Text="File Sharing"
                    FontSize="22"
                    FontAttributes="Bold"
                    TextColor="White" />
 
-            <!-- Local sharing -->
             <Frame Grid.Row="1"
                    Margin="0,16"
                    Padding="16"
@@ -49,7 +44,6 @@
                 </VerticalStackLayout>
             </Frame>
 
-            <!-- Peer list -->
             <CollectionView Grid.Row="2"
                             ItemsSource="{Binding Peers}"
                             SelectionMode="Single"
@@ -75,7 +69,6 @@
                 </CollectionView.ItemTemplate>
             </CollectionView>
 
-            <!-- Download Progress -->
             <Frame Grid.Row="3"
                    Margin="0,16,0,0"
                    Padding="14"
@@ -101,9 +94,6 @@
 
         </Grid>
 
-        <!-- ===================== -->
-        <!-- RIGHT: remote files -->
-        <!-- ===================== -->
         <Grid Grid.Column="1"
               RowDefinitions="Auto,Auto,*"
               Padding="20">
@@ -113,7 +103,6 @@
                    FontAttributes="Bold"
                    TextColor="White"/>
 
-            <!-- Column Header -->
             <Grid Grid.Row="1"
                   Margin="20,16,0,6"
                   ColumnDefinitions="700,50,70,60,120"
@@ -150,7 +139,6 @@
                        VerticalOptions="Center"/>
             </Grid>
 
-            <!-- Files List -->
             <CollectionView Grid.Row="2"
                             ItemsSource="{Binding Files}"
                             SelectionMode="None">

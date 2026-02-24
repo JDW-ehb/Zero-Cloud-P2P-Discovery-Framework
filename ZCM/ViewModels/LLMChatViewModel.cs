@@ -1,6 +1,4 @@
-﻿// File: ZCM/ViewModels/LLMChatViewModel.cs
-
-using Microsoft.Maui.Dispatching;
+﻿using Microsoft.Maui.Dispatching;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using ZCL.Models;
@@ -18,8 +16,6 @@ public sealed class LLMMessage
 
 public sealed class LLMChatViewModel : BindableObject
 {
-    // ZCSP hosting port is global in your current architecture.
-    // Keep it in ONE place so you won't accidentally use discovery/service DB ports.
     private const int ZcspPort = 5555;
 
     private readonly ZcspPeer _peer;
@@ -118,7 +114,6 @@ public sealed class LLMChatViewModel : BindableObject
         _llm = llm;
         _repo = repo;
 
-        // When LLMChatService establishes the session, we capture the sessionId.
         _llm.SessionStarted += (sessionId, remotePeerId) =>
         {
             if (_activePeer?.ProtocolPeerId == remotePeerId)
@@ -199,11 +194,6 @@ public sealed class LLMChatViewModel : BindableObject
         SelectedConversation = convo;
     }
 
-    // =====================================================
-    // FIXES APPLIED HERE:
-    // 1) Always use ZcspPort (5555) instead of service.Port
-    // 2) Add an explicit connect timeout to avoid "stuck" UX
-    // =====================================================
     private async Task ActivateConversationAsync(LLMConversationItem convo)
     {
         await _lock.WaitAsync();
@@ -229,10 +219,9 @@ public sealed class LLMChatViewModel : BindableObject
 
             _activeSessionId = Guid.Empty;
 
-            // ---- Connect with timeout (prevents hanging when peer/server is down) ----
             var connectTask = _peer.ConnectAsync(
                 service.Address,
-                ZcspPort,                // IMPORTANT: global ZCSP hosting port
+                ZcspPort,                
                 peer.ProtocolPeerId,
                 _llm);
 
@@ -242,10 +231,8 @@ public sealed class LLMChatViewModel : BindableObject
             if (finished != connectTask)
                 throw new TimeoutException("Connect timed out.");
 
-            // propagate any socket exceptions
             await connectTask;
 
-            // ---- Ensure session initialized ----
             if (_activeSessionId == Guid.Empty)
             {
                 Status = "Connected, but session not initialized.";
@@ -260,7 +247,6 @@ public sealed class LLMChatViewModel : BindableObject
         }
         catch (Exception ex)
         {
-            // Keep it simple for UX; you can log ex.ToString() if desired
             Status = ex is TimeoutException ? "Offline (timeout)" : "Offline";
             IsConnected = false;
         }

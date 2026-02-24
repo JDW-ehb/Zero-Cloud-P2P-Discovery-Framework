@@ -17,7 +17,6 @@ public sealed class FileTransferEntity
     [Key]
     public Guid TransferId { get; set; }
 
-    // FK -> SharedFileEntity.Id (local PK)
     [Required]
     public Guid SharedFileId { get; set; }
 

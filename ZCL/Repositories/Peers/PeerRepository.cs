@@ -7,8 +7,7 @@ public sealed class PeerRepository : IPeerRepository
 {
     private readonly ServiceDBContext _db;
 
-    // Per-instance lock (not static). Helps if the same repo instance is hit concurrently.
-    // If everything stays on one thread per DbContext (ideal), you could remove this entirely.
+
     private readonly SemaphoreSlim _lock = new(1, 1);
 
     public PeerRepository(ServiceDBContext db)
@@ -16,12 +15,6 @@ public sealed class PeerRepository : IPeerRepository
         _db = db;
     }
 
-    /// <summary>
-    /// DB-backed persistent local ProtocolPeerId.
-    /// - If no local peer exists: create one with a new GUID ProtocolPeerId and return it.
-    /// - If local peer exists: ensure ProtocolPeerId is a GUID string (fix legacy values like "Luca's desktop"),
-    ///   update hostname/ip, self-heal duplicates, and return the kept ProtocolPeerId.
-    /// </summary>
     public async Task<string> GetOrCreateLocalProtocolPeerIdAsync(
     string hostName,
     string ipAddress = "127.0.0.1",
@@ -80,10 +73,9 @@ public sealed class PeerRepository : IPeerRepository
             catch (DbUpdateException ex) when
             (
                 ex.InnerException is Microsoft.Data.Sqlite.SqliteException sqlite &&
-                sqlite.SqliteErrorCode == 19 // UNIQUE constraint violation
+                sqlite.SqliteErrorCode == 19
             )
             {
-                // Another DbContext won the race → re-read and return the real local peer
                 var existing = await _db.PeerNodes
                     .Where(p => p.IsLocal)
                     .OrderByDescending(p => p.LastSeen)
@@ -152,11 +144,10 @@ public sealed class PeerRepository : IPeerRepository
             catch (DbUpdateException ex) when
             (
                 ex.InnerException is Microsoft.Data.Sqlite.SqliteException sqlite &&
-                sqlite.SqliteErrorCode == 19 // UNIQUE constraint violation
+                sqlite.SqliteErrorCode == 19 
             )
             {
-                // Another concurrent context inserted the same ProtocolPeerId.
-                // Re-read the existing row and return that instead.
+
                 peer = await _db.PeerNodes
                     .FirstAsync(p => p.ProtocolPeerId == protocolPeerId, ct);
             }
@@ -177,8 +168,6 @@ public sealed class PeerRepository : IPeerRepository
 
     public Task<PeerNode> GetLocalPeerAsync(CancellationToken ct = default)
     {
-        // If duplicates exist, this throws. That’s OK if DB constraint exists.
-        // Otherwise use OrderByDescending(...).FirstAsync(...) similar to GetLocalPeerIdAsync.
         return _db.PeerNodes.SingleAsync(p => p.IsLocal, ct);
     }
 
@@ -188,12 +177,6 @@ public sealed class PeerRepository : IPeerRepository
             .OrderByDescending(p => p.LastSeen)
             .ToListAsync(ct);
     }
-
-    /// <summary>
-    /// Keeps newest local row, demotes extras. Also ensures the kept row matches the provided localProtocolPeerId.
-    /// Note: if you move fully to GetOrCreateLocalProtocolPeerIdAsync, this method becomes mostly redundant.
-    /// </summary>
-
 
     public Task<Guid?> GetLocalPeerIdAsync(CancellationToken ct = default)
     {

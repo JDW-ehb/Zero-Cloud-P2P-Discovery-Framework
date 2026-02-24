@@ -33,7 +33,7 @@ public partial class FileSharingPage : ContentPage
 
             Dispatcher.Dispatch(async () =>
             {
-                await Task.Delay(50); // allow UI to render
+                await Task.Delay(50); 
                 await _vm.ActivatePeerAsync(_preselectPeer);
             });
         }
@@ -53,7 +53,6 @@ public partial class FileSharingPage : ContentPage
 
     private async void OnMySharedFilesClicked(object sender, EventArgs e)
     {
-        // Modal popup is fine here — it’s a true popup
         await Navigation.PushModalAsync(
             new MySharedFilesPopup(_vm));
     }

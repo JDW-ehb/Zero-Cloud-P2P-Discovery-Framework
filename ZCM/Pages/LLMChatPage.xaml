@@ -8,20 +8,15 @@
     <Grid ColumnDefinitions="320,*"
           RowDefinitions="*">
 
-        <!-- ===================================== -->
-        <!-- LEFT PANEL -->
-        <!-- ===================================== -->
         <Grid Grid.Column="0"
               RowDefinitions="Auto,Auto,Auto,Auto,*"
               Padding="16"
               BackgroundColor="#151515">
 
-            <!-- Title -->
             <Label Text="AI Conversations"
                    FontSize="20"
                    TextColor="White" />
 
-            <!-- Peer Dropdown -->
             <Picker Grid.Row="1"
                     Margin="0,12,0,0"
                     ItemsSource="{Binding AvailablePeers}"
@@ -31,14 +26,12 @@
                     BackgroundColor="#2A2A2A"
                     TextColor="White" />
 
-            <!-- Model Name -->
             <Label Grid.Row="2"
                    Text="{Binding SelectedPeer.ModelDisplay}"
                    TextColor="#999999"
                    FontSize="12"
                    Margin="4,4,0,0" />
 
-            <!-- New Conversation -->
             <Button Grid.Row="3"
                     Text="+ New Conversation"
                     Command="{Binding StartNewConversationCommand}"
@@ -47,7 +40,6 @@
                     TextColor="White"
                     CornerRadius="12" />
 
-            <!-- Conversations -->
             <CollectionView Grid.Row="4"
                             Margin="0,14,0,0"
                             Padding="0,6"
@@ -60,7 +52,6 @@
                         <VerticalStackLayout Padding="0"
                              Spacing="0">
 
-                            <!-- Top Spacer -->
                             <BoxView HeightRequest="12"
                      Opacity="0" />
 
@@ -91,21 +82,16 @@
 
         </Grid>
 
-        <!-- ===================================== -->
-        <!-- RIGHT PANEL -->
-        <!-- ===================================== -->
         <Grid Grid.Column="1"
               RowDefinitions="Auto,*,Auto"
               Padding="20"
               BackgroundColor="#1e1e1e">
 
-            <!-- Status -->
             <Label Text="{Binding Status}"
                    TextColor="#CCCCCC"
                    FontSize="12"
                    Margin="0,0,0,10" />
 
-            <!-- Messages -->
             <CollectionView Grid.Row="1"
                             ItemsSource="{Binding Messages}"
                             SelectionMode="None">
@@ -133,7 +119,6 @@
 
             </CollectionView>
 
-            <!-- Input -->
             <Grid Grid.Row="2"
                   ColumnDefinitions="*,Auto"
                   Margin="0,16,0,0">

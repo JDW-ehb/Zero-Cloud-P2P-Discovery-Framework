@@ -50,10 +50,6 @@ namespace ZCL.Protocol.ZCSP
             return _peerId!;
         }
 
-        // =====================
-        // HOSTING (SERVER SIDE)
-        // =====================
-
         public async Task StartHostingAsync(int port, Func<string, IZcspService?> serviceResolver)
         {
             var localId = await EnsurePeerIdAsync();
@@ -92,33 +88,30 @@ namespace ZCL.Protocol.ZCSP
 
                     try
                     {
-                        // Raw TCP stream
                         raw = client.GetStream();
 
-                        // TLS upgrade
                         var cert = LoadLocalTlsIdentity();
                         tls = WrapServerTls(raw);
 
                         var serverOptions = new SslServerAuthenticationOptions
                         {
                             ServerCertificate = cert,
-                            ClientCertificateRequired = true, // mTLS ON
+                            ClientCertificateRequired = true, 
                             EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
                             CertificateRevocationCheckMode = X509RevocationMode.NoCheck
                         };
 
                         await tls.AuthenticateAsServerAsync(serverOptions);
 
-                        // From here on: protocol runs over TLS
                         var frame = await Framing.ReadAsync(tls);
                         if (frame == null) return;
 
                         var (type, _, _, reader) = BinaryCodec.Deserialize(frame);
                         if (type != ZcspMessageType.ServiceRequest) return;
 
-                        reader.ReadBytes(16); // requestId
+                        reader.ReadBytes(16); 
                         var fromPeer = BinaryCodec.ReadString(reader);
-                        var toPeer = BinaryCodec.ReadString(reader); // keep it
+                        var toPeer = BinaryCodec.ReadString(reader); 
                         var serviceName = BinaryCodec.ReadString(reader);
 
                         var service = serviceResolver(serviceName);
@@ -142,7 +135,6 @@ namespace ZCL.Protocol.ZCSP
 
                         await Framing.WriteAsync(tls, accept);
 
-                        // stream is TLS stream now
                         await service.OnSessionStartedAsync(session.Id, fromPeer, tls);
 
                         await RunSessionAsync(tls, session.Id, service);
@@ -161,18 +153,12 @@ namespace ZCL.Protocol.ZCSP
             }
         }
 
-        // =====================
-        // CONNECTING (CLIENT SIDE)
-        // =====================
-
         public async Task ConnectAsync(string host, int port, string remotePeerId, IZcspService service)
         {
             var localId = await EnsurePeerIdAsync();
 
-            // Final destination in the protocol (who we WANT to reach)
             var finalToPeerId = remotePeerId;
 
-            // Actual TCP target (who we CONNECT to)
             var connectHost = host;
             var connectPort = port;
 
@@ -187,7 +173,6 @@ namespace ZCL.Protocol.ZCSP
                 connectHost = _routing.ServerHost!;
                 connectPort = _routing.ServerPort;
 
-                // IMPORTANT: DO NOT change finalToPeerId.
             }
 
             var client = new TcpClient();
@@ -199,9 +184,8 @@ namespace ZCL.Protocol.ZCSP
 
                 var raw = client.GetStream();
 
-                // TLS upgrade (client)
                 var myCert = LoadLocalTlsIdentity();
-                var tls = WrapClientTls(raw); // DO NOT use 'using' here; background task needs it
+                var tls = WrapClientTls(raw); 
 
                 var clientOptions = new SslClientAuthenticationOptions
                 {
@@ -213,7 +197,6 @@ namespace ZCL.Protocol.ZCSP
 
                 await tls.AuthenticateAsClientAsync(clientOptions);
 
-                // Now do protocol over TLS
                 var request = BinaryCodec.Serialize(
                     ZcspMessageType.ServiceRequest,
                     null,
@@ -235,7 +218,6 @@ namespace ZCL.Protocol.ZCSP
                 if (type != ZcspMessageType.ServiceResponse || sessionId == null)
                     throw new InvalidOperationException("Invalid service response.");
 
-                // IMPORTANT: stream is TLS stream now (SslStream : Stream)
                 await service.OnSessionStartedAsync(sessionId.Value, finalToPeerId, tls);
 
                 _ = Task.Run(async () =>
@@ -294,22 +276,18 @@ namespace ZCL.Protocol.ZCSP
             }
             finally
             {
-                // ALWAYS notify service, even if an exception happened mid-read or mid-handle
                 try { await service.OnSessionClosedAsync(sessionId); }
-                catch { /* don't let close cascade-crash */ }
+                catch {  }
 
                 _sessions.Remove(sessionId);
             }
         }
 
-        // =====================
-        // TLS HELPERS
-        // =====================
+
 
         private X509Certificate2 LoadLocalTlsIdentity()
         {
-            // Stable directory for persistence.
-            // Later you can pass in DB directory / app-specific folder.
+
             var baseDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
             return TlsCertificateProvider.LoadOrCreateIdentityCertificate(
@@ -319,7 +297,6 @@ namespace ZCL.Protocol.ZCSP
 
         private SslStream WrapServerTls(Stream raw)
         {
-            // Server validates client cert here
             return new SslStream(
                 raw,
                 leaveInnerStreamOpen: false,
@@ -337,7 +314,6 @@ namespace ZCL.Protocol.ZCSP
 
         private SslStream WrapClientTls(Stream raw)
         {
-            // Client validates server cert here
             return new SslStream(
                 raw,
                 leaveInnerStreamOpen: false,

@@ -21,7 +21,6 @@ namespace ZCL.Security
                 return false;
             }
 
-            // 1) Try extension (preferred)
             var ext = cert.Extensions
                 .OfType<X509Extension>()
                 .FirstOrDefault(e => e.Oid?.Value == TlsConstants.MembershipTagOid);
@@ -60,15 +59,12 @@ namespace ZCL.Security
                 return true;
             }
 
-            // 2) Fallback: allow CN to contain the tag (optional)
-            // If you never plan to store tag in CN, you can delete this branch.
             var subject = cert.Subject ?? "";
             var marker = "ZC-TAG:";
             var idx = subject.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
             if (idx >= 0)
             {
                 var candidate = subject.Substring(idx).Trim();
-                // candidate like "ZC-TAG:v1:ABCDEF..."
                 if (!candidate.StartsWith("ZC-TAG:v1:", StringComparison.OrdinalIgnoreCase))
                 {
                     reason = "CN tag present but wrong version.";
@@ -106,14 +102,12 @@ namespace ZCL.Security
 
         private static bool ConstantTimeEqualsHex(string aHex, string bHex)
         {
-            // Normalize
             aHex = aHex.Trim();
             bHex = bHex.Trim();
 
             if (aHex.Length != bHex.Length)
                 return false;
 
-            // Constant-time compare on chars (good enough for this use)
             int diff = 0;
             for (int i = 0; i < aHex.Length; i++)
             {

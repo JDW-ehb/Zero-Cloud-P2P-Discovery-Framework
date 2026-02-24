@@ -133,10 +133,6 @@ namespace ZCL.API
             return "127.0.0.1";
         }
 
-
-
-        // NOTE(luca): ZCL is a class library, so we can't use Microsoft.Maui.Storage.Preferences here.
-        // Persist a stable peer guid using a small file stored next to the DB file.
         private static Guid GetOrCreateLocalPeerGuid(Func<ServiceDBContext> dbFactory)
         {
             using var db = dbFactory();
@@ -373,8 +369,6 @@ namespace ZCL.API
             ulong messageId = 0;
             ushort protocolVersion = Config.Instance.ZCDPProtocolVersion;
 
-            // NOTE(luca): If you hardcode the same Guid on multiple machines, they will appear as ONE peer.
-            // Persist a unique id per installation so each PC is discoverable.
             var peerGuid = GetOrCreateLocalPeerGuid(dbFactory);
 
             Socket? sender;

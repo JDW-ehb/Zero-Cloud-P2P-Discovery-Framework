@@ -282,7 +282,6 @@ public sealed class MessagingService : IZcspService
 
             var peerEntity = await peers.GetOrCreateAsync(protocolPeerId);
 
-            // You need a query like this in IMessageRepository
             var pending = await messages.GetUndeliveredMessagesAsync(peerEntity.PeerId);
 
             foreach (var msg in pending)

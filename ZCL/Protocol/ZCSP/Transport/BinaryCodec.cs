@@ -6,9 +6,7 @@ namespace ZCL.Protocol.ZCSP.Protocol
 {
     internal static class BinaryCodec
     {
-        // =====================
-        // Primitive helpers
-        // =====================
+
 
         public static void WriteString(BinaryWriter writer, string value)
         {
@@ -24,9 +22,6 @@ namespace ZCL.Protocol.ZCSP.Protocol
             return Encoding.UTF8.GetString(bytes);
         }
 
-        // =====================
-        // Message serialization
-        // =====================
 
         public static byte[] Serialize(
             ZcspMessageType type,

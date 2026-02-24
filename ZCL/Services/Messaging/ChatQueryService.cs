@@ -14,7 +14,6 @@ public sealed class ChatQueryService : IChatQueryService
 
     public Task<List<PeerNode>> GetPeersAsync()
     {
-        // NOTE: DbSet is PeerNodes (not Peers) after replacing Peer -> PeerNode
         return _db.PeerNodes
             .OrderByDescending(p => p.LastSeen)
             .ToListAsync();

@@ -25,9 +25,6 @@ internal static class Program
 
     public static async Task Main(string[] args)
     {
-        // ============================================
-        // 1️⃣ Initialize SQLCipher provider EARLY
-        // ============================================
         SqlCipherInitializer.Initialize();
 
         var host = Host.CreateDefaultBuilder(args)
@@ -39,9 +36,6 @@ internal static class Program
             })
             .ConfigureServices(services =>
             {
-                // ============================================
-                // Config
-                // ============================================
                 Config.Instance.PeerName =
                     $"{Environment.MachineName} (ZCSM)";
 
@@ -54,9 +48,6 @@ internal static class Program
 
                 var dbKeyHex = GetOrCreateDatabaseKey(appDir);
 
-                // ============================================
-                // Database (SQLCipher enabled)
-                // ============================================
                 services.AddDbContext<ServiceDBContext>(options =>
                 {
                     var connection = new SqliteConnection(
@@ -66,11 +57,9 @@ internal static class Program
 
                     using (var cmd = connection.CreateCommand())
                     {
-                        // IMPORTANT: key is hex
                         cmd.CommandText = $"PRAGMA key = \"x'{dbKeyHex}'\";";
                         cmd.ExecuteNonQuery();
 
-                        // sanity check
                         cmd.CommandText = "PRAGMA cipher_version;";
                         var version = cmd.ExecuteScalar();
 
@@ -84,25 +73,16 @@ internal static class Program
 
                 services.AddSingleton<DataStore>();
 
-                // ============================================
-                // Repositories
-                // ============================================
                 services.AddScoped<IPeerRepository, PeerRepository>();
                 services.AddScoped<IMessageRepository, MessageRepository>();
                 services.AddScoped<IChatQueryService, ChatQueryService>();
                 services.AddScoped<ILLMChatRepository, LLMChatRepository>();
 
-                // ============================================
-                // ZCSP core
-                // ============================================
                 services.AddSingleton<SessionRegistry>();
                 services.AddSingleton<ZcspPeer>();
                 services.AddSingleton<LLMChatService>();
                 services.AddSingleton<RoutingState>();
 
-                // ============================================
-                // Hosted services
-                // ============================================
                 services.AddSingleton<MessagingService>();
 
                 services.AddSingleton<Func<string>>(_ =>
@@ -119,17 +99,11 @@ internal static class Program
             })
             .Build();
 
-        // ============================================
-        // Routing state
-        // ============================================
         var routingState =
             host.Services.GetRequiredService<RoutingState>();
 
         routingState.Initialize(NodeRole.Server);
 
-        // ============================================
-        // Ensure DB exists
-        // ============================================
         using (var scope = host.Services.CreateScope())
         {
             var db = scope.ServiceProvider
@@ -138,9 +112,6 @@ internal static class Program
             db.Database.EnsureCreated();
         }
 
-        // ============================================
-        // Graceful shutdown support
-        // ============================================
         var cts = new CancellationTokenSource();
 
         Console.CancelKeyPress += (_, e) =>
@@ -157,9 +128,6 @@ internal static class Program
         var store =
             host.Services.GetRequiredService<DataStore>();
 
-        // ============================================
-        // ZCDP Discovery (SERVER role)
-        // ============================================
         _ = Task.Run(() =>
             ZCDPPeer.StartAndRunAsync(
                 multicastAddress,
@@ -175,9 +143,6 @@ internal static class Program
                 localRole: NodeRole.Server,
                 ct: cts.Token));
 
-        // ============================================
-        // ZCSP Hosting (TLS handled inside ZcspPeer)
-        // ============================================
         var zcspPeer =
             host.Services.GetRequiredService<ZcspPeer>();
 
@@ -204,17 +169,12 @@ internal static class Program
         await host.RunAsync(cts.Token);
     }
 
-    // ============================================
-    // SQLCipher Key Management (Server side)
-    // ============================================
     private static string GetOrCreateDatabaseKey(string baseDir)
     {
-        // 1️⃣ environment variable wins
         var envKey = Environment.GetEnvironmentVariable(DbKeyEnvVar);
         if (!string.IsNullOrWhiteSpace(envKey))
             return envKey.Trim();
 
-        // 2️⃣ fallback: persistent key file
         var keyFile = Path.Combine(baseDir, "zc_sqlcipher_key_v1.txt");
 
         if (File.Exists(keyFile))

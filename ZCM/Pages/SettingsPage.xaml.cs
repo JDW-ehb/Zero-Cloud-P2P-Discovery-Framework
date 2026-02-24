@@ -11,7 +11,6 @@ public partial class SettingsPage : ContentPage
     {
         InitializeComponent();
 
-        // Use DI instead of static access
         _config = ServiceHelper.GetService<Config>();
 
         BindingContext = _config;
@@ -19,9 +18,6 @@ public partial class SettingsPage : ContentPage
 
     private async void SaveButton_Clicked(object sender, EventArgs e)
     {
-        // If Config supports persistence, call it here.
-        // Example:
-        // _config.Save();
 
         Debug.WriteLine("Settings saved.");
 

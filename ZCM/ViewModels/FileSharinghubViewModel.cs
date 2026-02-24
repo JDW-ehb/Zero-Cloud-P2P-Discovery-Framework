@@ -78,7 +78,6 @@ public sealed class FileSharingHubViewModel : BindableObject
             if (_activePeer == null)
                 return;
 
-            // Try server-mode first (if connected to server)
             await _service.RequestFileRoutedAsync(
                 file.FileId,
                 ownerPeer: _activePeer,
@@ -102,9 +101,6 @@ public sealed class FileSharingHubViewModel : BindableObject
         _ = LoadLocalSharedFilesAsync();
     }
 
-    // =========================
-    // PEER SELECTION
-    // =========================
 
     public async Task ActivatePeerAsync(PeerNode peer)
     {
@@ -113,10 +109,8 @@ public sealed class FileSharingHubViewModel : BindableObject
 
         _activePeer = peer;
 
-        // Always load last known files
         await LoadRemoteFilesFromDbAsync(peer);
 
-        // If offline → stop here
         if (peer.OnlineStatus != PeerOnlineStatus.Online)
             return;
 
@@ -142,9 +136,6 @@ public sealed class FileSharingHubViewModel : BindableObject
 
 
 
-    // =========================
-    // PEERS
-    // =========================
 
     private async Task LoadPeersAsync()
     {
@@ -158,9 +149,6 @@ public sealed class FileSharingHubViewModel : BindableObject
         });
     }
 
-    // =========================
-    // REMOTE FILES
-    // =========================
 
     private void OnFilesReceived(IReadOnlyList<SharedFileDto> files)
     {
@@ -182,9 +170,6 @@ public sealed class FileSharingHubViewModel : BindableObject
         });
     }
 
-    // =========================
-    // LOCAL SHARED FILES
-    // =========================
 
     private async Task LoadLocalSharedFilesAsync()
     {
@@ -224,9 +209,6 @@ public sealed class FileSharingHubViewModel : BindableObject
         await LoadLocalSharedFilesAsync();
     }
 
-    // =========================
-    // ADD FILES (PICKER)
-    // =========================
 
     private async Task PickAndShareFilesAsync()
     {
@@ -263,7 +245,6 @@ public sealed class FileSharingHubViewModel : BindableObject
 
             db.SharedFiles.Add(entity);
 
-            // Mirror immediately (non-blocking server fallback safe)
             await _service.MirrorUploadToServerAsync(
                 fileId: entity.RemoteFileId,
                 ownerProtocolPeerId: localProtocolId,
@@ -279,9 +260,6 @@ public sealed class FileSharingHubViewModel : BindableObject
         await LoadLocalSharedFilesAsync();
     }
 
-    // =========================
-    // ADD FILES (DRAG & DROP)
-    // =========================
 
     public async Task AddFilesFromPathsAsync(IEnumerable<string> paths)
     {
