@@ -29,8 +29,7 @@ public class ServiceDBContextFactory : IDesignTimeDbContextFactory<ServiceDBCont
 {
     public ServiceDBContext CreateDbContext(string[] args)
     {
-        SQLitePCL.Batteries_V2.Init();
-        SQLitePCL.raw.SetProvider(new SQLitePCL.SQLite3Provider_e_sqlcipher());
+        SqlCipherInitializer.Initialize();
 
         var dbPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -61,8 +60,7 @@ public static class MauiProgram
     public static MauiApp CreateMauiApp()
     {
         var builder = MauiApp.CreateBuilder();
-        SQLitePCL.Batteries_V2.Init();
-        SQLitePCL.raw.SetProvider(new SQLitePCL.SQLite3Provider_e_sqlcipher());
+        SqlCipherInitializer.Initialize();
 
         builder
             .UseMauiApp<App>()
@@ -72,7 +70,7 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
             });
 
-        var dbKey = DbKeyProvider.GetKey();
+        var dbKey = "dev-only-key";
 
         builder.Services.AddSingleton<Config>();
 
@@ -94,9 +92,12 @@ public static class MauiProgram
                 cmd.CommandText = $"PRAGMA key = '{key}';";
                 cmd.ExecuteNonQuery();
 
-                // Optional but recommended:
-                cmd.CommandText = "PRAGMA cipher_memory_security = ON;";
-                cmd.ExecuteNonQuery();
+                // Optional validation (remove later if you want)
+                cmd.CommandText = "PRAGMA cipher_version;";
+                var version = cmd.ExecuteScalar();
+
+                if (version == null)
+                    throw new InvalidOperationException("SQLCipher not active.");
             }
 
             options.UseSqlite(connection, b => b.MigrationsAssembly("ZCM"));
@@ -190,7 +191,11 @@ public static class MauiProgram
             _ = ZCDPPeer.StartAndRunAsync(
                 multicastAddress,
                 port,
-                dbPath,
+                () =>
+                {
+                    var scope = app.Services.CreateScope();
+                    return scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+                },
                 store,
                 routingState,
                 NodeRole.Peer,
