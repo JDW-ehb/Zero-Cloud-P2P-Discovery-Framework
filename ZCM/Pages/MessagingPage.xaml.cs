@@ -6,13 +6,16 @@ using ZCM.ViewModels;
 
 namespace ZCM.Pages;
 
+[QueryProperty(nameof(Peer), "Peer")]
 public partial class MessagingPage : ContentPage
 {
     private bool _userNearBottom = true;
 
     private readonly MessagingViewModel _vm;
 
-    public MessagingPage(PeerNode? openWithPeer = null)
+    private PeerNode? _openWithPeer;
+
+    public MessagingPage()
     {
         InitializeComponent();
 
@@ -24,17 +27,27 @@ public partial class MessagingPage : ContentPage
 
         _vm.MessagesChanged += ScrollToBottomIfAllowed;
         BindingContext = _vm;
+    }
 
-        if (openWithPeer != null)
+    public PeerNode? Peer
+    {
+        get => _openWithPeer;
+        set
         {
+            _openWithPeer = value;
+
+            if (_openWithPeer == null)
+                return;
+
             Dispatcher.Dispatch(async () =>
             {
                 var convo = _vm.Conversations
-                    .FirstOrDefault(c => c.Peer.ProtocolPeerId == openWithPeer.ProtocolPeerId);
+                    .FirstOrDefault(c =>
+                        c.Peer.ProtocolPeerId == _openWithPeer.ProtocolPeerId);
 
                 if (convo == null)
                 {
-                    convo = new ConversationItem(openWithPeer);
+                    convo = new ConversationItem(_openWithPeer);
                     _vm.Conversations.Insert(0, convo);
                 }
 
@@ -96,6 +109,7 @@ public partial class MessagingPage : ContentPage
         var remaining = vm.Messages.Count - (e.LastVisibleItemIndex + 1);
         _userNearBottom = remaining <= 2;
     }
+
     private void OnMessageEntryCompleted(object sender, EventArgs e)
     {
         if (BindingContext is MessagingViewModel vm &&
@@ -104,5 +118,4 @@ public partial class MessagingPage : ContentPage
             vm.SendMessageCommand.Execute(null);
         }
     }
-
 }

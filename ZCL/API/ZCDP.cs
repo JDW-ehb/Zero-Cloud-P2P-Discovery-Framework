@@ -133,22 +133,13 @@ namespace ZCL.API
             return "127.0.0.1";
         }
 
-        public static ServiceDBContext CreateDBContext(string dbPath)
-        {
-            var optionsBuilder = new DbContextOptionsBuilder<ServiceDBContext>();
-            optionsBuilder.UseSqlite($"Data Source={dbPath}");
 
-            var db = new ServiceDBContext(optionsBuilder.Options);
-            db.Database.EnsureCreated();
-
-            return db;
-        }
 
         // NOTE(luca): ZCL is a class library, so we can't use Microsoft.Maui.Storage.Preferences here.
         // Persist a stable peer guid using a small file stored next to the DB file.
-        private static Guid GetOrCreateLocalPeerGuid(string dbPath)
+        private static Guid GetOrCreateLocalPeerGuid(Func<ServiceDBContext> dbFactory)
         {
-            using var db = CreateDBContext(dbPath);
+            using var db = dbFactory();
             var peersRepo = new PeerRepository(db);
 
             var localProtocolPeerId = peersRepo
@@ -279,7 +270,7 @@ namespace ZCL.API
             byte[] bytes,
             IPEndPoint remoteEndPoint,
             Guid localPeerGuid,
-            string dbPath,
+            Func<ServiceDBContext> dbFactory,
             DataStore store,
             CancellationToken ct = default)
         {
@@ -304,7 +295,7 @@ namespace ZCL.API
             var name = reader.ReadString();
             var servicesCount = reader.ReadUInt64();
 
-            using var db = CreateDBContext(dbPath);
+            using var db = dbFactory();
 
             var remoteProtocolPeerId = header.PeerGuid.ToString();
             var now = DateTime.UtcNow;
@@ -373,7 +364,7 @@ namespace ZCL.API
         public static async Task StartAndRunAsync(
             IPAddress multicastAddress,
             int port,
-            string dbPath,
+            Func<ServiceDBContext> dbFactory,
             DataStore store,
             RoutingState routingState,
             NodeRole localRole,
@@ -384,7 +375,7 @@ namespace ZCL.API
 
             // NOTE(luca): If you hardcode the same Guid on multiple machines, they will appear as ONE peer.
             // Persist a unique id per installation so each PC is discoverable.
-            var peerGuid = GetOrCreateLocalPeerGuid(dbPath);
+            var peerGuid = GetOrCreateLocalPeerGuid(dbFactory);
 
             Socket? sender;
             try
@@ -424,7 +415,7 @@ namespace ZCL.API
                     if (listener != null && listener.Available > 0)
                     {
                         var bytes = listener.Receive(ref remoteEndPoint);
-                        await HandleIncomingAsync(bytes, remoteEndPoint, peerGuid, dbPath, store, ct);
+                        await HandleIncomingAsync(bytes, remoteEndPoint, peerGuid, dbFactory, store, ct);
                     }
 
                     if (sender != null)
@@ -482,14 +473,14 @@ namespace ZCL.API
         public static void StartAndRun(
             IPAddress multicastAddress,
             int port,
-            string dbPath,
+            Func<ServiceDBContext> dbFactory,
             DataStore store,
             RoutingState routingState,
             NodeRole localRole)
             => StartAndRunAsync(
                 multicastAddress,
                 port,
-                dbPath,
+                dbFactory,
                 store,
                 routingState,
                 localRole)

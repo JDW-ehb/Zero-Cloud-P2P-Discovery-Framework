@@ -3,9 +3,12 @@ using ZCL.Models;
 
 namespace ZCM.Pages;
 
+[QueryProperty(nameof(Peer), "Peer")]
 public partial class FileSharingPage : ContentPage
 {
     private readonly FileSharingHubViewModel _vm;
+
+    private PeerNode? _preselectPeer;
 
     public FileSharingPage()
     {
@@ -18,17 +21,22 @@ public partial class FileSharingPage : ContentPage
         BindingContext = _vm;
     }
 
-    // ?? New constructor to support redirection from PeerDetailsPage
-    public FileSharingPage(PeerNode peer) : this()
+    public PeerNode? Peer
     {
-        _ = ActivatePeerOnLoad(peer);
-    }
+        get => _preselectPeer;
+        set
+        {
+            _preselectPeer = value;
 
-    private async Task ActivatePeerOnLoad(PeerNode peer)
-    {
-        // Let UI render first
-        await Task.Delay(50);
-        await _vm.ActivatePeerAsync(peer);
+            if (_preselectPeer == null)
+                return;
+
+            Dispatcher.Dispatch(async () =>
+            {
+                await Task.Delay(50); // allow UI to render
+                await _vm.ActivatePeerAsync(_preselectPeer);
+            });
+        }
     }
 
     private async void OnPeerSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -45,6 +53,7 @@ public partial class FileSharingPage : ContentPage
 
     private async void OnMySharedFilesClicked(object sender, EventArgs e)
     {
+        // Modal popup is fine here — it’s a true popup
         await Navigation.PushModalAsync(
             new MySharedFilesPopup(_vm));
     }

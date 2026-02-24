@@ -14,6 +14,7 @@ using ZCL.Repositories.Peers;
 using ZCL.Services.FileSharing;
 using ZCL.Services.LLM;
 using ZCL.Services.Messaging;
+using ZCM.Security;
 
 namespace ZCM;
 
@@ -28,12 +29,28 @@ public class ServiceDBContextFactory : IDesignTimeDbContextFactory<ServiceDBCont
 {
     public ServiceDBContext CreateDbContext(string[] args)
     {
-        var optionsBuilder = new DbContextOptionsBuilder<ServiceDBContext>();
+        SqlCipherInitializer.Initialize();
+
         var dbPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             Config.Instance.DBFileName);
 
-        optionsBuilder.UseSqlite($"Data Source={dbPath}");
+        var key = Environment.GetEnvironmentVariable("ZC_DB_KEY") ?? "dev-only-key";
+
+        var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+            $"Data Source={dbPath};Mode=ReadWriteCreate;Cache=Shared;");
+
+        connection.Open();
+
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = $"PRAGMA key = '{key}';";
+            cmd.ExecuteNonQuery();
+        }
+
+        var optionsBuilder = new DbContextOptionsBuilder<ServiceDBContext>();
+        optionsBuilder.UseSqlite(connection);
+
         return new ServiceDBContext(optionsBuilder.Options);
     }
 }
@@ -43,6 +60,7 @@ public static class MauiProgram
     public static MauiApp CreateMauiApp()
     {
         var builder = MauiApp.CreateBuilder();
+        SqlCipherInitializer.Initialize();
 
         builder
             .UseMauiApp<App>()
@@ -52,15 +70,37 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
             });
 
+        var dbKey = "dev-only-key";
+
         builder.Services.AddSingleton<Config>();
 
         // =========================
         // Database
         // =========================
-        builder.Services.AddDbContext<ServiceDBContext>(options =>
+        builder.Services.AddDbContext<ServiceDBContext>((sp, options) =>
         {
             var dbPath = Path.Combine(FileSystem.AppDataDirectory, Config.Instance.DBFileName);
-            options.UseSqlite($"Data Source={dbPath}", b => b.MigrationsAssembly("ZCM"));
+            var key = dbKey;
+
+            var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+                $"Data Source={dbPath};Mode=ReadWriteCreate;Cache=Shared;");
+
+            connection.Open();
+
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = $"PRAGMA key = '{key}';";
+                cmd.ExecuteNonQuery();
+
+                // Optional validation (remove later if you want)
+                cmd.CommandText = "PRAGMA cipher_version;";
+                var version = cmd.ExecuteScalar();
+
+                if (version == null)
+                    throw new InvalidOperationException("SQLCipher not active.");
+            }
+
+            options.UseSqlite(connection, b => b.MigrationsAssembly("ZCM"));
         });
 
         builder.Services.AddSingleton<DataStore>();
@@ -151,7 +191,11 @@ public static class MauiProgram
             _ = ZCDPPeer.StartAndRunAsync(
                 multicastAddress,
                 port,
-                dbPath,
+                () =>
+                {
+                    var scope = app.Services.CreateScope();
+                    return scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+                },
                 store,
                 routingState,
                 NodeRole.Peer,

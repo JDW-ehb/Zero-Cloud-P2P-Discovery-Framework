@@ -7,11 +7,14 @@ using ZCM.ViewModels;
 
 namespace ZCM.Pages;
 
+[QueryProperty(nameof(Peer), "Peer")]
 public partial class LLMChatPage : ContentPage
 {
     private readonly LLMChatViewModel _vm;
 
-    public LLMChatPage(PeerNode? preselectPeer = null)
+    private PeerNode? _preselectPeer;
+
+    public LLMChatPage()
     {
         InitializeComponent();
 
@@ -24,46 +27,47 @@ public partial class LLMChatPage : ContentPage
 
         Loaded += async (_, __) =>
         {
-            await InitializeAsync(preselectPeer);
+            await _vm.InitializeAsync();
+
+            if (_preselectPeer != null)
+                await ActivatePeerAsync(_preselectPeer);
         };
     }
 
-    private async Task InitializeAsync(PeerNode? preselectPeer)
+    public PeerNode? Peer
     {
-        await _vm.InitializeAsync();
+        get => _preselectPeer;
+        set => _preselectPeer = value;
+    }
 
-        if (preselectPeer == null)
-            return;
-
-        // Try to find existing conversation for this peer
+    private async Task ActivatePeerAsync(PeerNode preselectPeer)
+    {
         var convo = _vm.Conversations
             .FirstOrDefault(c => c.PeerId == preselectPeer.PeerId);
 
         if (convo != null)
         {
             _vm.SelectedConversation = convo;
+            return;
         }
-        else
+
+        using var scope = ServiceHelper.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+
+        var service = await db.Services
+            .FirstOrDefaultAsync(s =>
+                s.PeerRefId == preselectPeer.PeerId &&
+                s.Name == "LLMChat");
+
+        var model = service?.Metadata ?? "unknown";
+
+        _vm.Conversations.Add(new LLMConversationItem
         {
-            using var scope = ServiceHelper.Services.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+            PeerId = preselectPeer.PeerId,
+            PeerName = preselectPeer.HostName,
+            Model = model
+        });
 
-            var service = await db.Services
-                .FirstOrDefaultAsync(s =>
-                    s.PeerRefId == preselectPeer.PeerId &&
-                    s.Name == "LLMChat");
-
-            var model = service?.Metadata ?? "unknown";
-
-            _vm.Conversations.Add(new LLMConversationItem
-            {
-                PeerId = preselectPeer.PeerId,
-                PeerName = preselectPeer.HostName,
-                Model = model
-            });
-
-
-            _vm.SelectedConversation = _vm.Conversations.Last();
-        }
+        _vm.SelectedConversation = _vm.Conversations.Last();
     }
 }
