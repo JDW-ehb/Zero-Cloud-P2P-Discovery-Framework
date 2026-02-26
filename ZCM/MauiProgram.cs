@@ -145,6 +145,13 @@ public static class MauiProgram
 
         var app = builder.Build();
 
+        var secretProvider = app.Services.GetRequiredService<ISharedSecretProvider>();
+
+        Task.Run(async () =>
+        {
+            await secretProvider.GetSecretAsync();
+        }).GetAwaiter().GetResult();
+
         var routingState = app.Services.GetRequiredService<RoutingState>();
         routingState.Initialize(NodeRole.Peer);
 

@@ -6,6 +6,8 @@ namespace ZCL.Security;
 
 public interface ISharedSecretProvider
 {
-    void SetSecret(string secret);
-    string? GetSecret();
+    Task<string?> GetSecretAsync();
+    Task SetSecretAsync(string secret);
+
+    string? GetCachedSecret();
 }

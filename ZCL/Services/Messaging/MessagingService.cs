@@ -315,4 +315,6 @@ public sealed class MessagingService : IZcspService
             }
         });
     }
+    public bool HasActiveSession(string remoteProtocolPeerId)
+    => _activePeers.ContainsKey(remoteProtocolPeerId);
 }

@@ -99,7 +99,7 @@ namespace ZCL.Protocol.ZCSP
                 {
                     using var raw = client.GetStream();
 
-                    var cert = LoadLocalTlsIdentity();
+                    var cert = await LoadLocalTlsIdentityAsync();
                     using var tls = WrapServerTls(raw);
 
                     var serverOptions = new SslServerAuthenticationOptions
@@ -179,7 +179,7 @@ namespace ZCL.Protocol.ZCSP
                 connectPort = _routing.ServerPort;
             }
 
-            using var client = new TcpClient();
+            var client = new TcpClient();
 
             Console.WriteLine($"[CONNECT] Mode={_routing.Mode} Connecting to {connectHost}:{connectPort}");
 
@@ -188,10 +188,10 @@ namespace ZCL.Protocol.ZCSP
                 TimeSpan.FromSeconds(5),
                 "TCP connect");
 
-            using var raw = client.GetStream();
-            using var tls = WrapClientTls(raw);
+            var raw = client.GetStream();
+            var tls = WrapClientTls(raw);
 
-            var myCert = LoadLocalTlsIdentity();
+            var myCert = await LoadLocalTlsIdentityAsync();
 
             var clientOptions = new SslClientAuthenticationOptions
             {
@@ -245,6 +245,12 @@ namespace ZCL.Protocol.ZCSP
                     Console.WriteLine("[SESSION LOOP CRASH]");
                     Console.WriteLine(ex);
                 }
+                finally
+                {
+                    try { tls.Dispose(); } catch { }
+                    try { raw.Dispose(); } catch { }
+                    try { client.Dispose(); } catch { }
+                }
             });
         }
 
@@ -294,12 +300,13 @@ namespace ZCL.Protocol.ZCSP
         // TLS
         // =========================================================
 
-        private X509Certificate2 LoadLocalTlsIdentity()
+        private async Task<X509Certificate2> LoadLocalTlsIdentityAsync()
         {
-            var secret = _secretProvider.GetSecret();
+            var secret = await _secretProvider.GetSecretAsync();
+
             if (string.IsNullOrWhiteSpace(secret))
                 throw new InvalidOperationException("TLS secret not set. Pairing required.");
-            Console.WriteLine($"[TLS] Secret = '{secret}'");
+
             var baseDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
             return TlsCertificateProvider.LoadOrCreateIdentityCertificate(
@@ -313,9 +320,15 @@ namespace ZCL.Protocol.ZCSP
             return new SslStream(raw, false,
                 (sender, cert, chain, errors) =>
                 {
-                    var secret = _secretProvider.GetSecret();
-                    var x509 = cert as X509Certificate2 ?? (cert != null ? new X509Certificate2(cert) : null);
-                    return TlsValidation.IsTrustedPeerCertificate(x509, secret!, out _);
+                    var secret = _secretProvider.GetCachedSecret();
+
+                    if (string.IsNullOrWhiteSpace(secret))
+                        return false;
+
+                    var x509 = cert as X509Certificate2 ??
+                               (cert != null ? new X509Certificate2(cert) : null);
+
+                    return TlsValidation.IsTrustedPeerCertificate(x509, secret, out _);
                 });
         }
 
@@ -324,9 +337,15 @@ namespace ZCL.Protocol.ZCSP
             return new SslStream(raw, false,
                 (sender, cert, chain, errors) =>
                 {
-                    var secret = _secretProvider.GetSecret();
-                    var x509 = cert as X509Certificate2 ?? (cert != null ? new X509Certificate2(cert) : null);
-                    return TlsValidation.IsTrustedPeerCertificate(x509, secret!, out _);
+                    var secret = _secretProvider.GetCachedSecret();
+
+                    if (string.IsNullOrWhiteSpace(secret))
+                        return false;
+
+                    var x509 = cert as X509Certificate2 ??
+                               (cert != null ? new X509Certificate2(cert) : null);
+
+                    return TlsValidation.IsTrustedPeerCertificate(x509, secret, out _);
                 });
         }
 

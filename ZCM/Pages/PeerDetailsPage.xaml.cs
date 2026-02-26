@@ -83,7 +83,7 @@ public partial class PeerDetailsPage : ContentPage
 
         var secretStore = ServiceHelper.GetService<ISharedSecretProvider>();
 
-        secretStore.SetSecret(secret);
+        secretStore.SetSecretAsync(secret);
 
         await DisplayAlert("Success", "Secret stored. Restart connection to apply.", "OK");
     }

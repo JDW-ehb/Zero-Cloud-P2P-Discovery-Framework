@@ -42,7 +42,6 @@
 
             <CollectionView Grid.Row="4"
                             Margin="0,14,0,0"
-                            Padding="0,6"
                             ItemsSource="{Binding Conversations}"
                             SelectionMode="Single"
                             SelectedItem="{Binding SelectedConversation}">
