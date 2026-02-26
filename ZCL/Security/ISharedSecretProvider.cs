@@ -6,5 +6,6 @@ namespace ZCL.Security;
 
 public interface ISharedSecretProvider
 {
+    void SetSecret(string secret);
     string? GetSecret();
 }
