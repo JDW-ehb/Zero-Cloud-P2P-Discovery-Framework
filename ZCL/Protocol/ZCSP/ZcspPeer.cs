@@ -298,6 +298,7 @@ namespace ZCL.Protocol.ZCSP
                 throw new InvalidOperationException("TLS secret not set. Pairing required.");
 
             var baseDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            Console.WriteLine($"[TLS] Secret loaded: '{secret}'");
 
             return TlsCertificateProvider.LoadOrCreateIdentityCertificate(
                 baseDirectory: baseDir,
@@ -318,6 +319,7 @@ namespace ZCL.Protocol.ZCSP
                         Console.WriteLine("[TLS] Rejecting: no secret configured.");
                         return false;
                     }
+                    Console.WriteLine($"[TLS] Validating with secret: '{secret}'");
 
                     var x509 = cert as X509Certificate2 ?? (cert != null ? new X509Certificate2(cert) : null);
 

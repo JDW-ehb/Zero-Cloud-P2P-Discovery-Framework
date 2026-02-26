@@ -6,10 +6,28 @@ namespace ZCM.Security;
 public sealed class SharedSecretStore : ISharedSecretProvider
 {
     private const string KeyName = "zc_tls_secret_v1";
+    private string? _cachedSecret;
+
+    public SharedSecretStore()
+    {
+        // Load once at startup
+        _cachedSecret = SecureStorage.Default
+            .GetAsync(KeyName)
+            .ConfigureAwait(false)
+            .GetAwaiter()
+            .GetResult();
+    }
 
     public string? GetSecret()
-        => SecureStorage.Default.GetAsync(KeyName).GetAwaiter().GetResult();
+    {
+        return _cachedSecret;
+    }
 
     public void SetSecret(string secret)
-        => SecureStorage.Default.SetAsync(KeyName, secret).GetAwaiter().GetResult();
+    {
+        _cachedSecret = secret;
+
+        _ = SecureStorage.Default
+            .SetAsync(KeyName, secret); // fire-and-forget async
+    }
 }

@@ -1,5 +1,5 @@
 using ZCL.Models;
-
+using ZCL.Security;
 namespace ZCM.Pages;
 
 [QueryProperty(nameof(Card), "Card")]
@@ -81,7 +81,8 @@ public partial class PeerDetailsPage : ContentPage
             return;
         }
 
-        var secretStore = ServiceHelper.GetService<ZCM.Security.SharedSecretStore>();
+        var secretStore = ServiceHelper.GetService<ISharedSecretProvider>();
+
         secretStore.SetSecret(secret);
 
         await DisplayAlert("Success", "Secret stored. Restart connection to apply.", "OK");
