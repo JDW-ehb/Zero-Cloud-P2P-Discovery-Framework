@@ -21,14 +21,16 @@ namespace ZCL.Protocol.ZCSP
         private readonly SessionRegistry _sessions;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly RoutingState _routing;
+        private readonly ZCL.Security.TrustGroupCache _trustGroups;
 
         public string PeerId => _peerId ?? "(unresolved)";
 
-        public ZcspPeer(IServiceScopeFactory scopeFactory, SessionRegistry sessions, RoutingState routing)
+        public ZcspPeer(IServiceScopeFactory scopeFactory, SessionRegistry sessions, RoutingState routing, ZCL.Security.TrustGroupCache trustGroups)
         {
             _scopeFactory = scopeFactory;
             _sessions = sessions;
             _routing = routing;
+            _trustGroups = trustGroups;
         }
 
         private async Task<string> EnsurePeerIdAsync(CancellationToken ct = default)
@@ -289,10 +291,38 @@ namespace ZCL.Protocol.ZCSP
         {
             var baseDir = ZCL.API.Config.Instance.AppDataDirectory;
 
-            return TlsCertificateProvider.LoadOrCreateIdentityCertificate(
-                baseDirectory: baseDir,
-                peerLabel: Config.Instance.PeerName);
+            var activeHex = _trustGroups.ActiveSecretHex;
+
+            if (string.IsNullOrWhiteSpace(activeHex) || activeHex.Length < 64)
+                throw new InvalidOperationException("No active trust group secret configured.");
+
+            var secretBytes = Convert.FromHexString(activeHex);
+
+            var pfxPath = Path.Combine(baseDir, ZCL.Security.TlsConstants.DefaultPfxFileName);
+
+            if (File.Exists(pfxPath))
+            {
+                var loaded = new X509Certificate2(
+                    pfxPath,
+                    ZCL.Security.TlsConstants.DefaultPfxPassword,
+                    X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
+
+                if (loaded.HasPrivateKey)
+                    return loaded;
+            }
+
+            var created = ZCL.Security.TlsCertificateProvider.CreateSelfSignedIdentityCertificate(
+                peerLabel: ZCL.API.Config.Instance.PeerName,
+                membershipSecretBytes: secretBytes);
+
+            ZCL.Security.TlsCertificateProvider.SavePfx(
+                created,
+                pfxPath,
+                ZCL.Security.TlsConstants.DefaultPfxPassword);
+
+            return created;
         }
+
 
         private SslStream WrapServerTls(Stream raw)
         {
@@ -314,7 +344,12 @@ namespace ZCL.Protocol.ZCSP
 
                     Console.WriteLine($"Subject: {x509.Subject}");
 
-                    var ok = TlsValidation.IsTrustedPeerCertificate(x509, out var reason);
+                    var secrets = _trustGroups.EnabledSecretsHex
+                        .Where(h => !string.IsNullOrWhiteSpace(h) && h.Length >= 64)
+                        .Select(Convert.FromHexString)
+                        .ToList();
+
+                    var ok = ZCL.Security.TlsValidation.IsTrustedPeerCertificate(x509, secrets, out var reason);
 
                     Console.WriteLine($"Trusted: {ok}");
                     Console.WriteLine($"Reason: {reason}");
@@ -344,12 +379,16 @@ namespace ZCL.Protocol.ZCSP
 
                     Console.WriteLine($"Subject: {x509.Subject}");
 
-                    // Optional: dump extensions so you can confirm the membership OID exists
                     Console.WriteLine("Extensions:");
                     foreach (var ext in x509.Extensions)
                         Console.WriteLine($"  OID={ext.Oid?.Value}");
 
-                    var ok = TlsValidation.IsTrustedPeerCertificate(x509, out var reason);
+                    var secrets = _trustGroups.EnabledSecretsHex
+                        .Where(h => !string.IsNullOrWhiteSpace(h) && h.Length >= 64)
+                        .Select(Convert.FromHexString)
+                        .ToList();
+
+                    var ok = ZCL.Security.TlsValidation.IsTrustedPeerCertificate(x509, secrets, out var reason);
 
                     Console.WriteLine($"Trusted: {ok}");
                     Console.WriteLine($"Reason: {reason}");

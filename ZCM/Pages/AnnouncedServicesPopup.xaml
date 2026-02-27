@@ -1,0 +1,59 @@
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="ZCM.Pages.AnnouncedServicesPopup"
+    BackgroundColor="#80000000">
+
+    <Grid>
+        <BoxView BackgroundColor="Transparent">
+            <BoxView.GestureRecognizers>
+                <TapGestureRecognizer Tapped="OnBackdropTapped"/>
+            </BoxView.GestureRecognizers>
+        </BoxView>
+
+        <Frame WidthRequest="520"
+               Padding="20"
+               CornerRadius="18"
+               BackgroundColor="#1F1F1F"
+               HasShadow="False"
+               HorizontalOptions="Center"
+               VerticalOptions="Center">
+
+            <VerticalStackLayout Spacing="14">
+
+                <Grid ColumnDefinitions="*,Auto">
+                    <Label Text="Announced Services"
+                           FontSize="20"
+                           FontAttributes="Bold"
+                           TextColor="White"/>
+                    <Button Grid.Column="1"
+                            Text="✕"
+                            Clicked="OnCloseClicked"
+                            BackgroundColor="#2A2A2A"
+                            TextColor="White"
+                            CornerRadius="10"
+                            WidthRequest="36"
+                            HeightRequest="36"/>
+                </Grid>
+
+                <Label Text="Only enabled services are announced in discovery."
+                       TextColor="#AAAAAA"
+                       FontSize="12" />
+
+                <CollectionView ItemsSource="{Binding AnnouncedServices}" SelectionMode="None">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+                            <Frame Padding="12" CornerRadius="12" BackgroundColor="#2A2A2A" HasShadow="False">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                    <Label Text="{Binding ServiceName}" TextColor="White" VerticalOptions="Center"/>
+                                    <Switch Grid.Column="1" IsToggled="{Binding IsEnabled}" />
+                                </Grid>
+                            </Frame>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+
+            </VerticalStackLayout>
+        </Frame>
+    </Grid>
+</ContentPage>

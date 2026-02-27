@@ -11,7 +11,10 @@ namespace ZCL.Security
         /// Returns true if the certificate contains a valid membership tag
         /// derived from the shared secret.
         /// </summary>
-        public static bool IsTrustedPeerCertificate(X509Certificate2? cert, out string reason)
+        public static bool IsTrustedPeerCertificate(
+             X509Certificate2? cert,
+             IEnumerable<byte[]> trustedSecrets,
+             out string reason)
         {
             reason = "Unknown";
 
@@ -25,66 +28,43 @@ namespace ZCL.Security
                 .OfType<X509Extension>()
                 .FirstOrDefault(e => e.Oid?.Value == TlsConstants.MembershipTagOid);
 
-            if (ext != null)
+            if (ext == null)
             {
-                var payload = TryDecodeUtf8(ext.RawData);
-                if (payload == null)
-                {
-                    reason = "Membership extension present but not UTF-8.";
-                    return false;
-                }
-
-                if (!payload.StartsWith(TlsConstants.MembershipTagPrefix, StringComparison.Ordinal))
-                {
-                    reason = "Membership extension has wrong prefix/version.";
-                    return false;
-                }
-
-                var tagHex = payload.Substring(TlsConstants.MembershipTagPrefix.Length).Trim();
-                if (tagHex.Length == 0)
-                {
-                    reason = "Membership extension tag missing.";
-                    return false;
-                }
-
-                var expected = TlsCertificateProvider.ComputeMembershipTagHex(cert.PublicKey);
-
-                if (!ConstantTimeEqualsHex(tagHex, expected))
-                {
-                    reason = "Membership tag mismatch (wrong secret).";
-                    return false;
-                }
-
-                reason = "Trusted (membership tag ok).";
-                return true;
+                reason = "No membership proof found on certificate.";
+                return false;
             }
 
-            var subject = cert.Subject ?? "";
-            var marker = "ZC-TAG:";
-            var idx = subject.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
-            if (idx >= 0)
+            var payload = TryDecodeUtf8(ext.RawData);
+            if (payload == null)
             {
-                var candidate = subject.Substring(idx).Trim();
-                if (!candidate.StartsWith("ZC-TAG:v1:", StringComparison.OrdinalIgnoreCase))
-                {
-                    reason = "CN tag present but wrong version.";
-                    return false;
-                }
-
-                var tagHex = candidate.Substring("ZC-TAG:v1:".Length).Trim();
-                var expected = TlsCertificateProvider.ComputeMembershipTagHex(cert.PublicKey);
-
-                if (!ConstantTimeEqualsHex(tagHex, expected))
-                {
-                    reason = "CN tag mismatch (wrong secret).";
-                    return false;
-                }
-
-                reason = "Trusted (CN tag ok).";
-                return true;
+                reason = "Membership extension present but not UTF-8.";
+                return false;
             }
 
-            reason = "No membership proof found on certificate.";
+            if (!payload.StartsWith(TlsConstants.MembershipTagPrefix, StringComparison.Ordinal))
+            {
+                reason = "Membership extension has wrong prefix/version.";
+                return false;
+            }
+
+            var tagHex = payload.Substring(TlsConstants.MembershipTagPrefix.Length).Trim();
+            if (tagHex.Length == 0)
+            {
+                reason = "Membership extension tag missing.";
+                return false;
+            }
+
+            foreach (var secret in trustedSecrets)
+            {
+                var expected = TlsCertificateProvider.ComputeMembershipTagHex(cert.PublicKey, secret);
+                if (ConstantTimeEqualsHex(tagHex, expected))
+                {
+                    reason = "Trusted (group tag ok).";
+                    return true;
+                }
+            }
+
+            reason = "Membership tag mismatch (no enabled group matched).";
             return false;
         }
 

@@ -185,32 +185,48 @@ namespace ZCL.API
             return listener;
         }
 
-        private static async Task<Service[]> BuildAnnouncedServicesAsync(CancellationToken ct = default)
+        private static async Task<Service[]> BuildAnnouncedServicesAsync(
+            Func<ServiceDBContext> dbFactory,
+            CancellationToken ct = default)
         {
+
+            using var db = dbFactory();
+            var enabled = await db.AnnouncedServiceSettings
+                .Where(x => x.IsEnabled)
+                .Select(x => x.ServiceName)
+                .ToListAsync(ct);
+
+            var enabledSet = enabled.ToHashSet(StringComparer.Ordinal);
+
             const ushort zcspPort = 5555;
+            var servicesList = new List<Service>();
 
-            var servicesList = new List<Service>
+            if (enabledSet.Contains("FileSharing"))
+                servicesList.Add(new Service { Name = "FileSharing", Address = "tcp", Port = zcspPort });
+
+            if (enabledSet.Contains("Messaging"))
+                servicesList.Add(new Service { Name = "Messaging", Address = "tcp", Port = zcspPort });
+
+            if (enabledSet.Contains("LLMChat"))
             {
-                new() { Name = "FileSharing", Address = "tcp", Port = zcspPort },
-                new() { Name = "Messaging", Address = "tcp", Port = zcspPort }
-            };
-
-            var models = await GetOllamaModelsAsync(ct);
-            if (models.Count > 0)
-            {
-                var localIp = GetBestLocalIPv4();
-                var aiMetadataJson = JsonSerializer.Serialize(models);
-
-                servicesList.Add(new Service
+                var models = await GetOllamaModelsAsync(ct);
+                if (models.Count > 0)
                 {
-                    Name = "LLMChat",
-                    Address = localIp,
-                    Port = zcspPort,
-                    Metadata = aiMetadataJson
-                });
+                    var localIp = GetBestLocalIPv4();
+                    var aiMetadataJson = JsonSerializer.Serialize(models);
+
+                    servicesList.Add(new Service
+                    {
+                        Name = "LLMChat",
+                        Address = localIp,
+                        Port = zcspPort,
+                        Metadata = aiMetadataJson
+                    });
+                }
             }
 
             return servicesList.ToArray();
+
         }
 
         private static byte[] BuildAnnouncePacket(
@@ -401,7 +417,7 @@ namespace ZCL.API
 
                     if (sender != null)
                     {
-                        var services = await BuildAnnouncedServicesAsync(ct);
+                        var services = await BuildAnnouncedServicesAsync(dbFactory, ct);
                         var payload = BuildAnnouncePacket(
                             protocolVersion,
                             messageId++,

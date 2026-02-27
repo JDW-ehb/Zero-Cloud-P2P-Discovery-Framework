@@ -52,5 +52,18 @@
 	<ItemGroup>
 		<ProjectReference Include="..\ZCL\ZCL.csproj" />
 	</ItemGroup>
+	<ItemGroup>
+	  <Compile Update="Pages\GroupsPopup.xaml.cs">
+	    <DependentUpon>GroupsPopup.xaml</DependentUpon>
+	  </Compile>
+	  <Compile Update="Pages\AnnouncedServicesPopup.xaml.cs">
+	    <DependentUpon>AnnouncedServicesPopup.xaml</DependentUpon>
+	  </Compile>
+	</ItemGroup>
+	<ItemGroup>
+	  <MauiXaml Update="Pages\GroupsPopup.xaml">
+	    <Generator>MSBuild:Compile</Generator>
+	  </MauiXaml>
+	</ItemGroup>
 
 </Project>

@@ -12,7 +12,6 @@ namespace ZCL.API
         public ushort ZCDPProtocolVersion { get; set; } = 0;
         public int DiscoveryTimeoutMS { get; set; } = 3 * 1000;
         public string PeerName { get; set; } = Environment.MachineName;
-        public string TlsSharedSecret { get; set; } = "ZC_DEV_SECRET_CHANGE_ME";
 
         public string AppDataDirectory { get; set; } =
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -21,7 +20,6 @@ namespace ZCL.API
 
         private Config() { }
 
-        // ✅ JSON-friendly shape (parameterless ctor, settable props)
         private sealed class ConfigDto
         {
             public string? DBFileName { get; set; }
@@ -30,7 +28,6 @@ namespace ZCL.API
             public ushort? ZCDPProtocolVersion { get; set; }
             public int? DiscoveryTimeoutMS { get; set; }
             public string? PeerName { get; set; }
-            public string? TlsSharedSecret { get; set; }
         }
 
         public void Load()
@@ -47,7 +44,6 @@ namespace ZCL.API
                 if (loaded == null)
                     return;
 
-                // ✅ Only overwrite when value exists in JSON (keeps defaults sane)
                 if (!string.IsNullOrWhiteSpace(loaded.DBFileName))
                     DBFileName = loaded.DBFileName;
 
@@ -65,14 +61,9 @@ namespace ZCL.API
 
                 if (!string.IsNullOrWhiteSpace(loaded.PeerName))
                     PeerName = loaded.PeerName;
-
-                if (!string.IsNullOrWhiteSpace(loaded.TlsSharedSecret))
-                    TlsSharedSecret = loaded.TlsSharedSecret;
             }
             catch
             {
-                // Optional: swallow bad config file and keep defaults
-                // You can log here if you want
             }
         }
 
@@ -82,7 +73,6 @@ namespace ZCL.API
 
             var path = Path.Combine(AppDataDirectory, ConfigFileName);
 
-            // ✅ Save DTO so AppDataDirectory doesn’t get serialized + avoids future ctor issues
             var dto = new ConfigDto
             {
                 DBFileName = DBFileName,
@@ -90,8 +80,7 @@ namespace ZCL.API
                 MulticastAddress = MulticastAddress,
                 ZCDPProtocolVersion = ZCDPProtocolVersion,
                 DiscoveryTimeoutMS = DiscoveryTimeoutMS,
-                PeerName = PeerName,
-                TlsSharedSecret = TlsSharedSecret
+                PeerName = PeerName
             };
 
             var json = JsonSerializer.Serialize(dto, new JsonSerializerOptions

@@ -7,24 +7,22 @@
     Padding="0">
 
     <Grid>
-
         <BoxView BackgroundColor="Transparent">
             <BoxView.GestureRecognizers>
                 <TapGestureRecognizer Tapped="OnBackdropTapped"/>
             </BoxView.GestureRecognizers>
         </BoxView>
 
-        <Frame
-            WidthRequest="600"
-            Padding="24"
-            CornerRadius="18"
-            BackgroundColor="#1F1F1F"
-            HasShadow="True"
-            HorizontalOptions="Center"
-            VerticalOptions="Center">
+        <Frame WidthRequest="600"
+               Padding="24"
+               CornerRadius="18"
+               BackgroundColor="#1F1F1F"
+               HasShadow="True"
+               HorizontalOptions="Center"
+               VerticalOptions="Center">
 
             <ScrollView>
-                <VerticalStackLayout Spacing="15">
+                <VerticalStackLayout Spacing="14">
 
                     <Grid ColumnDefinitions="*,Auto">
                         <Label Text="Settings"
@@ -41,58 +39,42 @@
                                 Padding="10,6"/>
                     </Grid>
 
-                    <Label Text="Database File" TextColor="White" />
-                    <Entry Text="{Binding DBFileName}" TextColor="White" />
+                    <!-- Core Settings -->
 
-                    <Label Text="Discovery Port" TextColor="White" />
-                    <Entry Text="{Binding DiscoveryPort}" Keyboard="Numeric" TextColor="White" />
+                    <Label Text="Peer Name" TextColor="White"/>
+                    <Entry Text="{Binding PeerName}" TextColor="White"/>
 
-                    <Label Text="Multicast Address" TextColor="White" />
-                    <Entry Text="{Binding MulticastAddress}" TextColor="White" />
+                    <Label Text="Discovery Port" TextColor="White"/>
+                    <Entry Text="{Binding DiscoveryPort}" Keyboard="Numeric" TextColor="White"/>
 
-                    <Label Text="Protocol Version" TextColor="White" />
-                    <Entry Text="{Binding ZCDPProtocolVersion}" Keyboard="Numeric" TextColor="White" />
+                    <Label Text="Multicast Address" TextColor="White"/>
+                    <Entry Text="{Binding MulticastAddress}" TextColor="White"/>
 
-                    <Label Text="Discovery Timeout (ms)" TextColor="White" />
-                    <Entry Text="{Binding DiscoveryTimeoutMS}" Keyboard="Numeric" TextColor="White" />
+                    <Label Text="Discovery Timeout (ms)" TextColor="White"/>
+                    <Entry Text="{Binding DiscoveryTimeoutMS}" Keyboard="Numeric" TextColor="White"/>
 
-                    <Label Text="Peer Name" TextColor="White" />
-                    <Entry Text="{Binding PeerName}" TextColor="White" />
+                    <!-- Management Buttons -->
 
-                    <Label Text="TLS Shared Secret" TextColor="White" />
-                    <Entry Text="{Binding TlsSharedSecret}" 
-                               IsPassword="True"
-                               TextColor="White" />
+                    <Button Text="Manage Groups (Trust)…"
+                            Clicked="GroupsButton_Clicked"
+                            BackgroundColor="#2A2A2A"
+                            TextColor="White"
+                            CornerRadius="12"/>
 
-                    <Label Text="Services to Announce" TextColor="White" />
-
-                    <HorizontalStackLayout Spacing="10">
-                        <CheckBox IsChecked="{Binding AnnounceLLM}" Color="#007ACC"/>
-                        <Label Text="LLM" TextColor="White"/>
-                    </HorizontalStackLayout>
-
-                    <HorizontalStackLayout Spacing="10">
-                        <CheckBox IsChecked="{Binding AnnounceFileSharing}" Color="#007ACC"/>
-                        <Label Text="FileSharing" TextColor="White"/>
-                    </HorizontalStackLayout>
-
-                    <HorizontalStackLayout Spacing="10">
-                        <CheckBox IsChecked="{Binding AnnounceMessaging}" Color="#007ACC"/>
-                        <Label Text="Messaging" TextColor="White"/>
-                    </HorizontalStackLayout>
-                    
-                    
+                    <Button Text="Manage Announced Services…"
+                            Clicked="ServicesButton_Clicked"
+                            BackgroundColor="#2A2A2A"
+                            TextColor="White"
+                            CornerRadius="12"/>
 
                     <Button Text="Save Settings"
+                            Clicked="SaveButton_Clicked"
                             TextColor="White"
-                            BackgroundColor="#007ACC"
-                            Clicked="SaveButton_Clicked" />
+                            BackgroundColor="#007ACC"/>
 
                 </VerticalStackLayout>
             </ScrollView>
 
         </Frame>
-
     </Grid>
-
 </ContentPage>

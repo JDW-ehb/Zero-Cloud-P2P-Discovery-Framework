@@ -11,9 +11,11 @@ using ZCL.Protocol.ZCSP.Sessions;
 using ZCL.Repositories.IA;
 using ZCL.Repositories.Messages;
 using ZCL.Repositories.Peers;
+using ZCL.Repositories.Security;          
 using ZCL.Services.FileSharing;
 using ZCL.Services.LLM;
 using ZCL.Services.Messaging;
+using ZCL.Security;                      
 using ZCM.Security;
 
 namespace ZCM;
@@ -31,11 +33,9 @@ public class ServiceDBContextFactory : IDesignTimeDbContextFactory<ServiceDBCont
     {
         SqlCipherInitializer.Initialize();
 
-        // ✅ Design-time (migrations) runs outside MAUI, so use OS LocalApplicationData.
         Config.Instance.AppDataDirectory =
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
-        // Load config so DBFileName etc. are consistent with runtime behavior
         Config.Instance.Load();
 
         var dbPath = Path.Combine(
@@ -66,7 +66,6 @@ public static class MauiProgram
 {
     public static MauiApp CreateMauiApp()
     {
-        // ✅ One source of truth for ALL app files (db, cert, config json, etc.)
         Config.Instance.AppDataDirectory = FileSystem.AppDataDirectory;
         Config.Instance.Load();
 
@@ -85,7 +84,6 @@ public static class MauiProgram
 
         builder.Services.AddDbContext<ServiceDBContext>((sp, options) =>
         {
-            // ✅ Use the same directory you loaded config from
             var dbPath = Path.Combine(
                 Config.Instance.AppDataDirectory,
                 Config.Instance.DBFileName);
@@ -110,6 +108,17 @@ public static class MauiProgram
             options.UseSqlite(connection, b => b.MigrationsAssembly("ZCM"));
         });
 
+        // =============================
+        // ✅ NEW: Trust + Announce System
+        // =============================
+
+        builder.Services.AddSingleton<TrustGroupCache>();
+
+        builder.Services.AddScoped<ITrustGroupRepository, TrustGroupRepository>();
+        builder.Services.AddScoped<IAnnouncedServiceSettingsRepository, AnnouncedServiceSettingsRepository>();
+
+        // =============================
+
         builder.Services.AddSingleton<DataStore>();
 
         builder.Services.AddScoped<IPeerRepository, PeerRepository>();
@@ -118,11 +127,12 @@ public static class MauiProgram
         builder.Services.AddScoped<ILLMChatRepository, LLMChatRepository>();
 
         builder.Services.AddSingleton<SessionRegistry>();
-        builder.Services.AddSingleton<LLMChatService>();
         builder.Services.AddSingleton<RoutingState>();
-        builder.Services.AddSingleton<ZcspPeer>();
 
+        builder.Services.AddSingleton<ZcspPeer>();
         builder.Services.AddSingleton<MessagingService>();
+        builder.Services.AddSingleton<FileSharingService>();
+        builder.Services.AddSingleton<LLMChatService>();
 
         builder.Services.AddSingleton<Func<string>>(_ =>
         {
@@ -134,8 +144,6 @@ public static class MauiProgram
             };
         });
 
-        builder.Services.AddSingleton<FileSharingService>();
-
 #if DEBUG
         builder.Logging.AddDebug();
 #endif
@@ -145,13 +153,33 @@ public static class MauiProgram
         var routingState = app.Services.GetRequiredService<RoutingState>();
         routingState.Initialize(NodeRole.Peer);
 
+        // =============================
+        // ✅ Ensure DB + Trust Defaults
+        // =============================
+
         using (var scope = app.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
             db.Database.EnsureCreated();
+
+            var trustRepo = scope.ServiceProvider.GetRequiredService<ITrustGroupRepository>();
+            trustRepo.EnsureDefaultsAsync().GetAwaiter().GetResult();
+
+            // hydrate TLS trust cache
+            var cache = app.Services.GetRequiredService<TrustGroupCache>();
+
+            var enabled = trustRepo.GetEnabledAsync().GetAwaiter().GetResult();
+            var active = trustRepo.GetActiveLocalAsync().GetAwaiter().GetResult();
+
+            cache.SetEnabledSecrets(enabled.Select(x => x.SecretHex));
+            cache.SetActiveSecret(active?.SecretHex);
         }
 
         ServiceHelper.Initialize(app.Services);
+
+        // =============================
+        // Load stored peers into DataStore
+        // =============================
 
         using (var scope = app.Services.CreateScope())
         {
@@ -161,6 +189,10 @@ public static class MauiProgram
             foreach (var dbPeer in db.PeerNodes.ToList())
                 store.Peers.Add(dbPeer);
         }
+
+        // =============================
+        // Discovery
+        // =============================
 
         using (var scope = app.Services.CreateScope())
         {
@@ -185,6 +217,10 @@ public static class MauiProgram
                 cts.Token);
         }
 
+        // =============================
+        // ZCSP Hosting
+        // =============================
+
         var zcspPeer = app.Services.GetRequiredService<ZcspPeer>();
 
         Task.Run(() =>
@@ -202,6 +238,7 @@ public static class MauiProgram
                 })
         );
 
+        // Warm services
         _ = app.Services.GetRequiredService<MessagingService>();
         _ = app.Services.GetRequiredService<FileSharingService>();
         _ = app.Services.GetRequiredService<LLMChatService>();
