@@ -8,7 +8,6 @@ namespace ZCM
         {
             InitializeComponent();
 
-            Routing.RegisterRoute(nameof(PeerDetailsPage), typeof(PeerDetailsPage));
             Routing.RegisterRoute(nameof(MessagingPage), typeof(MessagingPage));
             Routing.RegisterRoute(nameof(LLMChatPage), typeof(LLMChatPage));
             Routing.RegisterRoute(nameof(FileSharingPage), typeof(FileSharingPage));

@@ -2,7 +2,6 @@ using ZCL.Models;
 
 namespace ZCM.Pages;
 
-[QueryProperty(nameof(Card), "Card")]
 public partial class PeerDetailsPage : ContentPage
 {
     private MainPage.PeerNodeCard? _card;
@@ -10,6 +9,7 @@ public partial class PeerDetailsPage : ContentPage
     public PeerDetailsPage()
     {
         InitializeComponent();
+        this.BackgroundColor = new Color(0, 0, 0, 0.6f);
     }
 
     public MainPage.PeerNodeCard? Card
@@ -23,48 +23,36 @@ public partial class PeerDetailsPage : ContentPage
     }
 
     private async void OnCloseClicked(object sender, EventArgs e)
-        => await Shell.Current.GoToAsync("..");
+        => await Navigation.PopModalAsync(false);
 
     private async void OnBackdropTapped(object sender, EventArgs e)
-        => await Shell.Current.GoToAsync("..");
+        => await Navigation.PopModalAsync(false);
 
     private async void OnServiceClicked(object sender, EventArgs e)
     {
-        if (sender is not Button btn)
-            return;
-
-        if (_card is null)
+        if (sender is not Button btn || _card is null)
             return;
 
         var peer = _card.ToPeerNode();
 
+        // Close popup first
+        await Navigation.PopModalAsync(false);
+
         switch (btn.Text)
         {
             case "Messaging":
-                await Shell.Current.GoToAsync(
-                    nameof(MessagingPage),
-                    new Dictionary<string, object>
-                    {
-                        { "Peer", peer }
-                    });
+                await Shell.Current.GoToAsync(nameof(MessagingPage),
+                    new Dictionary<string, object> { { "Peer", peer } });
                 break;
 
             case "FileTransfer":
-                await Shell.Current.GoToAsync(
-                    nameof(FileSharingPage),
-                    new Dictionary<string, object>
-                    {
-                        { "Peer", peer }
-                    });
+                await Shell.Current.GoToAsync(nameof(FileSharingPage),
+                    new Dictionary<string, object> { { "Peer", peer } });
                 break;
 
             case "AIChat":
-                await Shell.Current.GoToAsync(
-                    nameof(LLMChatPage),
-                    new Dictionary<string, object>
-                    {
-                        { "Peer", peer }
-                    });
+                await Shell.Current.GoToAsync(nameof(LLMChatPage),
+                    new Dictionary<string, object> { { "Peer", peer } });
                 break;
         }
     }

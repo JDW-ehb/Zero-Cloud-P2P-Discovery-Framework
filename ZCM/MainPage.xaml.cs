@@ -97,11 +97,12 @@ public partial class MainPage : ContentPage
         if (e.Parameter is not PeerNodeCard card)
             return;
 
-        await Shell.Current.GoToAsync(nameof(PeerDetailsPage),
-            new Dictionary<string, object>
-            {
-                { "Card", card }
-            });
+        var popup = new PeerDetailsPage
+        {
+            Card = card
+        };
+
+        await Navigation.PushModalAsync(popup, false);
     }
 
 
