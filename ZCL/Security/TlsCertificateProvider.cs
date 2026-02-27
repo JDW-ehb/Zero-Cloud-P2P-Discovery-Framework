@@ -102,6 +102,7 @@ namespace ZCL.Security
 
         public static string ComputeMembershipTagHex(PublicKey publicKey)
         {
+            Console.WriteLine($"[TLS] Using secret (len={Config.Instance.TlsSharedSecret?.Length ?? 0})");
             if (publicKey == null) throw new ArgumentNullException(nameof(publicKey));
 
             var alg = publicKey.EncodedParameters?.RawData ?? Array.Empty<byte>();

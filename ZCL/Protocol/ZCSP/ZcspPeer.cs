@@ -301,11 +301,24 @@ namespace ZCL.Protocol.ZCSP
                 leaveInnerStreamOpen: false,
                 userCertificateValidationCallback: (sender, cert, chain, errors) =>
                 {
-                    var x509 = cert as X509Certificate2 ?? (cert != null ? new X509Certificate2(cert) : null);
+                    Console.WriteLine("=== TLS VALIDATION (SERVER SIDE) ===");
+
+                    var x509 = cert as X509Certificate2 ??
+                               (cert != null ? new X509Certificate2(cert) : null);
+
+                    if (x509 == null)
+                    {
+                        Console.WriteLine("No certificate provided.");
+                        return false;
+                    }
+
+                    Console.WriteLine($"Subject: {x509.Subject}");
 
                     var ok = TlsValidation.IsTrustedPeerCertificate(x509, out var reason);
-                    if (!ok)
-                        Console.WriteLine($"[TLS] Rejecting client cert: {reason}");
+
+                    Console.WriteLine($"Trusted: {ok}");
+                    Console.WriteLine($"Reason: {reason}");
+                    Console.WriteLine("====================================");
 
                     return ok;
                 });
@@ -318,11 +331,29 @@ namespace ZCL.Protocol.ZCSP
                 leaveInnerStreamOpen: false,
                 userCertificateValidationCallback: (sender, cert, chain, errors) =>
                 {
-                    var x509 = cert as X509Certificate2 ?? (cert != null ? new X509Certificate2(cert) : null);
+                    Console.WriteLine("=== TLS VALIDATION (CLIENT SIDE) ===");
+
+                    var x509 = cert as X509Certificate2 ??
+                               (cert != null ? new X509Certificate2(cert) : null);
+
+                    if (x509 == null)
+                    {
+                        Console.WriteLine("No certificate provided.");
+                        return false;
+                    }
+
+                    Console.WriteLine($"Subject: {x509.Subject}");
+
+                    // Optional: dump extensions so you can confirm the membership OID exists
+                    Console.WriteLine("Extensions:");
+                    foreach (var ext in x509.Extensions)
+                        Console.WriteLine($"  OID={ext.Oid?.Value}");
 
                     var ok = TlsValidation.IsTrustedPeerCertificate(x509, out var reason);
-                    if (!ok)
-                        Console.WriteLine($"[TLS] Rejecting server cert: {reason}");
+
+                    Console.WriteLine($"Trusted: {ok}");
+                    Console.WriteLine($"Reason: {reason}");
+                    Console.WriteLine("====================================");
 
                     return ok;
                 });
