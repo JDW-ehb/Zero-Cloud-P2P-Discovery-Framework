@@ -14,19 +14,6 @@ using ZCL.Repositories.Peers;
 
 namespace ZCL.API
 {
-    public sealed class Config
-    {
-        public static Config Instance { get; } = new();
-
-        public string DBFileName { get; set; } = "services.db";
-        public int DiscoveryPort { get; set; } = 2600;
-        public string MulticastAddress { get; set; } = "224.0.0.26";
-        public ushort ZCDPProtocolVersion { get; set; } = 0;
-        public int DiscoveryTimeoutMS { get; set; } = 3 * 1000;
-        public string PeerName { get; set; } = Environment.MachineName;
-
-        private Config() { }
-    }
 
     public sealed class DataStore
     {

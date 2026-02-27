@@ -59,6 +59,11 @@
                     <Label Text="Peer Name" TextColor="White" />
                     <Entry Text="{Binding PeerName}" TextColor="White" />
 
+                    <Label Text="TLS Shared Secret" TextColor="White" />
+                    <Entry Text="{Binding TlsSharedSecret}" 
+                               IsPassword="True"
+                               TextColor="White" />
+
                     <Label Text="Services to Announce" TextColor="White" />
 
                     <HorizontalStackLayout Spacing="10">
@@ -75,6 +80,8 @@
                         <CheckBox IsChecked="{Binding AnnounceMessaging}" Color="#007ACC"/>
                         <Label Text="Messaging" TextColor="White"/>
                     </HorizontalStackLayout>
+                    
+                    
 
                     <Button Text="Save Settings"
                             TextColor="White"

@@ -31,8 +31,15 @@ public class ServiceDBContextFactory : IDesignTimeDbContextFactory<ServiceDBCont
     {
         SqlCipherInitializer.Initialize();
 
+        // ✅ Design-time (migrations) runs outside MAUI, so use OS LocalApplicationData.
+        Config.Instance.AppDataDirectory =
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+        // Load config so DBFileName etc. are consistent with runtime behavior
+        Config.Instance.Load();
+
         var dbPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            Config.Instance.AppDataDirectory,
             Config.Instance.DBFileName);
 
         var key = Environment.GetEnvironmentVariable("ZC_DB_KEY") ?? "dev-only-key";
@@ -59,6 +66,10 @@ public static class MauiProgram
 {
     public static MauiApp CreateMauiApp()
     {
+        // ✅ One source of truth for ALL app files (db, cert, config json, etc.)
+        Config.Instance.AppDataDirectory = FileSystem.AppDataDirectory;
+        Config.Instance.Load();
+
         var builder = MauiApp.CreateBuilder();
         SqlCipherInitializer.Initialize();
 
@@ -72,11 +83,12 @@ public static class MauiProgram
 
         var dbKey = "dev-only-key";
 
-
         builder.Services.AddDbContext<ServiceDBContext>((sp, options) =>
         {
-            var dbPath = Path.Combine(FileSystem.AppDataDirectory, Config.Instance.DBFileName);
-            var key = dbKey;
+            // ✅ Use the same directory you loaded config from
+            var dbPath = Path.Combine(
+                Config.Instance.AppDataDirectory,
+                Config.Instance.DBFileName);
 
             var connection = new Microsoft.Data.Sqlite.SqliteConnection(
                 $"Data Source={dbPath};Mode=ReadWriteCreate;Cache=Shared;");
@@ -85,7 +97,7 @@ public static class MauiProgram
 
             using (var cmd = connection.CreateCommand())
             {
-                cmd.CommandText = $"PRAGMA key = '{key}';";
+                cmd.CommandText = $"PRAGMA key = '{dbKey}';";
                 cmd.ExecuteNonQuery();
 
                 cmd.CommandText = "PRAGMA cipher_version;";
@@ -100,18 +112,15 @@ public static class MauiProgram
 
         builder.Services.AddSingleton<DataStore>();
 
-
         builder.Services.AddScoped<IPeerRepository, PeerRepository>();
         builder.Services.AddScoped<IMessageRepository, MessageRepository>();
         builder.Services.AddScoped<IChatQueryService, ChatQueryService>();
         builder.Services.AddScoped<ILLMChatRepository, LLMChatRepository>();
 
-
         builder.Services.AddSingleton<SessionRegistry>();
         builder.Services.AddSingleton<LLMChatService>();
         builder.Services.AddSingleton<RoutingState>();
         builder.Services.AddSingleton<ZcspPeer>();
-
 
         builder.Services.AddSingleton<MessagingService>();
 
@@ -119,7 +128,7 @@ public static class MauiProgram
         {
             return () =>
             {
-                var dir = Path.Combine(FileSystem.AppDataDirectory, "Downloads");
+                var dir = Path.Combine(Config.Instance.AppDataDirectory, "Downloads");
                 Directory.CreateDirectory(dir);
                 return dir;
             };
@@ -155,13 +164,10 @@ public static class MauiProgram
 
         using (var scope = app.Services.CreateScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
             var store = scope.ServiceProvider.GetRequiredService<DataStore>();
 
             var multicastAddress = IPAddress.Parse(Config.Instance.MulticastAddress);
             var port = Config.Instance.DiscoveryPort;
-            string dbPath = db.Database.GetDbConnection().DataSource;
-
 
             var cts = new CancellationTokenSource();
 
@@ -170,8 +176,8 @@ public static class MauiProgram
                 port,
                 () =>
                 {
-                    var scope = app.Services.CreateScope();
-                    return scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+                    var innerScope = app.Services.CreateScope();
+                    return innerScope.ServiceProvider.GetRequiredService<ServiceDBContext>();
                 },
                 store,
                 routingState,
@@ -195,8 +201,6 @@ public static class MauiProgram
                     };
                 })
         );
-
-
 
         _ = app.Services.GetRequiredService<MessagingService>();
         _ = app.Services.GetRequiredService<FileSharingService>();

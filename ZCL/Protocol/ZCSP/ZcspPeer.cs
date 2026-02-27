@@ -287,8 +287,7 @@ namespace ZCL.Protocol.ZCSP
 
         private X509Certificate2 LoadLocalTlsIdentity()
         {
-
-            var baseDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var baseDir = ZCL.API.Config.Instance.AppDataDirectory;
 
             return TlsCertificateProvider.LoadOrCreateIdentityCertificate(
                 baseDirectory: baseDir,

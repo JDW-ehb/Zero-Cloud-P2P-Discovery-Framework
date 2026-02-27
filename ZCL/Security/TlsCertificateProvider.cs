@@ -4,10 +4,11 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using ZCL.API;
 
 namespace ZCL.Security
 {
-    internal static class TlsCertificateProvider
+    public static class TlsCertificateProvider
     {
 
         public static X509Certificate2 LoadOrCreateIdentityCertificate(
@@ -110,7 +111,7 @@ namespace ZCL.Security
             Buffer.BlockCopy(alg, 0, material, 0, alg.Length);
             Buffer.BlockCopy(key, 0, material, alg.Length, key.Length);
 
-            var secretBytes = Encoding.UTF8.GetBytes(TlsConstants.SharedSecret);
+            var secretBytes = Encoding.UTF8.GetBytes(ZCL.API.Config.Instance.TlsSharedSecret);
             using var hmac = new HMACSHA256(secretBytes);
 
             var tag = hmac.ComputeHash(material);
@@ -129,6 +130,17 @@ namespace ZCL.Security
         private static string EscapeCn(string s)
         {
             return s.Replace(",", "_").Replace(";", "_").Replace("\n", "_").Replace("\r", "_");
+        }
+
+        public static void DeleteLocalIdentityCertificate(string baseDirectory)
+        {
+            if (string.IsNullOrWhiteSpace(baseDirectory))
+                throw new ArgumentException(nameof(baseDirectory));
+
+            var pfxPath = Path.Combine(baseDirectory, TlsConstants.DefaultPfxFileName);
+
+            if (File.Exists(pfxPath))
+                File.Delete(pfxPath);
         }
     }
 }
