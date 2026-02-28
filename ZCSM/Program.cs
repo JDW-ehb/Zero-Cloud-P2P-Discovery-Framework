@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using SQLitePCL;
 using System.Net;
 using System.Security.Cryptography;
 using ZCL.API;
@@ -12,6 +13,8 @@ using ZCL.Protocol.ZCSP.Sessions;
 using ZCL.Repositories.IA;
 using ZCL.Repositories.Messages;
 using ZCL.Repositories.Peers;
+using ZCL.Repositories.Security;
+using ZCL.Security;
 using ZCL.Services.FileSharing;
 using ZCL.Services.LLM;
 using ZCL.Services.Messaging;
@@ -34,13 +37,16 @@ internal static class Program
                 logging.AddConsole();
                 logging.SetMinimumLevel(LogLevel.Information);
             })
-            .ConfigureServices(services =>
+            .ConfigureServices((context, services) =>
             {
                 Config.Instance.PeerName =
                     $"{Environment.MachineName} (ZCSM)";
 
                 var appDir =
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+                Config.Instance.AppDataDirectory = appDir;
+                Config.Instance.Load();
 
                 var dbPath = Path.Combine(
                     appDir,
@@ -55,35 +61,36 @@ internal static class Program
 
                     connection.Open();
 
-                    using (var cmd = connection.CreateCommand())
-                    {
-                        cmd.CommandText = $"PRAGMA key = \"x'{dbKeyHex}'\";";
-                        cmd.ExecuteNonQuery();
+                    using var cmd = connection.CreateCommand();
+                    cmd.CommandText = $"PRAGMA key = \"x'{dbKeyHex}'\";";
+                    cmd.ExecuteNonQuery();
 
-                        cmd.CommandText = "PRAGMA cipher_version;";
-                        var version = cmd.ExecuteScalar();
-
-                        if (version == null)
-                            throw new InvalidOperationException(
-                                "SQLCipher not active. cipher_version is null.");
-                    }
+                    cmd.CommandText = "PRAGMA cipher_version;";
+                    if (cmd.ExecuteScalar() == null)
+                        throw new InvalidOperationException("SQLCipher not active.");
 
                     options.UseSqlite(connection);
                 });
 
+                // Core runtime state
                 services.AddSingleton<DataStore>();
+                services.AddSingleton<SessionRegistry>();
+                services.AddSingleton<RoutingState>();
+                services.AddSingleton<TrustGroupCache>();
 
+                // Repositories
                 services.AddScoped<IPeerRepository, PeerRepository>();
                 services.AddScoped<IMessageRepository, MessageRepository>();
                 services.AddScoped<IChatQueryService, ChatQueryService>();
                 services.AddScoped<ILLMChatRepository, LLMChatRepository>();
+                services.AddScoped<ITrustGroupRepository, TrustGroupRepository>();
+                services.AddScoped<IAnnouncedServiceSettingsRepository, AnnouncedServiceSettingsRepository>();
 
-                services.AddSingleton<SessionRegistry>();
+                // Services
                 services.AddSingleton<ZcspPeer>();
-                services.AddSingleton<LLMChatService>();
-                services.AddSingleton<RoutingState>();
-
                 services.AddSingleton<MessagingService>();
+                services.AddSingleton<FileSharingService>();
+                services.AddSingleton<LLMChatService>();
 
                 services.AddSingleton<Func<string>>(_ =>
                 {
@@ -94,8 +101,6 @@ internal static class Program
                         return dir;
                     };
                 });
-
-                services.AddSingleton<FileSharingService>();
             })
             .Build();
 
@@ -104,12 +109,26 @@ internal static class Program
 
         routingState.Initialize(NodeRole.Server);
 
+        // Ensure DB + trust defaults
         using (var scope = host.Services.CreateScope())
         {
             var db = scope.ServiceProvider
                           .GetRequiredService<ServiceDBContext>();
 
             db.Database.EnsureCreated();
+
+            var trustRepo =
+                scope.ServiceProvider.GetRequiredService<ITrustGroupRepository>();
+
+            await trustRepo.EnsureDefaultsAsync();
+
+            var cache =
+                host.Services.GetRequiredService<TrustGroupCache>();
+
+            var enabled =
+                await trustRepo.GetEnabledAsync();
+
+            cache.SetEnabledSecrets(enabled.Select(x => x.SecretHex));
         }
 
         var cts = new CancellationTokenSource();
@@ -123,7 +142,8 @@ internal static class Program
         var multicastAddress =
             IPAddress.Parse(Config.Instance.MulticastAddress);
 
-        var discoveryPort = Config.Instance.DiscoveryPort;
+        var discoveryPort =
+            Config.Instance.DiscoveryPort;
 
         var store =
             host.Services.GetRequiredService<DataStore>();
@@ -140,31 +160,30 @@ internal static class Program
                 },
                 store,
                 routingState,
-                localRole: NodeRole.Server,
-                ct: cts.Token));
+                NodeRole.Server,
+                cts.Token));
 
         var zcspPeer =
             host.Services.GetRequiredService<ZcspPeer>();
 
-        _ = Task.Run(() =>
-            zcspPeer.StartHostingAsync(
-                port: ZcspPort,
-                serviceName =>
+        zcspPeer.StartHosting(
+            port: ZcspPort,
+            serviceName =>
+            {
+                return serviceName switch
                 {
-                    return serviceName switch
-                    {
-                        "Messaging" =>
-                            host.Services.GetRequiredService<MessagingService>(),
+                    "Messaging" =>
+                        host.Services.GetRequiredService<MessagingService>(),
 
-                        "FileSharing" =>
-                            host.Services.GetRequiredService<FileSharingService>(),
+                    "FileSharing" =>
+                        host.Services.GetRequiredService<FileSharingService>(),
 
-                        "LLMChat" =>
-                            host.Services.GetRequiredService<LLMChatService>(),
+                    "LLMChat" =>
+                        host.Services.GetRequiredService<LLMChatService>(),
 
-                        _ => null
-                    };
-                }));
+                    _ => null
+                };
+            });
 
         await host.RunAsync(cts.Token);
     }
@@ -187,6 +206,8 @@ internal static class Program
         return hex;
     }
 }
+
+
 internal static class SqlCipherInitializer
 {
     private static bool _initialized;
@@ -196,9 +217,8 @@ internal static class SqlCipherInitializer
         if (_initialized)
             return;
 
-        SQLitePCL.Batteries_V2.Init();
-        SQLitePCL.raw.SetProvider(
-            new SQLitePCL.SQLite3Provider_e_sqlcipher());
+        Batteries_V2.Init();
+        raw.SetProvider(new SQLite3Provider_e_sqlcipher());
 
         _initialized = true;
     }

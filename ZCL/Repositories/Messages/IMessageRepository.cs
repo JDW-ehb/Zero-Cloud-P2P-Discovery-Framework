@@ -9,7 +9,9 @@ public interface IMessageRepository
         Guid fromPeerId,
         Guid toPeerId,
         string content);
+
     Task<MessageEntity> StoreIncomingAsync(
+        Guid messageId,
         Guid sessionId,
         Guid fromPeerId,
         Guid toPeerId,
@@ -22,6 +24,7 @@ public interface IMessageRepository
     string content,
     MessageStatus status);
 
+    Task<bool> ExistsAsync(Guid messageId);
     Task UpdateStatusAsync(Guid messageId, MessageStatus status);
     Task<List<MessageEntity>> GetUndeliveredMessagesAsync(Guid toPeerId);
     Task MarkAsDeliveredAsync(Guid messageId);
