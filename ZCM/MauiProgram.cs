@@ -25,6 +25,39 @@ public static class ServiceHelper
     public static IServiceProvider Services { get; private set; } = default!;
     public static void Initialize(IServiceProvider serviceProvider) => Services = serviceProvider;
     public static T GetService<T>() => Services.GetRequiredService<T>();
+
+    public static async Task ResetNetworkBoundaryAsync()
+    {
+        var peer = GetService<ZcspPeer>();
+        var sessions = GetService<SessionRegistry>();
+        var trustCache = GetService<TrustGroupCache>();
+        var trustRepo = GetService<ITrustGroupRepository>();
+
+        Console.WriteLine("[SECURITY] Resetting network boundary...");
+
+        sessions.ClearAll();
+
+        await peer.StopHostingAsync();
+
+        var enabled = await trustRepo.GetEnabledAsync();
+        trustCache.SetEnabledSecrets(enabled.Select(x => x.SecretHex));
+
+        peer.StartHosting(
+            port: 5555,
+            serviceName =>
+            {
+                return serviceName switch
+                {
+                    "Messaging" => GetService<MessagingService>(),
+                    "FileSharing" => GetService<FileSharingService>(),
+                    "LLMChat" => GetService<LLMChatService>(),
+                    _ => null
+                };
+            });
+
+        Console.WriteLine("[SECURITY] Boundary reset complete.");
+    }
+
 }
 
 public class ServiceDBContextFactory : IDesignTimeDbContextFactory<ServiceDBContext>
@@ -233,7 +266,7 @@ public static class MauiProgram
         var zcspPeer = app.Services.GetRequiredService<ZcspPeer>();
 
         Task.Run(() =>
-            zcspPeer.StartHostingAsync(
+            zcspPeer.StartHosting(
                 port: 5555,
                 serviceName =>
                 {

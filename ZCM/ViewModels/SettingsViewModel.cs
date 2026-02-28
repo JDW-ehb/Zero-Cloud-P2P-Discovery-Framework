@@ -170,6 +170,7 @@ public sealed class SettingsViewModel : BindableObject
             .ToList();
 
         trustCache.SetEnabledSecrets(enabledSecrets);
+        await ServiceHelper.ResetNetworkBoundaryAsync();
     }
 }
 

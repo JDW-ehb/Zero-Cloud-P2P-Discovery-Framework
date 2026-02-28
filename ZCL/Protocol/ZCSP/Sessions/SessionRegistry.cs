@@ -34,6 +34,12 @@ namespace ZCL.Protocol.ZCSP.Sessions
             return false;
         }
 
+        public void ClearAll()
+        {
+            foreach (var id in _sessions.Keys.ToList())
+                Remove(id);
+        }
+
         public bool Remove(Guid sessionId)
         {
             return _sessions.TryRemove(sessionId, out _);

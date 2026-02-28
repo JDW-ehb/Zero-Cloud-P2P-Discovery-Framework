@@ -24,7 +24,8 @@ namespace ZCL.Protocol.ZCSP
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly RoutingState _routing;
         private readonly ZCL.Security.TrustGroupCache _trustGroups;
-
+        private CancellationTokenSource? _hostingCts;
+        private Task? _hostingTask;
         public string PeerId => _peerId ?? "(unresolved)";
 
         public ZcspPeer(
@@ -59,7 +60,21 @@ namespace ZCL.Protocol.ZCSP
             return _peerId!;
         }
 
-        public async Task StartHostingAsync(int port, Func<string, IZcspService?> serviceResolver)
+        public void StartHosting(int port, Func<string, IZcspService?> serviceResolver)
+        {
+            if (_hostingTask != null)
+                return;
+
+            _hostingCts = new CancellationTokenSource();
+
+            _hostingTask = Task.Run(() =>
+                StartHostingLoopAsync(port, serviceResolver, _hostingCts.Token));
+        }
+
+        private async Task StartHostingLoopAsync(
+            int port,
+            Func<string, IZcspService?> serviceResolver,
+            CancellationToken ct)
         {
             var localId = await EnsurePeerIdAsync();
 
@@ -68,20 +83,53 @@ namespace ZCL.Protocol.ZCSP
 
             Console.WriteLine($"[{localId}] Hosting on port {port}");
 
-            while (true)
+            try
             {
-                var client = await listener.AcceptTcpClientAsync();
-
-                _ = Task.Run(async () =>
+                while (!ct.IsCancellationRequested)
                 {
-                    try { await HandleClientAsync(client, serviceResolver); }
-                    catch (Exception ex)
+                    if (!listener.Pending())
                     {
-                        Console.WriteLine($"[{localId}] Client handler crashed:");
-                        Console.WriteLine(ex);
+                        await Task.Delay(50, ct);
+                        continue;
                     }
-                });
+
+                    var client = await listener.AcceptTcpClientAsync(ct);
+
+                    _ = Task.Run(async () =>
+                    {
+                        try { await HandleClientAsync(client, serviceResolver); }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[{localId}] Client handler crashed:");
+                            Console.WriteLine(ex);
+                        }
+                    }, ct);
+                }
             }
+            catch (OperationCanceledException) { }
+            finally
+            {
+                listener.Stop();
+            }
+        }
+
+        public async Task StopHostingAsync()
+        {
+            if (_hostingCts == null)
+                return;
+
+            _hostingCts.Cancel();
+
+            try
+            {
+                if (_hostingTask != null)
+                    await _hostingTask;
+            }
+            catch { }
+
+            _hostingTask = null;
+            _hostingCts.Dispose();
+            _hostingCts = null;
         }
 
         private async Task HandleClientAsync(TcpClient client, Func<string, IZcspService?> serviceResolver)
