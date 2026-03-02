@@ -2,192 +2,145 @@
 <ContentPage
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    x:Class="ZCM.MainPage"
+    xmlns:conv="clr-namespace:ZCM.Converters"
     Shell.NavBarIsVisible="False"
-    BackgroundColor="#1e1e1e">
+    BackgroundColor="#111111"
+    x:Class="ZCM.MainPage">
+
+    <ContentPage.Resources>
+        <conv:OnlineStatusColorConverter x:Key="OnlineStatusColorConverter"/>
+    </ContentPage.Resources>
 
     <Grid ColumnDefinitions="240,*">
 
-        <!-- ================= SIDEBAR ================= -->
+        <!-- SIDEBAR -->
+        <VerticalStackLayout Grid.Column="0"
+                             Padding="20"
+                             Spacing="16"
+                             BackgroundColor="#151515">
 
-        <VerticalStackLayout
-            Grid.Column="0"
-            Padding="20"
-            Spacing="16"
-            BackgroundColor="#151515">
+            <Label Text="Zero Cloud"
+                   FontSize="22"
+                   TextColor="White"
+                   FontAttributes="Bold" />
 
-            <Label
-                Text="Zero Cloud"
-                FontSize="22"
-                TextColor="White"
-                FontAttributes="Bold" />
-
-            <Button
-                Text="Dashboard"
-                BackgroundColor="#2A2A2A"
-                TextColor="White"
-                CornerRadius="12" />
-
-            <Button
-                Text="Discovery"
-                Clicked="DiscoveryButton_Clicked"
-                BackgroundColor="#2A2A2A"
-                TextColor="White"
-                CornerRadius="12" />
-
-            <Label
-                Text="Services"
-                Margin="0,20,0,0"
-                FontSize="14"
-                TextColor="#888888" />
-
-            <Button
-                Text="LLM"
-                Clicked="LlmButton_Clicked"
-                BackgroundColor="#2A2A2A"
-                TextColor="White"
-                CornerRadius="12" />
-
-            <Button
-                Text="MSG"
-                Clicked="MessagingButton_Clicked"
-                BackgroundColor="#2A2A2A"
-                TextColor="White"
-                CornerRadius="12" />
-
-            <Button
-                Text="Share"
-                Clicked="ShareButton_Clicked"
-                BackgroundColor="#2A2A2A"
-                TextColor="White"
-                CornerRadius="12" />
-
-            <VerticalStackLayout VerticalOptions="EndAndExpand" Spacing="12">
-
-                <Button
-                    Text="Settings"
-                    Clicked="SettingsButton_Clicked"
+            <Button Text="Dashboard"
                     BackgroundColor="#2A2A2A"
                     TextColor="White"
                     CornerRadius="12" />
 
-                <Button
-                    Text="Exit App"
+            <Button Text="Discovery"
+                    Clicked="DiscoveryButton_Clicked"
                     BackgroundColor="#2A2A2A"
-                    TextColor="#999999"
+                    TextColor="White"
                     CornerRadius="12" />
-            </VerticalStackLayout>
 
+            <Label Text="Services"
+                   Margin="0,20,0,0"
+                   FontSize="14"
+                   TextColor="#888888" />
+
+            <Button Text="LLM"
+                    Clicked="LlmButton_Clicked"
+                    BackgroundColor="#2A2A2A"
+                    TextColor="White"
+                    CornerRadius="12" />
+
+            <Button Text="MSG"
+                    Clicked="MessagingButton_Clicked"
+                    BackgroundColor="#2A2A2A"
+                    TextColor="White"
+                    CornerRadius="12" />
+
+            <Button Text="Share"
+                    Clicked="ShareButton_Clicked"
+                    BackgroundColor="#2A2A2A"
+                    TextColor="White"
+                    CornerRadius="12" />
+
+            <VerticalStackLayout VerticalOptions="EndAndExpand" Spacing="12">
+                <Button Text="Settings"
+                        Clicked="SettingsButton_Clicked"
+                        BackgroundColor="#2A2A2A"
+                        TextColor="White"
+                        CornerRadius="12" />
+
+                <Button Text="Exit App"
+                        BackgroundColor="#2A2A2A"
+                        TextColor="#999999"
+                        CornerRadius="12" />
+            </VerticalStackLayout>
         </VerticalStackLayout>
 
-        <!-- ================= DASHBOARD ================= -->
-
+        <!-- DASHBOARD -->
         <ScrollView Grid.Column="1">
-
             <VerticalStackLayout Padding="24" Spacing="24">
 
-                <!-- ================= ROW 1 ================= -->
-
-                <Grid ColumnDefinitions="2*,1*"
-                      ColumnSpacing="24">
+                <!-- ROW 1 -->
+                <Grid ColumnDefinitions="2*,1*" ColumnSpacing="24">
 
                     <!-- Network Overview -->
                     <Frame BackgroundColor="#212121"
                            CornerRadius="18"
-                           Padding="20"
-                           HasShadow="False">
+                           Padding="20">
 
                         <VerticalStackLayout Spacing="16">
-
                             <Label Text="Network Overview"
                                    FontSize="18"
                                    TextColor="White"
                                    FontAttributes="Bold" />
 
-                            <!-- Donut Placeholder -->
-                            <Grid ColumnDefinitions="150,*"
-                                  ColumnSpacing="20">
+                            <Grid ColumnDefinitions="150,*">
 
-                                <BoxView WidthRequest="140"
-                                         HeightRequest="140"
-                                         CornerRadius="70"
-                                         BackgroundColor="#2A2A2A"
-                                         HorizontalOptions="Start"/>
+                                <GraphicsView
+                                    x:Name="PeerDonutView"
+                                    WidthRequest="140"
+                                    HeightRequest="140" />
 
-                                <Grid Grid.Column="1"
-                                      RowDefinitions="Auto,Auto,Auto,Auto"
-                                      ColumnDefinitions="*,*"
-                                      RowSpacing="12"
-                                      ColumnSpacing="12">
+                                <!-- Stats -->
+                                <VerticalStackLayout Grid.Column="1" Spacing="6">
 
-                                    <Label Text="Peers Online:"
-                                           TextColor="#CCCCCC" />
-                                    <Label Grid.Column="1"
-                                           Text="{Binding OnlineCount}"
-                                           TextColor="White"
-                                           FontAttributes="Bold" />
+                                    <Label Text="{Binding OnlineCount, StringFormat='Peers Online: {0}'}"
+                                           TextColor="White"/>
 
-                                    <Label Grid.Row="1"
-                                           Text="Peers Offline:"
-                                           TextColor="#CCCCCC" />
-                                    <Label Grid.Row="1"
-                                           Grid.Column="1"
-                                           Text="{Binding OfflineCount}"
-                                           TextColor="White"
-                                           FontAttributes="Bold" />
+                                    <Label Text="{Binding OfflineCount, StringFormat='Peers Offline: {0}'}"
+                                           TextColor="White"/>
 
-                                    <Label Grid.Row="2"
-                                           Text="Shared Files:"
-                                           TextColor="#CCCCCC" />
-                                    <Label Grid.Row="2"
-                                           Grid.Column="1"
-                                           Text="{Binding SharedFilesCount}"
-                                           TextColor="White"
-                                           FontAttributes="Bold" />
+                                    <Label Text="{Binding MessagingPeersCount, StringFormat='Messaging Peers: {0}'}"
+                                           TextColor="White"/>
 
-                                    <Label Grid.Row="3"
-                                           Text="Active Sessions:"
-                                           TextColor="#CCCCCC" />
-                                    <Label Grid.Row="3"
-                                           Grid.Column="1"
-                                           Text="0"
-                                           TextColor="White"
-                                           FontAttributes="Bold" />
+                                    <Label Text="{Binding FileSharingPeersCount, StringFormat='FileSharing Peers: {0}'}"
+                                           TextColor="White"/>
 
-                                </Grid>
+                                    <Label Text="{Binding AvailableModelsCount, StringFormat='Available Models: {0}'}"
+                                           TextColor="White"/>
 
+                                </VerticalStackLayout>
                             </Grid>
-
                         </VerticalStackLayout>
-
                     </Frame>
 
                     <!-- Activity -->
                     <Frame Grid.Column="1"
                            BackgroundColor="#212121"
                            CornerRadius="18"
-                           Padding="20"
-                           HasShadow="False">
+                           Padding="20">
 
                         <VerticalStackLayout Spacing="12">
-
                             <Label Text="Activity"
                                    FontSize="18"
                                    TextColor="White"
-                                   FontAttributes="Bold" />
+                                   FontAttributes="Bold"/>
 
                             <CollectionView ItemsSource="{Binding ActivityFeed}"
-                                            SelectionMode="None"
-                                            HeightRequest="250">
+                                            SelectionMode="None">
 
                                 <CollectionView.ItemTemplate>
                                     <DataTemplate>
                                         <Frame BackgroundColor="#2A2A2A"
                                                Padding="8"
                                                CornerRadius="10"
-                                               HasShadow="False"
                                                Margin="0,4">
-
                                             <Label Text="{Binding}"
                                                    FontSize="12"
                                                    TextColor="#CCCCCC"/>
@@ -196,126 +149,106 @@
                                 </CollectionView.ItemTemplate>
 
                             </CollectionView>
-
                         </VerticalStackLayout>
-
                     </Frame>
 
                 </Grid>
 
-                <!-- ================= ROW 2 ================= -->
-
-                <Grid ColumnDefinitions="2*,1*"
-                      ColumnSpacing="24">
+                <!-- ROW 2 -->
+                <Grid ColumnDefinitions="2*,1*" ColumnSpacing="24">
 
                     <!-- Recent Conversations -->
                     <Frame BackgroundColor="#212121"
                            CornerRadius="18"
-                           Padding="20"
-                           HasShadow="False">
+                           Padding="20">
 
                         <VerticalStackLayout Spacing="12">
 
                             <Label Text="Recent Conversations"
                                    FontSize="18"
                                    TextColor="White"
-                                   FontAttributes="Bold" />
+                                   FontAttributes="Bold"/>
 
-                            <CollectionView ItemsSource="{Binding Peers}"
+                            <CollectionView ItemsSource="{Binding RecentConversations}"
                                             SelectionMode="None">
 
                                 <CollectionView.ItemTemplate>
                                     <DataTemplate>
-
                                         <Frame BackgroundColor="#1A1A1A"
                                                Padding="14"
                                                CornerRadius="14"
-                                               HasShadow="False"
                                                Margin="0,6">
 
-                                            <VerticalStackLayout>
-                                                <Label Text="{Binding HostName}"
-                                                       FontAttributes="Bold"
-                                                       TextColor="White"/>
-                                                <Label Text="{Binding LastSeenText}"
-                                                       FontSize="11"
-                                                       TextColor="#888888"/>
-                                            </VerticalStackLayout>
+                                            <Grid ColumnDefinitions="Auto,*"
+                                                  ColumnSpacing="12">
 
+                                                <BoxView WidthRequest="10"
+                                                         HeightRequest="10"
+                                                         CornerRadius="5"
+                                                         VerticalOptions="Center"
+                                                         Color="{Binding IsOnline, Converter={StaticResource OnlineStatusColorConverter}}"/>
+
+                                                <VerticalStackLayout Grid.Column="1"
+                                                                     Spacing="2">
+
+                                                    <Label Text="{Binding PeerName}"
+                                                           FontAttributes="Bold"
+                                                           TextColor="White"/>
+
+                                                    <Label Text="{Binding LastMessage}"
+                                                           FontSize="12"
+                                                           TextColor="#CCCCCC"
+                                                           LineBreakMode="TailTruncation"/>
+                                                </VerticalStackLayout>
+                                            </Grid>
                                         </Frame>
-
                                     </DataTemplate>
                                 </CollectionView.ItemTemplate>
 
                             </CollectionView>
 
                         </VerticalStackLayout>
-
                     </Frame>
 
-                    <!-- Trust & Security -->
+                    <!-- Trust -->
                     <Frame Grid.Column="1"
                            BackgroundColor="#212121"
                            CornerRadius="18"
-                           Padding="20"
-                           HasShadow="False">
+                           Padding="20">
 
                         <VerticalStackLayout Spacing="12">
-
-                            <!-- ✅ FIX: & must be escaped in XML -->
                             <Label Text="Trust &amp; Security"
                                    FontSize="18"
                                    TextColor="White"
-                                   FontAttributes="Bold" />
+                                   FontAttributes="Bold"/>
 
-                            <Frame BackgroundColor="#2A2A2A"
-                                   CornerRadius="10"
-                                   Padding="8"
-                                   HasShadow="False">
-                                <Label Text="Network secret active"
-                                       FontSize="12"
-                                       TextColor="#CCCCCC"/>
-                            </Frame>
+                            <Label Text="Network secret active"
+                                   TextColor="#CCCCCC"/>
 
-                            <Frame BackgroundColor="#2A2A2A"
-                                   CornerRadius="10"
-                                   Padding="8"
-                                   HasShadow="False">
-                                <Label Text="2 Trusted groups enabled"
-                                       FontSize="12"
-                                       TextColor="#CCCCCC"/>
-                            </Frame>
-
+                            <Label Text="2 Trusted groups enabled"
+                                   TextColor="#CCCCCC"/>
                         </VerticalStackLayout>
-
                     </Frame>
 
                 </Grid>
 
-                <!-- ================= ROW 3 ================= -->
-
+                <!-- ROW 3 -->
                 <Frame BackgroundColor="#212121"
                        CornerRadius="18"
-                       Padding="20"
-                       HasShadow="False">
+                       Padding="20">
 
                     <VerticalStackLayout Spacing="12">
-
                         <Label Text="Files Shared"
                                FontSize="18"
                                TextColor="White"
-                               FontAttributes="Bold" />
-
+                               FontAttributes="Bold"/>
                         <Label Text="No recent file activity"
-                               FontSize="12"
                                TextColor="#888888"/>
-
                     </VerticalStackLayout>
 
                 </Frame>
 
             </VerticalStackLayout>
-
         </ScrollView>
 
     </Grid>

@@ -1,25 +1,101 @@
 ﻿using Microsoft.Maui.Dispatching;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Runtime.CompilerServices;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using ZCL.API;
 using ZCL.Models;
 using ZCM.Pages;
 
 namespace ZCM;
 
+public class PeerDonutDrawable : IDrawable
+{
+    public int Online { get; set; }
+    public int Offline { get; set; }
+
+    public void Draw(ICanvas canvas, RectF rect)
+    {
+        int total = Online + Offline;
+        if (total <= 0)
+            return;
+
+        float size = Math.Min(rect.Width, rect.Height);
+        float cx = rect.Center.X;
+        float cy = rect.Center.Y;
+
+        float outerR = size / 2f;
+        float innerR = outerR - 18f;
+
+        float startAngle = -90f;
+        float onlineSweep = (float)Online / total * 360f;
+        float offlineSweep = 360f - onlineSweep;
+
+        DrawSegment(canvas, cx, cy, outerR, innerR, startAngle, onlineSweep, Colors.LimeGreen);
+        DrawSegment(canvas, cx, cy, outerR, innerR, startAngle + onlineSweep, offlineSweep, Colors.DarkRed);
+    }
+    private void DrawSegment(
+    ICanvas canvas,
+    float cx, float cy,
+    float outerR, float innerR,
+    float startDeg, float sweepDeg,
+    Color color)
+    {
+        const int steps = 60; // smoothness
+
+        var path = new PathF();
+        float step = sweepDeg / steps;
+
+        // Outer arc
+        for (int i = 0; i <= steps; i++)
+        {
+            float angle = (startDeg + step * i) * MathF.PI / 180f;
+            float x = cx + outerR * MathF.Cos(angle);
+            float y = cy + outerR * MathF.Sin(angle);
+
+            if (i == 0)
+                path.MoveTo(x, y);
+            else
+                path.LineTo(x, y);
+        }
+
+        // Inner arc (reverse)
+        for (int i = steps; i >= 0; i--)
+        {
+            float angle = (startDeg + step * i) * MathF.PI / 180f;
+            float x = cx + innerR * MathF.Cos(angle);
+            float y = cy + innerR * MathF.Sin(angle);
+
+            path.LineTo(x, y);
+        }
+
+        path.Close();
+
+        canvas.FillColor = color;
+        canvas.FillPath(path);
+    }
+}
+
 public partial class MainPage : ContentPage
 {
     private readonly DataStore _store;
+    private readonly PeerDonutDrawable _donutDrawable = new();
 
     public ObservableCollection<PeerNodeCard> Peers { get; } = new();
+    public ObservableCollection<ConversationPreview> RecentConversations { get; } = new();
 
     public int OnlineCount => Peers.Count(p => p.IsUp);
     public int OfflineCount => Peers.Count(p => !p.IsUp);
-
-    // TODO later: compute from DB SharedFiles table if you want
     public int SharedFilesCount => 0;
+
+    public int MessagingPeersCount =>
+        Peers.Count(p => p.Services.Any(s => s.Contains("Messaging")));
+
+    public int FileSharingPeersCount =>
+        Peers.Count(p => p.Services.Any(s => s.Contains("Filesharing")));
+
+    public int AvailableModelsCount =>
+        Peers.Sum(p => p.Services.Count(s => s.StartsWith("LLMChat")));
 
     public ObservableCollection<string> ActivityFeed { get; } = new()
     {
@@ -35,6 +111,9 @@ public partial class MainPage : ContentPage
 
         _store = ServiceHelper.GetService<DataStore>();
         BindingContext = this;
+
+        // Hook drawable to GraphicsView (defined in XAML)
+        PeerDonutView.Drawable = _donutDrawable;
     }
 
     protected override void OnAppearing()
@@ -60,13 +139,13 @@ public partial class MainPage : ContentPage
         }
 
         SyncPeers();
+        SyncConversations();
         RefreshDashboardCounts();
     }
 
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
-
         _timer?.Stop();
         _timer = null;
     }
@@ -76,13 +155,68 @@ public partial class MainPage : ContentPage
         OnPropertyChanged(nameof(OnlineCount));
         OnPropertyChanged(nameof(OfflineCount));
         OnPropertyChanged(nameof(SharedFilesCount));
+        OnPropertyChanged(nameof(MessagingPeersCount));
+        OnPropertyChanged(nameof(FileSharingPeersCount));
+        OnPropertyChanged(nameof(AvailableModelsCount));
+
+        // Update donut values
+        _donutDrawable.Online = OnlineCount;
+        _donutDrawable.Offline = OfflineCount;
+
+        PeerDonutView.Invalidate();
     }
 
     private async void DiscoveryButton_Clicked(object sender, EventArgs e)
+        => await Navigation.PushModalAsync(new DiscoveryPopup(this), false);
+
+    private async void MessagingButton_Clicked(object sender, EventArgs e)
+        => await Shell.Current.GoToAsync(nameof(MessagingPage));
+
+    private async void LlmButton_Clicked(object sender, EventArgs e)
+        => await Shell.Current.GoToAsync(nameof(LLMChatPage));
+
+    private async void ShareButton_Clicked(object sender, EventArgs e)
+        => await Shell.Current.GoToAsync(nameof(FileSharingPage));
+
+    private async void SettingsButton_Clicked(object sender, EventArgs e)
+        => await Navigation.PushModalAsync(new SettingsPage(), false);
+
+    private async void OnPeerTapped(object sender, TappedEventArgs e)
     {
-        await Navigation.PushModalAsync(
-            new DiscoveryPopup(this),
-            false);
+        if (e.Parameter is not PeerNodeCard card)
+            return;
+
+        var popup = new PeerDetailsPage { Card = card };
+        await Navigation.PushModalAsync(popup, false);
+    }
+
+    private void SyncConversations()
+    {
+        using var scope = ServiceHelper.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+
+        var lastMessages = db.Messages
+            .GroupBy(m => m.ToPeerId)
+            .Select(g => g.OrderByDescending(m => m.Timestamp).First())
+            .Take(5)
+            .ToList();
+
+        RecentConversations.Clear();
+
+        foreach (var msg in lastMessages)
+        {
+            var peer = Peers.FirstOrDefault(p => p.PeerId == msg.ToPeerId);
+            if (peer == null)
+                continue;
+
+            RecentConversations.Add(new ConversationPreview
+            {
+                PeerName = peer.HostName,
+                LastMessage = msg.Content,
+                IsOnline = peer.IsUp,
+                LastSeenText = peer.LastSeenText
+            });
+        }
     }
 
     private void SyncPeers()
@@ -109,32 +243,12 @@ public partial class MainPage : ContentPage
         }
     }
 
-    private async void MessagingButton_Clicked(object sender, EventArgs e)
-        => await Shell.Current.GoToAsync(nameof(MessagingPage));
-
-    private async void LlmButton_Clicked(object sender, EventArgs e)
-        => await Shell.Current.GoToAsync(nameof(LLMChatPage));
-
-    private async void ShareButton_Clicked(object sender, EventArgs e)
-        => await Shell.Current.GoToAsync(nameof(FileSharingPage));
-
-    private async void SettingsButton_Clicked(object sender, EventArgs e)
+    public class ConversationPreview
     {
-        var popup = new SettingsPage();
-        await Navigation.PushModalAsync(popup, false);
-    }
-
-    private async void OnPeerTapped(object sender, TappedEventArgs e)
-    {
-        if (e.Parameter is not PeerNodeCard card)
-            return;
-
-        var popup = new PeerDetailsPage
-        {
-            Card = card
-        };
-
-        await Navigation.PushModalAsync(popup, false);
+        public string PeerName { get; set; } = "";
+        public string LastMessage { get; set; } = "";
+        public bool IsOnline { get; set; }
+        public string LastSeenText { get; set; } = "";
     }
 
     public sealed class PeerNodeCard : INotifyPropertyChanged
@@ -190,7 +304,6 @@ public partial class MainPage : ContentPage
         public void UpdateFrom(PeerNode peer, ServiceDBContext db)
         {
             _peer = peer;
-
             LoadServices(db);
 
             OnPropertyChanged(nameof(HostName));
