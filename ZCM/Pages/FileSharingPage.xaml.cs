@@ -1,11 +1,14 @@
+using ZCM.Controls;
 using ZCM.ViewModels;
 using ZCL.Models;
 
 namespace ZCM.Pages;
 
 [QueryProperty(nameof(Peer), "Peer")]
-public partial class FileSharingPage : ContentPage
+public partial class FileSharingPage : ContentPage, IDrawerPage
 {
+    public DrawerHost? PageDrawer => Drawer;
+
     private readonly FileSharingHubViewModel _vm;
 
     private PeerNode? _preselectPeer;

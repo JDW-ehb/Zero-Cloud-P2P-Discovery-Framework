@@ -2,13 +2,16 @@ using ZCL.API;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Services.Messaging;
+using ZCM.Controls;
 using ZCM.ViewModels;
 
 namespace ZCM.Pages;
 
 [QueryProperty(nameof(Peer), "Peer")]
-public partial class MessagingPage : ContentPage
+public partial class MessagingPage : ContentPage, IDrawerPage
 {
+    public DrawerHost? PageDrawer => Drawer;
+
     private bool _userNearBottom = true;
 
     private readonly MessagingViewModel _vm;

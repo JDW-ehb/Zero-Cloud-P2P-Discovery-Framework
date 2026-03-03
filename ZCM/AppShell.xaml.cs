@@ -1,10 +1,14 @@
-﻿using ZCM.Notifications;
+﻿using System.Runtime.CompilerServices;
+using ZCM.Controls;
+using ZCM.Notifications;
 using ZCM.Pages;
 
 namespace ZCM
 {
     public partial class AppShell : Shell
     {
+        private bool _intercepting;
+
         public AppShell()
         {
             InitializeComponent();
@@ -12,6 +16,25 @@ namespace ZCM
             Routing.RegisterRoute(nameof(MessagingPage), typeof(MessagingPage));
             Routing.RegisterRoute(nameof(LLMChatPage), typeof(LLMChatPage));
             Routing.RegisterRoute(nameof(FileSharingPage), typeof(FileSharingPage));
+        }
+
+        protected override void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        {
+            base.OnPropertyChanged(propertyName);
+
+            if (propertyName == nameof(FlyoutIsPresented) && FlyoutIsPresented && !_intercepting)
+            {
+                // Prevent Shell's flyout from actually opening
+                _intercepting = true;
+                FlyoutIsPresented = false;
+                _intercepting = false;
+
+                // Toggle the current page's DrawerHost instead
+                if (CurrentPage is IDrawerPage { PageDrawer: not null } drawerPage)
+                {
+                    drawerPage.PageDrawer.IsOpen = !drawerPage.PageDrawer.IsOpen;
+                }
+            }
         }
 
         private async void DashboardButton_Clicked(object sender, EventArgs e)

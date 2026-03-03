@@ -124,8 +124,6 @@ public partial class MainPage : ContentPage
         BindingContext = this;
 
         PeerDonutView.Drawable = _donutDrawable;
-
-        Sidebar.Host = Drawer;
     }
 
     protected override void OnAppearing()
@@ -576,12 +574,5 @@ public partial class MainPage : ContentPage
             if (diff.TotalDays < 365) return $"{(int)Math.Round(diff.TotalDays / 30)}mo ago";
             return $"{(int)Math.Round(diff.TotalDays / 365)}y ago";
         }
-    }
-
-
-    private void HamburgerButton_Clicked(object sender, EventArgs e)
-    {
-        if (Shell.Current is Shell shell)
-            shell.FlyoutIsPresented = !shell.FlyoutIsPresented;
-    }
+    } 
 }

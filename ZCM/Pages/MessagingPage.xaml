@@ -6,6 +6,7 @@
     xmlns:controls="clr-namespace:ZCM.Controls"
     x:Class="ZCM.Pages.MessagingPage"
     Shell.NavBarIsVisible="False"
+    Title="Messaging"
     BackgroundColor="#1e1e1e">
 
     <ContentPage.Resources>
