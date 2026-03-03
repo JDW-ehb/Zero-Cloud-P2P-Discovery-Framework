@@ -21,22 +21,28 @@
                       Padding="16"
                       BackgroundColor="#151515">
 
-                    <!-- ☰ hamburger inside the sidebar -->
-                    <Button Text="☰"
-                            WidthRequest="44"
-                            HeightRequest="44"
-                            FontSize="20"
-                            BackgroundColor="#2A2A2A"
-                            TextColor="White"
-                            CornerRadius="12"
-                            HorizontalOptions="Start"
-                            Command="{Binding Source={x:Reference Drawer}, Path=ToggleCommand}" />
+                    <!-- Header -->
+                    <Grid Grid.Row="0"
+      ColumnDefinitions="Auto,*"
+      ColumnSpacing="12">
 
-                    <Label Grid.Row="1"
-                           Text="File Sharing"
-                           FontSize="22"
-                           FontAttributes="Bold"
-                           TextColor="White" />
+                        <Button Text="☰"
+            WidthRequest="44"
+            HeightRequest="44"
+            FontSize="20"
+            BackgroundColor="#2A2A2A"
+            TextColor="White"
+            CornerRadius="12"
+            Command="{Binding Source={x:Reference Drawer}, Path=ToggleCommand}" />
+
+                        <Label Grid.Column="1"
+           Text="File Sharing"
+           FontSize="22"
+           FontAttributes="Bold"
+           VerticalOptions="Center"
+           TextColor="White" />
+
+                    </Grid>
 
                     <Frame Grid.Row="2"
                            Margin="0,16"

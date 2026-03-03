@@ -25,54 +25,61 @@
             <Grid ColumnDefinitions="320,*" RowDefinitions="*">
 
                 <Grid Grid.Column="0"
-                      RowDefinitions="Auto,Auto,Auto,Auto,Auto,*"
-                      Padding="16"
-                      BackgroundColor="#151515">
+      RowDefinitions="Auto,Auto,Auto,Auto,Auto,*"
+      Padding="16"
+      BackgroundColor="#151515">
 
-                    <!-- ☰ hamburger inside the sidebar -->
-                    <Button Text="☰"
-                            WidthRequest="44"
-                            HeightRequest="44"
-                            FontSize="20"
-                            BackgroundColor="#2A2A2A"
-                            TextColor="White"
-                            CornerRadius="12"
-                            HorizontalOptions="Start"
-                            Command="{Binding Source={x:Reference Drawer}, Path=ToggleCommand}" />
+                    <!-- Header -->
+                    <Grid Grid.Row="0"
+          ColumnDefinitions="Auto,*"
+          ColumnSpacing="12">
 
-                    <Label Grid.Row="1"
-                           Text="AI Conversations"
-                           FontSize="20"
-                           TextColor="White" />
+                        <Button Text="☰"
+                WidthRequest="44"
+                HeightRequest="44"
+                FontSize="20"
+                BackgroundColor="#2A2A2A"
+                TextColor="White"
+                CornerRadius="12"
+                Command="{Binding Source={x:Reference Drawer}, Path=ToggleCommand}" />
 
-                    <Picker Grid.Row="2"
-                            Margin="0,12,0,0"
-                            ItemsSource="{Binding AvailablePeers}"
-                            SelectedItem="{Binding SelectedPeer}"
-                            Title="Select AI Peer"
-                            ItemDisplayBinding="{Binding Display}"
-                            BackgroundColor="#2A2A2A"
-                            TextColor="White" />
+                        <Label Grid.Column="1"
+               Text="AI Conversations"
+               FontSize="20"
+               VerticalOptions="Center"
+               TextColor="White" />
 
-                    <Label Grid.Row="3"
-                           Text="{Binding SelectedPeer.ModelDisplay}"
-                           TextColor="#999999"
-                           FontSize="12"
-                           Margin="4,4,0,0" />
+                    </Grid>
 
-                    <Button Grid.Row="4"
-                            Text="+ New Conversation"
-                            Command="{Binding StartNewConversationCommand}"
-                            Margin="0,12,0,0"
-                            BackgroundColor="#2A2A2A"
-                            TextColor="White"
-                            CornerRadius="12" />
+                    <!-- Peer Picker -->
+                    <Picker Grid.Row="1"
+            Margin="0,16,0,0"
+            ItemsSource="{Binding AvailablePeers}"
+            SelectedItem="{Binding SelectedPeer}"
+            Title="Select AI Peer"
+            ItemDisplayBinding="{Binding Display}"
+            BackgroundColor="#2A2A2A"
+            TextColor="White" />
 
-                    <CollectionView Grid.Row="5"
-                                    Margin="0,14,0,0"
-                                    ItemsSource="{Binding Conversations}"
-                                    SelectionMode="Single"
-                                    SelectedItem="{Binding SelectedConversation}">
+                    <Label Grid.Row="2"
+           Text="{Binding SelectedPeer.ModelDisplay}"
+           TextColor="#999999"
+           FontSize="12"
+           Margin="4,4,0,0" />
+
+                    <Button Grid.Row="3"
+            Text="+ New Conversation"
+            Command="{Binding StartNewConversationCommand}"
+            Margin="0,12,0,0"
+            BackgroundColor="#2A2A2A"
+            TextColor="White"
+            CornerRadius="12" />
+
+                    <CollectionView Grid.Row="4"
+                    Margin="0,14,0,0"
+                    ItemsSource="{Binding Conversations}"
+                    SelectionMode="Single"
+                    SelectedItem="{Binding SelectedConversation}">
 
                         <CollectionView.ItemTemplate>
                             <DataTemplate>

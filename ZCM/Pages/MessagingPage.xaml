@@ -26,31 +26,39 @@
             <Grid ColumnDefinitions="320,*">
 
                 <Grid Grid.Column="0"
-                      RowDefinitions="Auto,Auto,Auto,*"
-                      Padding="16"
-                      BackgroundColor="#151515">
+      RowDefinitions="Auto,Auto,Auto,*"
+      Padding="16"
+      BackgroundColor="#151515">
 
-                    <!-- ☰ hamburger inside the sidebar -->
-                    <Button Text="☰"
-                            WidthRequest="44"
-                            HeightRequest="44"
-                            FontSize="20"
-                            BackgroundColor="#2A2A2A"
-                            TextColor="White"
-                            CornerRadius="12"
-                            HorizontalOptions="Start"
-                            Command="{Binding Source={x:Reference Drawer}, Path=ToggleCommand}" />
+                    <!-- Header row -->
+                    <Grid Grid.Row="0"
+          ColumnDefinitions="Auto,*"
+          ColumnSpacing="12">
 
+                        <Button Text="☰"
+                WidthRequest="44"
+                HeightRequest="44"
+                FontSize="20"
+                BackgroundColor="#2A2A2A"
+                TextColor="White"
+                CornerRadius="12"
+                Command="{Binding Source={x:Reference Drawer}, Path=ToggleCommand}" />
+
+                        <Label Grid.Column="1"
+               Text="Messaging"
+               FontSize="22"
+               VerticalOptions="Center"
+               TextColor="White" />
+
+                    </Grid>
+
+                    <!-- Status -->
                     <Label Grid.Row="1"
-                           Text="Messaging"
-                           FontSize="22"
-                           TextColor="White" />
+           Margin="0,10"
+           Text="{Binding StatusMessage}"
+           FontSize="12"
+           TextColor="{Binding IsConnected, Converter={StaticResource BoolToColorConverter}}" />
 
-                    <Label Grid.Row="2"
-                           Margin="0,10"
-                           Text="{Binding StatusMessage}"
-                           FontSize="12"
-                           TextColor="{Binding IsConnected, Converter={StaticResource BoolToColorConverter}}" />
 
                     <CollectionView Grid.Row="3"
                                     ItemsSource="{Binding Conversations}"
