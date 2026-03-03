@@ -215,7 +215,7 @@
                    BackgroundColor="#212121"
                    CornerRadius="18"
                    Padding="20"
-                   HeightRequest="400">
+                   HeightRequest="315">
 
                 <VerticalStackLayout Spacing="12">
                     <Label Text="{Binding SharedFilesCount, StringFormat='Files Shared ({0})'}"
@@ -295,7 +295,7 @@
                    BackgroundColor="#212121"
                    CornerRadius="18"
                    Padding="20"
-                   HeightRequest="400">
+                   HeightRequest="315">
 
                 <Grid RowDefinitions="Auto,Auto,Auto,*"
       RowSpacing="6">
