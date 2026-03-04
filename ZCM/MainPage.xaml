@@ -328,6 +328,53 @@
                                    Margin="0,6,0,0"/>
                         </CollectionView.EmptyView>
 
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Frame BackgroundColor="#1A1A1A"
+                                       Padding="12"
+                                       CornerRadius="12"
+                                       HasShadow="False"
+                                       Margin="0,4">
+
+                                    <Grid ColumnDefinitions="*,Auto"
+                                          RowDefinitions="Auto,Auto"
+                                          ColumnSpacing="12"
+                                          RowSpacing="4">
+
+                                        <Label Text="{Binding FileName}"
+                                               FontAttributes="Bold"
+                                               TextColor="White"
+                                               LineBreakMode="TailTruncation"/>
+
+                                        <Label Grid.Column="1"
+                                               Text="{Binding FileSizeText}"
+                                               TextColor="#AAAAAA"
+                                               FontSize="12"
+                                               HorizontalTextAlignment="End"
+                                               VerticalOptions="Center"/>
+
+                                        <HorizontalStackLayout Grid.Row="1"
+                                                               Spacing="12">
+
+                                            <Label Text="{Binding PeerName, StringFormat='From: {0}'}"
+                                                   FontSize="11"
+                                                   TextColor="#888888"/>
+
+                                            <Label Text="{Binding FileType}"
+                                                   FontSize="11"
+                                                   TextColor="#888888"/>
+
+                                            <Label Text="{Binding SharedSince, StringFormat='{0:dd/MM/yyyy}'}"
+                                                   FontSize="11"
+                                                   TextColor="#888888"/>
+
+                                        </HorizontalStackLayout>
+
+                                    </Grid>
+                                </Frame>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+
                     </CollectionView>
 
                 </VerticalStackLayout>
