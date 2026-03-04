@@ -32,6 +32,11 @@ public partial class SettingsPage : ContentPage
             2000);
     }
 
+    private async void NetworkSettingsButton_Clicked(object sender, EventArgs e)
+    {
+        await Navigation.PushModalAsync(new NetworkSettingsPopup(_vm), false);
+    }
+
     private async void GroupsButton_Clicked(object sender, EventArgs e)
     {
         await Navigation.PushModalAsync(new GroupsPopup(_vm), false);

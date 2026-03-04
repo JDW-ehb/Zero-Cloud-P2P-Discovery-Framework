@@ -63,6 +63,9 @@
 	  <Compile Update="Pages\DiscoveryPopup.xaml.cs">
 	    <DependentUpon>DiscoveryPopup.xaml</DependentUpon>
 	  </Compile>
+	  <Compile Update="Pages\NetworkSettingsPopup.xaml.cs">
+	    <DependentUpon>NetworkSettingsPopup.xaml</DependentUpon>
+	  </Compile>
 	</ItemGroup>
 	<ItemGroup>
 	  <MauiXaml Update="Controls\SidebarView.xaml">
@@ -72,6 +75,9 @@
 	    <Generator>MSBuild:Compile</Generator>
 	  </MauiXaml>
 	  <MauiXaml Update="Pages\DiscoveryPopup.xaml">
+	    <Generator>MSBuild:Compile</Generator>
+	  </MauiXaml>
+	  <MauiXaml Update="Pages\NetworkSettingsPopup.xaml">
 	    <Generator>MSBuild:Compile</Generator>
 	  </MauiXaml>
 	</ItemGroup>

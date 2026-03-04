@@ -40,7 +40,26 @@ public partial class App : Application
 
     protected override Window CreateWindow(IActivationState? activationState)
     {
-        return new Window(new AppShell());
+        var window = new Window(new AppShell());
+
+#if WINDOWS
+        window.HandlerChanged += (s, e) =>
+        {
+            if (window.Handler?.PlatformView is Microsoft.UI.Xaml.Window nativeWindow)
+            {
+                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(nativeWindow);
+                var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
+                var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(windowId);
+
+                if (appWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)
+                {
+                    presenter.Maximize();
+                }
+            }
+        };
+#endif
+
+        return window;
     }
 }
 

@@ -7,12 +7,15 @@
     Padding="0">
 
     <Grid>
+
+        <!-- Backdrop -->
         <BoxView BackgroundColor="Transparent">
             <BoxView.GestureRecognizers>
                 <TapGestureRecognizer Tapped="OnBackdropTapped"/>
             </BoxView.GestureRecognizers>
         </BoxView>
 
+        <!-- Popup -->
         <Frame WidthRequest="600"
                Padding="24"
                CornerRadius="18"
@@ -24,6 +27,7 @@
             <ScrollView>
                 <VerticalStackLayout Spacing="14">
 
+                    <!-- Header -->
                     <Grid ColumnDefinitions="*,Auto">
                         <Label Text="Settings"
                                FontSize="20"
@@ -39,26 +43,30 @@
                                 Padding="10,6"/>
                     </Grid>
 
-                    <!-- Core Settings -->
+                    <!-- Identity Settings -->
 
-                    <Label Text="Peer Name" TextColor="White"/>
-                    <Entry Text="{Binding PeerName}" TextColor="White"/>
+                    <Label Text="Peer Name"
+                           TextColor="White"/>
 
-                    <Label Text="Discovery Port" TextColor="White"/>
-                    <Entry Text="{Binding DiscoveryPort}" Keyboard="Numeric" TextColor="White"/>
+                    <Entry Text="{Binding PeerName}"
+                           TextColor="White"/>
 
-                    <Label Text="Multicast Address" TextColor="White"/>
-                    <Entry Text="{Binding MulticastAddress}" TextColor="White"/>
+                    <Label Text="Network Secret"
+                           TextColor="White"/>
 
-                    <Label Text="Discovery Timeout (ms)" TextColor="White"/>
-                    <Entry Text="{Binding DiscoveryTimeoutMS}" Keyboard="Numeric" TextColor="White"/>
-
-                    <Label Text="Network Secret" TextColor="White"/>
                     <Entry Text="{Binding NetworkSecret}"
                            IsPassword="True"
                            TextColor="White"/>
 
-                    <!-- Management Buttons -->
+                    <!-- Networking -->
+
+                    <Button Text="Manage Network Settings…"
+                            Clicked="NetworkSettingsButton_Clicked"
+                            BackgroundColor="#2A2A2A"
+                            TextColor="White"
+                            CornerRadius="12"/>
+
+                    <!-- Trust -->
 
                     <Button Text="Manage Groups (Trust)…"
                             Clicked="GroupsButton_Clicked"
@@ -66,11 +74,15 @@
                             TextColor="White"
                             CornerRadius="12"/>
 
+                    <!-- Services -->
+
                     <Button Text="Manage Announced Services…"
                             Clicked="ServicesButton_Clicked"
                             BackgroundColor="#2A2A2A"
                             TextColor="White"
                             CornerRadius="12"/>
+
+                    <!-- Save -->
 
                     <Button Text="Save Settings"
                             Clicked="SaveButton_Clicked"
@@ -81,5 +93,6 @@
             </ScrollView>
 
         </Frame>
+
     </Grid>
 </ContentPage>
