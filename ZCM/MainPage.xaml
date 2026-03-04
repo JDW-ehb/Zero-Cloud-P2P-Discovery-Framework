@@ -71,8 +71,9 @@
                         CornerRadius="12"/>
 
                 <Button Text="Exit App"
+                        Clicked="ExitButton_Clicked"
                         BackgroundColor="#2A2A2A"
-                        TextColor="#999999"
+                        TextColor="#E74C3C"
                         CornerRadius="12"/>
 
             </VerticalStackLayout>

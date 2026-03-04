@@ -649,4 +649,9 @@ public partial class MainPage : ContentPage
 
 
     }
+
+    private void ExitButton_Clicked(object sender, EventArgs e)
+    {
+        Application.Current?.Quit();
+    }
 }
