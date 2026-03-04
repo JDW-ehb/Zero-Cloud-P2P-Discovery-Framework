@@ -73,7 +73,7 @@
                     <!-- Quick-filter buttons -->
                     <VerticalStackLayout Grid.Row="2" Spacing="8" Margin="0,0,0,12">
 
-                        <Button Text="📁  My Files"
+                        <Button Text="My Files"
                                 Clicked="OnMyFilesClicked"
                                 BackgroundColor="#2A2A2A"
                                 TextColor="White"
@@ -81,7 +81,7 @@
                                 Padding="12,10"
                                 HorizontalOptions="Fill" />
 
-                        <Button Text="🌐  All Network Files"
+                        <Button Text="All Network Files"
                                 Clicked="OnAllNetworkFilesClicked"
                                 BackgroundColor="#2A2A2A"
                                 TextColor="White"
@@ -156,20 +156,21 @@
                            FontAttributes="Bold"
                            TextColor="White"/>
 
+                    <!-- Column headers — same widths as item rows -->
                     <Grid Grid.Row="1"
-                          Margin="20,16,0,6"
-                          ColumnDefinitions="700,50,70,60,120"
-                          ColumnSpacing="16">
+                          Margin="14,16,14,6"
+                          ColumnDefinitions="*,100,80,80,120"
+                          ColumnSpacing="20">
 
                         <Label Text="File name"
                                FontAttributes="Bold"
                                TextColor="#AAAAAA"
                                VerticalOptions="Center"/>
 
-                        <Label Grid.Column="1" Text="Date" FontAttributes="Bold" TextColor="#AAAAAA" HorizontalTextAlignment="Center" VerticalOptions="Center"/>
-                        <Label Grid.Column="2" Text="Type" FontAttributes="Bold" TextColor="#AAAAAA" HorizontalTextAlignment="Center" VerticalOptions="Center"/>
-                        <Label Grid.Column="3" Text="Size" FontAttributes="Bold" TextColor="#AAAAAA" HorizontalTextAlignment="Center" VerticalOptions="Center"/>
-                        <Label Grid.Column="4" Text="" VerticalOptions="Center"/>
+                        <Label Grid.Column="1" Text="Date"   FontAttributes="Bold" TextColor="#AAAAAA" HorizontalTextAlignment="Center" VerticalOptions="Center"/>
+                        <Label Grid.Column="2" Text="Type"   FontAttributes="Bold" TextColor="#AAAAAA" HorizontalTextAlignment="Center" VerticalOptions="Center"/>
+                        <Label Grid.Column="3" Text="Size"   FontAttributes="Bold" TextColor="#AAAAAA" HorizontalTextAlignment="Center" VerticalOptions="Center"/>
+                        <Label Grid.Column="4" Text=""        VerticalOptions="Center"/>
                     </Grid>
 
                     <CollectionView Grid.Row="2"
@@ -194,7 +195,8 @@
                                        BackgroundColor="#1F1F1F"
                                        HasShadow="False">
 
-                                    <Grid ColumnDefinitions="3*,Auto,Auto,Auto,Auto"
+                                    <!-- Same column widths as the header -->
+                                    <Grid ColumnDefinitions="*,100,80,80,120"
                                           ColumnSpacing="20"
                                           VerticalOptions="Center">
 
@@ -206,15 +208,14 @@
                                                    IsVisible="{Binding OwnerHostName, Converter={x:Static x:NullToBoolConverter.Instance}}" />
                                         </VerticalStackLayout>
 
-                                        <Label Grid.Column="1" Text="{Binding SharedSinceText}" TextColor="#CCCCCC" HorizontalOptions="Center"/>
-                                        <Label Grid.Column="2" Text="{Binding Type}" TextColor="#CCCCCC" HorizontalOptions="Center"/>
-                                        <Label Grid.Column="3" Text="{Binding SizeText}" TextColor="#CCCCCC" HorizontalOptions="Center"/>
+                                        <Label Grid.Column="1" Text="{Binding SharedSinceText}" TextColor="#CCCCCC" HorizontalTextAlignment="Center" VerticalOptions="Center"/>
+                                        <Label Grid.Column="2" Text="{Binding Type}"            TextColor="#CCCCCC" HorizontalTextAlignment="Center" VerticalOptions="Center"/>
+                                        <Label Grid.Column="3" Text="{Binding SizeText}"        TextColor="#CCCCCC" HorizontalTextAlignment="Center" VerticalOptions="Center"/>
 
                                         <Button Grid.Column="4"
                                                 Text="Download"
                                                 Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.DownloadCommand}"
                                                 CommandParameter="{Binding .}"
-                                                IsVisible="{Binding IsLocal, Converter={x:Static x:InverseBoolConverter.Instance}}"
                                                 BackgroundColor="#6B5DD3"
                                                 TextColor="White"
                                                 CornerRadius="10"

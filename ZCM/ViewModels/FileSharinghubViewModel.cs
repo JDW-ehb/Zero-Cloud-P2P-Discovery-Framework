@@ -64,7 +64,7 @@ public sealed class FileSharingHubViewModel : BindableObject
 
         DownloadCommand = new Command<SharedFileItem>(async file =>
         {
-            if (file == null || file.IsLocal)
+            if (file == null)
                 return;
 
 #if WINDOWS
@@ -84,6 +84,17 @@ public sealed class FileSharingHubViewModel : BindableObject
 
     if (result == null)
         return;
+
+    // Local file → just copy it directly, no network needed
+    if (file.IsLocal)
+    {
+        var localPath = await ResolveLocalPathAsync(file.FileId);
+        if (localPath != null && File.Exists(localPath))
+        {
+            File.Copy(localPath, result.Path, overwrite: true);
+            return;
+        }
+    }
 
     _service.SetDownloadTarget(file.FileId, result.Path);
 #endif
@@ -118,6 +129,20 @@ public sealed class FileSharingHubViewModel : BindableObject
 
         _ = LoadPeersAsync();
         _ = LoadLocalSharedFilesAsync();
+    }
+
+    /// <summary>
+    /// Look up the local disk path for a file owned by this peer.
+    /// </summary>
+    private async Task<string?> ResolveLocalPathAsync(Guid remoteFileId)
+    {
+        using var scope = ServiceHelper.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
+
+        var entity = await db.SharedFiles
+            .FirstOrDefaultAsync(f => f.RemoteFileId == remoteFileId);
+
+        return entity?.LocalPath;
     }
 
 
@@ -203,7 +228,7 @@ public sealed class FileSharingHubViewModel : BindableObject
     }
 
     /// <summary>
-    /// Show files shared by every remote peer in the network.
+    /// Show files shared by every peer in the network, including yourself.
     /// </summary>
     public async Task LoadAllNetworkFilesAsync()
     {
@@ -221,7 +246,6 @@ public sealed class FileSharingHubViewModel : BindableObject
 
         var files = await db.SharedFiles
             .Include(f => f.Peer)
-            .Where(f => f.PeerRefId != localPeerId)
             .OrderByDescending(f => f.SharedSince)
             .ToListAsync();
 
@@ -230,8 +254,11 @@ public sealed class FileSharingHubViewModel : BindableObject
             Files.Clear();
             foreach (var f in files)
             {
+                var isLocal = f.PeerRefId == localPeerId;
+
                 // Cache the owner so downloads can resolve the right peer
-                _fileOwnerMap[f.RemoteFileId] = f.Peer;
+                if (!isLocal)
+                    _fileOwnerMap[f.RemoteFileId] = f.Peer;
 
                 Files.Add(new SharedFileItem
                 {
@@ -240,6 +267,7 @@ public sealed class FileSharingHubViewModel : BindableObject
                     Type = f.FileType,
                     Size = f.FileSize,
                     SharedSince = f.SharedSince,
+                    IsLocal = isLocal,
                     OwnerHostName = f.Peer.HostName
                 });
             }
@@ -345,8 +373,8 @@ public sealed class FileSharingHubViewModel : BindableObject
 
             var entity = new SharedFileEntity
             {
-                Id = Guid.NewGuid(),               
-                RemoteFileId = Guid.NewGuid(),     
+                Id = Guid.NewGuid(),
+                RemoteFileId = Guid.NewGuid(),
                 PeerRefId = localPeerId.Value,
                 FileName = info.Name,
                 FileSize = info.Length,
@@ -482,5 +510,6 @@ public sealed class FileSharingHubViewModel : BindableObject
         });
     }
 }
+
 
 
