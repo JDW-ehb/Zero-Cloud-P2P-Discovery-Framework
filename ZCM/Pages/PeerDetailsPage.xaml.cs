@@ -33,27 +33,30 @@ public partial class PeerDetailsPage : ContentPage
         if (sender is not Button btn || _card is null)
             return;
 
+        var serviceName = btn.Text;
         var peer = _card.ToPeerNode();
 
-        // Close popup first
-        await Navigation.PopModalAsync(false);
+        // Grab Shell navigation BEFORE popping, so the reference stays valid
+        var nav = Shell.Current.Navigation;
 
-        switch (btn.Text)
+        // Close PeerDetailsPage modal, then the DiscoveryPopup underneath
+        await nav.PopModalAsync(false);
+        await nav.PopModalAsync(false);
+
+        if (serviceName.StartsWith("Messaging", StringComparison.OrdinalIgnoreCase))
         {
-            case "Messaging":
-                await Shell.Current.GoToAsync(nameof(MessagingPage),
-                    new Dictionary<string, object> { { "Peer", peer } });
-                break;
-
-            case "FileTransfer":
-                await Shell.Current.GoToAsync(nameof(FileSharingPage),
-                    new Dictionary<string, object> { { "Peer", peer } });
-                break;
-
-            case "AIChat":
-                await Shell.Current.GoToAsync(nameof(LLMChatPage),
-                    new Dictionary<string, object> { { "Peer", peer } });
-                break;
+            await Shell.Current.GoToAsync(nameof(MessagingPage),
+                new Dictionary<string, object> { { "Peer", peer } });
+        }
+        else if (serviceName.StartsWith("Filesharing", StringComparison.OrdinalIgnoreCase))
+        {
+            await Shell.Current.GoToAsync(nameof(FileSharingPage),
+                new Dictionary<string, object> { { "Peer", peer } });
+        }
+        else if (serviceName.StartsWith("LLMChat", StringComparison.OrdinalIgnoreCase))
+        {
+            await Shell.Current.GoToAsync(nameof(LLMChatPage),
+                new Dictionary<string, object> { { "Peer", peer } });
         }
     }
 }
