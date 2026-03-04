@@ -421,34 +421,16 @@ public partial class MainPage : ContentPage
             var existing = Peers.FirstOrDefault(x => x.ProtocolPeerId == p.ProtocolPeerId);
 
             if (existing == null)
-            {
                 Peers.Add(new PeerNodeCard(p, db));
-
-                if (_knownPeerIds.Add(p.ProtocolPeerId))
-                    _activity.Log($"Peer discovered: {p.HostName} ({p.IpAddress})");
-            }
             else
-            {
-                var wasUp = existing.IsUp;
-                existing.UpdateFrom(p, db);
-
-                // Detect status transitions
-                if (!wasUp && existing.IsUp)
-                    _activity.Log($"Peer online: {p.HostName}");
-                else if (wasUp && !existing.IsUp)
-                    _activity.Log($"Peer offline: {p.HostName}");
-            }
+                existing.UpdateFrom(p, db);  // ✅ This updates LastSeen from DataStore
         }
 
         for (int i = Peers.Count - 1; i >= 0; i--)
         {
             var card = Peers[i];
             if (!_store.Peers.Any(p => p.ProtocolPeerId == card.ProtocolPeerId))
-            {
-                _activity.Log($"Peer removed: {card.HostName}");
-                _knownPeerIds.Remove(card.ProtocolPeerId);
                 Peers.RemoveAt(i);
-            }
         }
     }
 
@@ -680,7 +662,7 @@ public partial class MainPage : ContentPage
         public void UpdateFrom(PeerNode peer, ServiceDBContext db)
         {
             _peer = peer;
-            LoadServices(db);
+            LoadServices(db);  // ✅ This should reload services from DB
 
             OnPropertyChanged(nameof(HostName));
             OnPropertyChanged(nameof(IpAddress));

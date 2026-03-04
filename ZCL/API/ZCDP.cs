@@ -325,6 +325,9 @@ namespace ZCL.API
             store.Peers.AddOrUpdatePeer(peer);
             await db.SaveChangesAsync(ct);
 
+            // ✅ Track announced services to identify which ones to keep
+            var announcedServiceKeys = new HashSet<(string Name, string Address, ushort Port)>();
+
             // Read services and upsert
             for (ulong idx = 0; idx < servicesCount; idx++)
             {
@@ -336,6 +339,8 @@ namespace ZCL.API
                     Metadata = reader.ReadString(),
                     PeerRefId = peer.PeerId
                 };
+
+                announcedServiceKeys.Add((service.Name, service.Address, service.Port));
 
                 var existing = await db.Services
                     .AsNoTracking()
@@ -355,6 +360,21 @@ namespace ZCL.API
                     service.ServiceId = existing.ServiceId;
                     db.Services.Update(service);
                 }
+            }
+
+            // ✅ Remove services that are no longer announced by this peer
+            var existingServices = await db.Services
+                .Where(s => s.PeerRefId == peer.PeerId)
+                .ToListAsync(ct);  // Remove .AsNoTracking() so entities are tracked
+
+            var servicesToRemove = existingServices
+                .Where(s => !announcedServiceKeys.Contains((s.Name, s.Address, s.Port)))
+                .ToList();
+
+            if (servicesToRemove.Any())
+            {
+                db.Services.RemoveRange(servicesToRemove);
+                Debug.WriteLine($"Removed {servicesToRemove.Count} obsolete service(s) from peer {peer.HostName}");
             }
 
             await db.SaveChangesAsync(ct);
