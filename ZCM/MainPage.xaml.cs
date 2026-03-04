@@ -17,7 +17,7 @@ namespace ZCM;
 public class PeerDonutDrawable : IDrawable
 {
     public int Online { get; set; }
-    public int Offline { get; set; }        
+    public int Offline { get; set; }
 
     public void Draw(ICanvas canvas, RectF rect)
     {
@@ -225,9 +225,9 @@ public partial class MainPage : ContentPage
 
         PeersMessagedCount = peersMessaged.Count;
 
-        // peers never messaged
+        // peers never messaged (exclude servers)
         var knownPeers = db.PeerNodes
-            .Where(p => !p.IsLocal)
+            .Where(p => !p.IsLocal && p.Role != NodeRole.Server)
             .Select(p => p.PeerId)
             .ToList();
 
@@ -416,39 +416,21 @@ public partial class MainPage : ContentPage
         using var scope = ServiceHelper.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
 
-        foreach (var p in _store.Peers.Where(p => !p.IsLocal))
+        foreach (var p in _store.Peers.Where(p => !p.IsLocal && p.Role != NodeRole.Server))
         {
             var existing = Peers.FirstOrDefault(x => x.ProtocolPeerId == p.ProtocolPeerId);
 
             if (existing == null)
-            {
                 Peers.Add(new PeerNodeCard(p, db));
-
-                if (_knownPeerIds.Add(p.ProtocolPeerId))
-                    _activity.Log($"Peer discovered: {p.HostName} ({p.IpAddress})");
-            }
             else
-            {
-                var wasUp = existing.IsUp;
-                existing.UpdateFrom(p, db);
-
-                // Detect status transitions
-                if (!wasUp && existing.IsUp)
-                    _activity.Log($"Peer online: {p.HostName}");
-                else if (wasUp && !existing.IsUp)
-                    _activity.Log($"Peer offline: {p.HostName}");
-            }
+                existing.UpdateFrom(p, db);  // ✅ This updates LastSeen from DataStore
         }
 
         for (int i = Peers.Count - 1; i >= 0; i--)
         {
             var card = Peers[i];
-            if (!_store.Peers.Any(p => p.ProtocolPeerId == card.ProtocolPeerId))
-            {
-                _activity.Log($"Peer removed: {card.HostName}");
-                _knownPeerIds.Remove(card.ProtocolPeerId);
+            if (!_store.Peers.Any(p => p.ProtocolPeerId == card.ProtocolPeerId && p.Role != NodeRole.Server))
                 Peers.RemoveAt(i);
-            }
         }
     }
 
@@ -492,9 +474,11 @@ public partial class MainPage : ContentPage
         var db = scope.ServiceProvider.GetRequiredService<ServiceDBContext>();
         var fileSharing = scope.ServiceProvider.GetRequiredService<FileSharingService>();
 
-        // Ask every online remote peer for its list
+        // Ask every online remote peer for its list (exclude servers)
         var onlinePeers = await db.PeerNodes
-            .Where(p => !p.IsLocal && p.OnlineStatus == PeerOnlineStatus.Online)
+            .Where(p => !p.IsLocal
+                     && p.Role != NodeRole.Server
+                     && p.OnlineStatus == PeerOnlineStatus.Online)
             .ToListAsync();
 
         foreach (var peer in onlinePeers)
@@ -680,7 +664,7 @@ public partial class MainPage : ContentPage
         public void UpdateFrom(PeerNode peer, ServiceDBContext db)
         {
             _peer = peer;
-            LoadServices(db);
+            LoadServices(db);  // ✅ This should reload services from DB
 
             OnPropertyChanged(nameof(HostName));
             OnPropertyChanged(nameof(IpAddress));
