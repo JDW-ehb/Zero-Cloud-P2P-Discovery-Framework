@@ -1,4 +1,5 @@
 using ZCL.Models;
+using System.Diagnostics;
 
 namespace ZCM.Pages;
 
@@ -33,7 +34,32 @@ public partial class PeerDetailsPage : ContentPage
         if (sender is not Button btn || _card is null)
             return;
 
-        var serviceName = btn.Text;
+        // Get the original service name from CommandParameter
+        // If CommandParameter is not set, try getting it from the button's BindingContext
+        var serviceName = btn.CommandParameter as string;
+
+        if (string.IsNullOrEmpty(serviceName))
+        {
+            // Fallback: reconstruct from the displayed text
+            if (btn.Text == "LLM")
+            {
+                // Find the actual LLMChat service from the card's Services collection
+                serviceName = _card.Services.FirstOrDefault(s => s.StartsWith("LLMChat", StringComparison.OrdinalIgnoreCase));
+            }
+            else
+            {
+                serviceName = btn.Text;
+            }
+        }
+
+        if (string.IsNullOrEmpty(serviceName))
+        {
+            Debug.WriteLine("ServiceClicked: No service name found");
+            return;
+        }
+
+        Debug.WriteLine($"ServiceClicked: {serviceName}");
+
         var peer = _card.ToPeerNode();
 
         // Grab Shell navigation BEFORE popping, so the reference stays valid
@@ -57,6 +83,10 @@ public partial class PeerDetailsPage : ContentPage
         {
             await Shell.Current.GoToAsync(nameof(LLMChatPage),
                 new Dictionary<string, object> { { "Peer", peer } });
+        }
+        else
+        {
+            Debug.WriteLine($"ServiceClicked: Unknown service type: {serviceName}");
         }
     }
 }
