@@ -29,11 +29,25 @@ public sealed class SettingsViewModel : BindableObject
         set { _multicastAddress = value; OnPropertyChanged(); }
     }
 
-    private int _discoveryTimeoutMs;
+    private string _discoveryTimeoutMsText = "";
+    public string DiscoveryTimeoutMSText
+    {
+        get => _discoveryTimeoutMsText;
+        set
+        {
+            _discoveryTimeoutMsText = value;
+            OnPropertyChanged();
+        }
+    }
+
     public int DiscoveryTimeoutMS
     {
-        get => _discoveryTimeoutMs;
-        set { _discoveryTimeoutMs = value; OnPropertyChanged(); }
+        get => int.TryParse(_discoveryTimeoutMsText, out var v) ? v : 0;
+        set
+        {
+            _discoveryTimeoutMsText = value.ToString();
+            OnPropertyChanged(nameof(DiscoveryTimeoutMSText));
+        }
     }
 
     private string _networkSecret = "";

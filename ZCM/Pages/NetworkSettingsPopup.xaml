@@ -56,7 +56,7 @@
                     <Label Text="Discovery Timeout (ms)"
                            TextColor="#CCCCCC"/>
 
-                    <Entry Text="{Binding DiscoveryTimeout}"
+                    <Entry Text="{Binding DiscoveryTimeoutMSText}"
                            Keyboard="Numeric"
                            BackgroundColor="#333333"
                            TextColor="White"/>
