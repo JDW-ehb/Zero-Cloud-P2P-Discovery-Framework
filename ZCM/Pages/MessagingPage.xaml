@@ -65,11 +65,14 @@
                                         ItemsSource="{Binding Conversations}"
                                         SelectionMode="Single"
                                         SelectionChanged="OnConversationSelectionChanged">
+                            <CollectionView.ItemsLayout>
+                                <LinearItemsLayout Orientation="Vertical" ItemSpacing="18" />
+                            </CollectionView.ItemsLayout>
 
                             <CollectionView.ItemTemplate>
                                 <DataTemplate>
                                     <Frame Padding="12"
-                                           Margin="0,10"
+                                           Margin="0,4"
                                            CornerRadius="14"
                                            HasShadow="False"
                                            BackgroundColor="#1F1F1F">
