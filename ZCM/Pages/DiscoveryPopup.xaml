@@ -10,11 +10,11 @@
         <!-- Backdrop -->
         <BoxView BackgroundColor="Transparent">
             <BoxView.GestureRecognizers>
-                <TapGestureRecognizer Tapped="OnBackdropTapped"/>
+                <TapGestureRecognizer Tapped="OnBackdropTapped" />
             </BoxView.GestureRecognizers>
         </BoxView>
 
-        <!-- Popup -->
+        <!-- Popup -->  
         <Frame
             WidthRequest="900"
             HeightRequest="650"
@@ -25,9 +25,9 @@
             VerticalOptions="Center"
             HasShadow="False">
 
-            <VerticalStackLayout Spacing="20">
+            <Grid RowDefinitions="Auto,*" RowSpacing="20">
 
-                <Grid ColumnDefinitions="*,Auto">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
                     <Label
                         Text="Discovery"
                         FontSize="20"
@@ -42,24 +42,25 @@
                         TextColor="White"
                         CornerRadius="10"
                         WidthRequest="36"
-                        HeightRequest="36"/>
+                        HeightRequest="36" />
                 </Grid>
 
                 <CollectionView
+                    Grid.Row="1"
                     ItemsSource="{Binding Peers}"
-                    SelectionMode="None">
+                    SelectionMode="None"
+                    VerticalScrollBarVisibility="Always">
 
                     <CollectionView.ItemsLayout>
                         <GridItemsLayout
                             Orientation="Vertical"
                             Span="3"
                             VerticalItemSpacing="20"
-                            HorizontalItemSpacing="20"/>
+                            HorizontalItemSpacing="20" />
                     </CollectionView.ItemsLayout>
 
                     <CollectionView.ItemTemplate>
                         <DataTemplate>
-
                             <Frame
                                 Padding="16"
                                 CornerRadius="16"
@@ -73,32 +74,29 @@
                                 </Frame.GestureRecognizers>
 
                                 <VerticalStackLayout Spacing="8">
-
                                     <Label
                                         Text="{Binding HostName}"
                                         TextColor="White"
-                                        FontAttributes="Bold"/>
+                                        FontAttributes="Bold" />
 
                                     <Label
                                         Text="{Binding StatusText}"
                                         TextColor="#CCCCCC"
-                                        FontSize="12"/>
+                                        FontSize="12" />
 
                                     <Label
                                         Text="{Binding LastSeenText}"
                                         TextColor="#888888"
-                                        FontSize="11"/>
-
+                                        FontSize="11" />
                                 </VerticalStackLayout>
 
                             </Frame>
-
                         </DataTemplate>
                     </CollectionView.ItemTemplate>
 
                 </CollectionView>
 
-            </VerticalStackLayout>
+            </Grid>
 
         </Frame>
 
