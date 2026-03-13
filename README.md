@@ -19,27 +19,25 @@ A decentralized, cross-platform Peer-to-Peer (P2P) framework built with .NET MAU
 
 Discovering local peers and establishing secure trust boundaries.
 
-> *Add your Peer Discovery GIF below:*
+![Peer Discovery Demo](ZCM/Resources/Images/discovery.gif)
 
 ### Real-time P2P Messaging
 
 Secure, real-time text communication directly between discovered peers on the local network.
 
-> *Add your Messaging GIF below:*
-
+![Messaging Demo](ZCM/Resources/Images/messaging.gif)
 
 ### Secure File Sharing
 
 Sending and receiving files directly between peers without a central server.
 
-> *Add your File Sharing GIF below:*
-
+![File Sharing Demo](ZCM/Resources/Images/filesharing.gif)
 
 ### Local LLM Chat
 
 Messaging local peers using integrated LLM chat logic.
 
-> *Add your LLM Chat GIF below:*
+![LLM Chat Demo](ZCM/Resources/Images/llmchat.gif)
 
 
 ---
