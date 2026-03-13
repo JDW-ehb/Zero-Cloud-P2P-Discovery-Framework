@@ -1,11 +1,14 @@
+using ZCM.Controls;
 using ZCM.ViewModels;
 using ZCL.Models;
 
 namespace ZCM.Pages;
 
 [QueryProperty(nameof(Peer), "Peer")]
-public partial class FileSharingPage : ContentPage
+public partial class FileSharingPage : ContentPage, IDrawerPage
 {
+    public DrawerHost? PageDrawer => Drawer;
+
     private readonly FileSharingHubViewModel _vm;
 
     private PeerNode? _preselectPeer;
@@ -13,6 +16,8 @@ public partial class FileSharingPage : ContentPage
     public FileSharingPage()
     {
         InitializeComponent();
+
+        Sidebar.Host = Drawer;
 
         _vm = new FileSharingHubViewModel(
             ServiceHelper.GetService<ZCL.Services.FileSharing.FileSharingService>(),
@@ -33,7 +38,7 @@ public partial class FileSharingPage : ContentPage
 
             Dispatcher.Dispatch(async () =>
             {
-                await Task.Delay(50); 
+                await Task.Delay(50);
                 await _vm.ActivatePeerAsync(_preselectPeer);
             });
         }
@@ -55,5 +60,15 @@ public partial class FileSharingPage : ContentPage
     {
         await Navigation.PushModalAsync(
             new MySharedFilesPopup(_vm));
+    }
+
+    private async void OnMyFilesClicked(object sender, EventArgs e)
+    {
+        await _vm.LoadMyFilesAsync();
+    }
+
+    private async void OnAllNetworkFilesClicked(object sender, EventArgs e)
+    {
+        await _vm.LoadAllNetworkFilesAsync();
     }
 }

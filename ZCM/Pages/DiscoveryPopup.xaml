@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="ZCM.Pages.DiscoveryPopup"
+    BackgroundColor="#80000000">
+
+    <Grid>
+
+        <!-- Backdrop -->
+        <BoxView BackgroundColor="Transparent">
+            <BoxView.GestureRecognizers>
+                <TapGestureRecognizer Tapped="OnBackdropTapped" />
+            </BoxView.GestureRecognizers>
+        </BoxView>
+
+        <!-- Popup -->  
+        <Frame
+            WidthRequest="900"
+            HeightRequest="650"
+            CornerRadius="20"
+            Padding="24"
+            BackgroundColor="#1F1F1F"
+            HorizontalOptions="Center"
+            VerticalOptions="Center"
+            HasShadow="False">
+
+            <Grid RowDefinitions="Auto,*" RowSpacing="20">
+
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                    <Label
+                        Text="Discovery"
+                        FontSize="20"
+                        FontAttributes="Bold"
+                        TextColor="White" />
+
+                    <Button
+                        Grid.Column="1"
+                        Text="X"
+                        Clicked="OnCloseClicked"
+                        BackgroundColor="#2A2A2A"
+                        TextColor="White"
+                        CornerRadius="10"
+                        WidthRequest="36"
+                        HeightRequest="36" />
+                </Grid>
+
+                <CollectionView
+                    Grid.Row="1"
+                    ItemsSource="{Binding Peers}"
+                    SelectionMode="None"
+                    VerticalScrollBarVisibility="Always">
+
+                    <CollectionView.ItemsLayout>
+                        <GridItemsLayout
+                            Orientation="Vertical"
+                            Span="3"
+                            VerticalItemSpacing="20"
+                            HorizontalItemSpacing="20" />
+                    </CollectionView.ItemsLayout>
+
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+                            <Frame
+                                Padding="16"
+                                CornerRadius="16"
+                                BackgroundColor="#2A2A2A"
+                                HasShadow="False">
+
+                                <Frame.GestureRecognizers>
+                                    <TapGestureRecognizer
+                                        Tapped="OnPeerTapped"
+                                        CommandParameter="{Binding .}" />
+                                </Frame.GestureRecognizers>
+
+                                <VerticalStackLayout Spacing="8">
+                                    <Label
+                                        Text="{Binding HostName}"
+                                        TextColor="White"
+                                        FontAttributes="Bold" />
+
+                                    <Label
+                                        Text="{Binding StatusText}"
+                                        TextColor="#CCCCCC"
+                                        FontSize="12" />
+
+                                    <Label
+                                        Text="{Binding LastSeenText}"
+                                        TextColor="#888888"
+                                        FontSize="11" />
+                                </VerticalStackLayout>
+
+                            </Frame>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+
+                </CollectionView>
+
+            </Grid>
+
+        </Frame>
+
+    </Grid>
+</ContentPage>

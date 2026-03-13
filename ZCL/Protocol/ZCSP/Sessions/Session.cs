@@ -10,6 +10,8 @@ namespace ZCL.Protocol.ZCSP.Sessions
 
         public bool IsExpired => DateTime.UtcNow >= ExpiresAt;
 
+        private Stream? _transport;
+
         public Session(Guid id, string peerId, DateTime expiresAt)
         {
             Id = id;
@@ -20,6 +22,16 @@ namespace ZCL.Protocol.ZCSP.Sessions
         public void Extend(TimeSpan duration)
         {
             ExpiresAt = DateTime.UtcNow.Add(duration);
+        }
+
+        public void AttachTransport(Stream stream)
+        {
+            _transport = stream;
+        }
+
+        public void ForceClose()
+        {
+            try { _transport?.Dispose(); } catch { }
         }
     }
 }

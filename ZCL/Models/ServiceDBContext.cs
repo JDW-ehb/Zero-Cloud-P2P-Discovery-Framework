@@ -11,7 +11,8 @@ public class ServiceDBContext : DbContext
     public DbSet<FileTransferEntity> FileTransfers => Set<FileTransferEntity>();
     public DbSet<LLMMessageEntity> LLMMessages => Set<LLMMessageEntity>();
     public DbSet<LLMConversationEntity> LLMConversations => Set<LLMConversationEntity>();
-
+    public DbSet<TrustGroupEntity> TrustGroups => Set<TrustGroupEntity>();
+    public DbSet<AnnouncedServiceSettingEntity> AnnouncedServiceSettings => Set<AnnouncedServiceSettingEntity>();
 
 
     public ServiceDBContext(DbContextOptions<ServiceDBContext> options)
@@ -65,6 +66,13 @@ public class ServiceDBContext : DbContext
             .HasIndex(f => new { f.PeerRefId, f.RemoteFileId })
             .IsUnique();
 
+        modelBuilder.Entity<TrustGroupEntity>()
+            .HasIndex(x => x.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<AnnouncedServiceSettingEntity>()
+            .HasIndex(x => x.ServiceName)
+            .IsUnique();
 
         base.OnModelCreating(modelBuilder);
     }

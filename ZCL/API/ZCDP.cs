@@ -14,19 +14,6 @@ using ZCL.Repositories.Peers;
 
 namespace ZCL.API
 {
-    public sealed class Config
-    {
-        public static Config Instance { get; } = new();
-
-        public string DBFileName { get; set; } = "services.db";
-        public int DiscoveryPort { get; set; } = 2600;
-        public string MulticastAddress { get; set; } = "224.0.0.26";
-        public ushort ZCDPProtocolVersion { get; set; } = 0;
-        public int DiscoveryTimeoutMS { get; set; } = 3 * 1000;
-        public string PeerName { get; set; } = Environment.MachineName;
-
-        private Config() { }
-    }
 
     public sealed class DataStore
     {
@@ -198,32 +185,48 @@ namespace ZCL.API
             return listener;
         }
 
-        private static async Task<Service[]> BuildAnnouncedServicesAsync(CancellationToken ct = default)
+        private static async Task<Service[]> BuildAnnouncedServicesAsync(
+            Func<ServiceDBContext> dbFactory,
+            CancellationToken ct = default)
         {
+
+            using var db = dbFactory();
+            var enabled = await db.AnnouncedServiceSettings
+                .Where(x => x.IsEnabled)
+                .Select(x => x.ServiceName)
+                .ToListAsync(ct);
+
+            var enabledSet = enabled.ToHashSet(StringComparer.Ordinal);
+
             const ushort zcspPort = 5555;
+            var servicesList = new List<Service>();
 
-            var servicesList = new List<Service>
+            if (enabledSet.Contains("FileSharing"))
+                servicesList.Add(new Service { Name = "FileSharing", Address = "tcp", Port = zcspPort });
+
+            if (enabledSet.Contains("Messaging"))
+                servicesList.Add(new Service { Name = "Messaging", Address = "tcp", Port = zcspPort });
+
+            if (enabledSet.Contains("LLMChat"))
             {
-                new() { Name = "FileSharing", Address = "tcp", Port = zcspPort },
-                new() { Name = "Messaging", Address = "tcp", Port = zcspPort }
-            };
-
-            var models = await GetOllamaModelsAsync(ct);
-            if (models.Count > 0)
-            {
-                var localIp = GetBestLocalIPv4();
-                var aiMetadataJson = JsonSerializer.Serialize(models);
-
-                servicesList.Add(new Service
+                var models = await GetOllamaModelsAsync(ct);
+                if (models.Count > 0)
                 {
-                    Name = "LLMChat",
-                    Address = localIp,
-                    Port = zcspPort,
-                    Metadata = aiMetadataJson
-                });
+                    var localIp = GetBestLocalIPv4();
+                    var aiMetadataJson = JsonSerializer.Serialize(models);
+
+                    servicesList.Add(new Service
+                    {
+                        Name = "LLMChat",
+                        Address = localIp,
+                        Port = zcspPort,
+                        Metadata = aiMetadataJson
+                    });
+                }
             }
 
             return servicesList.ToArray();
+
         }
 
         private static byte[] BuildAnnouncePacket(
@@ -322,6 +325,9 @@ namespace ZCL.API
             store.Peers.AddOrUpdatePeer(peer);
             await db.SaveChangesAsync(ct);
 
+            // ✅ Track announced services to identify which ones to keep
+            var announcedServiceKeys = new HashSet<(string Name, string Address, ushort Port)>();
+
             // Read services and upsert
             for (ulong idx = 0; idx < servicesCount; idx++)
             {
@@ -333,6 +339,8 @@ namespace ZCL.API
                     Metadata = reader.ReadString(),
                     PeerRefId = peer.PeerId
                 };
+
+                announcedServiceKeys.Add((service.Name, service.Address, service.Port));
 
                 var existing = await db.Services
                     .AsNoTracking()
@@ -352,6 +360,21 @@ namespace ZCL.API
                     service.ServiceId = existing.ServiceId;
                     db.Services.Update(service);
                 }
+            }
+
+            // ✅ Remove services that are no longer announced by this peer
+            var existingServices = await db.Services
+                .Where(s => s.PeerRefId == peer.PeerId)
+                .ToListAsync(ct);  // Remove .AsNoTracking() so entities are tracked
+
+            var servicesToRemove = existingServices
+                .Where(s => !announcedServiceKeys.Contains((s.Name, s.Address, s.Port)))
+                .ToList();
+
+            if (servicesToRemove.Any())
+            {
+                db.Services.RemoveRange(servicesToRemove);
+                Debug.WriteLine($"Removed {servicesToRemove.Count} obsolete service(s) from peer {peer.HostName}");
             }
 
             await db.SaveChangesAsync(ct);
@@ -400,7 +423,9 @@ namespace ZCL.API
             var remoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
 
             var discoveryStart = DateTime.UtcNow;
-            var routingDecided = false;
+            var routingDecisionEnabled = false;
+            RoutingMode? lastRoutingMode = null;
+            string? lastServerPeerId = null;
 
             while (!ct.IsCancellationRequested)
             {
@@ -414,7 +439,7 @@ namespace ZCL.API
 
                     if (sender != null)
                     {
-                        var services = await BuildAnnouncedServicesAsync(ct);
+                        var services = await BuildAnnouncedServicesAsync(dbFactory, ct);
                         var payload = BuildAnnouncePacket(
                             protocolVersion,
                             messageId++,
@@ -423,10 +448,18 @@ namespace ZCL.API
                             services);
                         sender.SendTo(payload, new IPEndPoint(multicastAddress, port));
                     }
-                    if (!routingDecided && (DateTime.UtcNow - discoveryStart).TotalSeconds >= 10)
+                    if (!routingDecisionEnabled && (DateTime.UtcNow - discoveryStart).TotalSeconds >= 10)
+                        routingDecisionEnabled = true;
+
+                    if (routingDecisionEnabled)
                     {
+                        var now = DateTime.UtcNow;
+                        var maxServerAge = TimeSpan.FromMilliseconds(
+                            Math.Max(Config.Instance.DiscoveryTimeoutMS * 3, 10_000));
+
                         var server = store.Peers
                             .Where(p => p.Role == NodeRole.Server)
+                            .Where(p => (now - p.LastSeen) <= maxServerAge)
                             .OrderByDescending(p => p.LastSeen)
                             .FirstOrDefault();
 
@@ -437,15 +470,25 @@ namespace ZCL.API
                                 port: 5555, // ZCSP hosting port
                                 protocolPeerId: server.ProtocolPeerId);
 
-                            Debug.WriteLine($"Routing switched to ViaServer: {server.HostName}");
+                            if (lastRoutingMode != RoutingMode.ViaServer ||
+                                !string.Equals(lastServerPeerId, server.ProtocolPeerId, StringComparison.Ordinal))
+                            {
+                                Debug.WriteLine($"Routing switched to ViaServer: {server.HostName}");
+                            }
+
+                            lastRoutingMode = RoutingMode.ViaServer;
+                            lastServerPeerId = server.ProtocolPeerId;
                         }
                         else
                         {
                             routingState.SetDirect();
-                            Debug.WriteLine("Routing set to Direct (no server found)");
-                        }
 
-                        routingDecided = true;
+                            if (lastRoutingMode != RoutingMode.Direct)
+                                Debug.WriteLine("Routing set to Direct (no server found)");
+
+                            lastRoutingMode = RoutingMode.Direct;
+                            lastServerPeerId = null;
+                        }
                     }
                 }
                 catch (OperationCanceledException)

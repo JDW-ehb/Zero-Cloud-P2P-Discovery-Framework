@@ -1,5 +1,4 @@
-﻿using Microsoft.Maui.Controls;
-using Microsoft.Maui.ApplicationModel;
+﻿using Microsoft.Maui.ApplicationModel;
 
 namespace ZCM.Notifications;
 
@@ -12,8 +11,9 @@ public static class TransientNotificationService
     {
         await MainThread.InvokeOnMainThreadAsync(async () =>
         {
-            var page = Shell.Current?.CurrentPage as ContentPage;
-            if (page?.Content is not Layout layout)
+            // Prefer the explicit overlay layer if the page provides one
+            var layer = NotificationHost.Layer;
+            if (layer == null)
                 return;
 
             var background = severity switch
@@ -24,30 +24,38 @@ public static class TransientNotificationService
                 _ => Color.FromArgb("#2A2A2A")
             };
 
-            var container = new Grid
+            var toast = new Frame
             {
-                VerticalOptions = LayoutOptions.End,
-                HorizontalOptions = LayoutOptions.End,
-                Margin = new Thickness(0, 0, 24, 24)
-            };
-
-            var label = new Label
-            {
-                Text = message,
                 BackgroundColor = background,
-                TextColor = Colors.White,
+                CornerRadius = 14,
                 Padding = new Thickness(18, 10),
-                Opacity = 0
+                HasShadow = false,
+                MaximumWidthRequest = 320,
+                HorizontalOptions = LayoutOptions.End,
+                VerticalOptions = LayoutOptions.End,
+                Margin = new Thickness(16),
+                Content = new Label
+                {
+                    Text = message,
+                    TextColor = Colors.White,
+                    LineBreakMode = LineBreakMode.WordWrap
+                },
+                Opacity = 0,
+                InputTransparent = true
             };
 
-            container.Children.Add(label);
-            layout.Children.Add(container);
+            // Ensure overlay behavior inside the layer grid
+            Grid.SetRowSpan(toast, int.MaxValue);
+            Grid.SetColumnSpan(toast, int.MaxValue);
+            toast.ZIndex = 999;
 
-            await label.FadeTo(1, 200);
+            layer.Children.Add(toast);
+
+            await toast.FadeTo(1, 200);
             await Task.Delay(durationMs);
-            await label.FadeTo(0, 200);
+            await toast.FadeTo(0, 200);
 
-            layout.Children.Remove(container);
+            layer.Children.Remove(toast);
         });
     }
 }

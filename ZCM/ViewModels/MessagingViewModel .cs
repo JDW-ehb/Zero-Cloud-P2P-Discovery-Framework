@@ -207,10 +207,11 @@ public sealed class MessagingViewModel : BindableObject
 
     private void OnMessageReceived(ChatMessage msg)
     {
-
-
         MainThread.BeginInvokeOnMainThread(() =>
         {
+            // Always refresh preview text/time in the left conversation list.
+            UpdateConversationPreview(msg);
+
             if (_activeProtocolPeerId == null)
                 return;
 
@@ -223,6 +224,31 @@ public sealed class MessagingViewModel : BindableObject
         });
     }
 
+    private void UpdateConversationPreview(ChatMessage msg)
+    {
+        // Identify the remote peer for this message.
+        var remoteProtocolPeerId = msg.FromPeer == _peer.PeerId
+            ? msg.ToPeer
+            : msg.FromPeer;
+
+        var convo = Conversations.FirstOrDefault(c =>
+            c.Peer.ProtocolPeerId == remoteProtocolPeerId);
+
+        if (convo == null)
+            return;
+
+        convo.LastMessage = msg.Content;
+        convo.LastTimestamp = msg.Timestamp;
+
+        // Optional UX: move most recently active conversation to top.
+        var currentIndex = Conversations.IndexOf(convo);
+        if (currentIndex > 0)
+        {
+            Conversations.RemoveAt(currentIndex);
+            Conversations.Insert(0, convo);
+        }
+    }
+
 
     private async Task LoadConversationsAsync()
     {
@@ -230,8 +256,25 @@ public sealed class MessagingViewModel : BindableObject
 
         Conversations.Clear();
 
+        if (_localPeerDbId is null)
+            return;
+
         foreach (var peer in historyPeers)
-            Conversations.Add(new ConversationItem(peer));
+        {
+            var convo = new ConversationItem(peer);
+
+            var last = await _chatQueries.GetLastMessageBetweenAsync(
+                _localPeerDbId.Value,
+                peer.PeerId);
+
+            if (last != null)
+            {
+                convo.LastMessage = last.Content;
+                convo.LastTimestamp = last.Timestamp;
+            }
+
+            Conversations.Add(convo);
+        }
     }
 
     private async Task LoadChatHistoryAsync(PeerNode peer)

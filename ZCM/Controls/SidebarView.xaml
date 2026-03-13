@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    x:Class="ZCM.Controls.SidebarView"
+    BackgroundColor="#151515">
+
+    <Grid Padding="20"
+          RowDefinitions="*,Auto">
+
+        <VerticalStackLayout Grid.Row="0" Spacing="16">
+            <Label Text="FallbackMesh"
+                   FontSize="22"
+                   TextColor="White"
+                   FontAttributes="Bold" />
+
+            <Button Text="Dashboard"
+                    Clicked="DashboardButton_Clicked"
+                    BackgroundColor="#2A2A2A"
+                    TextColor="White"
+                    CornerRadius="12" />
+
+            <Button Text="Discovery"
+                    Clicked="DiscoveryButton_Clicked"
+                    BackgroundColor="#2A2A2A"
+                    TextColor="White"
+                    CornerRadius="12" />
+
+            <Label Text="Services"
+                   Margin="0,20,0,0"
+                   FontSize="14"
+                   TextColor="#888888" />
+
+            <Button Text="LLM"
+                    Clicked="LlmButton_Clicked"
+                    BackgroundColor="#2A2A2A"
+                    TextColor="White"
+                    CornerRadius="12" />
+
+            <Button Text="MSG"
+                    Clicked="MessagingButton_Clicked"
+                    BackgroundColor="#2A2A2A"
+                    TextColor="White"
+                    CornerRadius="12" />
+
+            <Button Text="Share"
+                    Clicked="ShareButton_Clicked"
+                    BackgroundColor="#2A2A2A"
+                    TextColor="White"
+                    CornerRadius="12" />
+        </VerticalStackLayout>
+
+        <VerticalStackLayout Grid.Row="1" Spacing="12">
+            <Button Text="Settings"
+                    Clicked="SettingsButton_Clicked"
+                    BackgroundColor="#2A2A2A"
+                    TextColor="White"
+                    CornerRadius="12" />
+
+            <Button Text="Exit App"
+                    Clicked="ExitButton_Clicked"
+                    BackgroundColor="#2A2A2A"
+                    TextColor="#999999"
+                    CornerRadius="12" />
+        </VerticalStackLayout>
+    </Grid>
+</ContentView>

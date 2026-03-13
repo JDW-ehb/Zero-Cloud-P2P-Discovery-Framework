@@ -2,13 +2,17 @@ using ZCL.API;
 using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Services.Messaging;
+using ZCM.Controls;
 using ZCM.ViewModels;
+using ZCM.Notifications;
 
 namespace ZCM.Pages;
 
 [QueryProperty(nameof(Peer), "Peer")]
-public partial class MessagingPage : ContentPage
+public partial class MessagingPage : ContentPage, IDrawerPage
 {
+    public DrawerHost? PageDrawer => Drawer;
+
     private bool _userNearBottom = true;
 
     private readonly MessagingViewModel _vm;
@@ -18,6 +22,11 @@ public partial class MessagingPage : ContentPage
     public MessagingPage()
     {
         InitializeComponent();
+
+        // NEW: give the notification system the overlay layer for this page
+        NotificationHost.Initialize(NotificationLayer);
+
+        Sidebar.Host = Drawer;
 
         _vm = new MessagingViewModel(
            ServiceHelper.GetService<ZcspPeer>(),
@@ -91,10 +100,7 @@ public partial class MessagingPage : ContentPage
 
         Dispatcher.Dispatch(() =>
         {
-            MessagesView.ScrollTo(
-                vm.Messages[^1],
-                position: ScrollToPosition.End,
-                animate: true);
+            MessagesView.ScrollTo(vm.Messages[^1], -1, ScrollToPosition.End, true);
         });
     }
 

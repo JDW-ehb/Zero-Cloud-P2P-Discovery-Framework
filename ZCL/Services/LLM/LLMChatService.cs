@@ -18,6 +18,9 @@ public sealed class LLMChatService : IZcspService
 
     private readonly HttpClient _http;
     private readonly ConcurrentDictionary<Guid, Stream> _sessions = new();
+    private readonly ConcurrentDictionary<string, Task> _connectInFlight = new();
+    private readonly ConcurrentDictionary<string, DateTime> _nextAllowedConnectUtc = new();
+
     private readonly IServiceScopeFactory _scopeFactory;
 
     private readonly ZcspPeer _peer;
@@ -375,17 +378,47 @@ public sealed class LLMChatService : IZcspService
         if (_directSessions.ContainsKey(peer.ProtocolPeerId))
             return;
 
-        await _sessionLock.WaitAsync(ct);
+        // Backoff gate
+        if (_nextAllowedConnectUtc.TryGetValue(peer.ProtocolPeerId, out var next) &&
+            DateTime.UtcNow < next)
+            return;
+
+        // Single-flight per peer
+        var task = _connectInFlight.GetOrAdd(peer.ProtocolPeerId, _ => ConnectOnceAsync(peer, ct));
+
         try
         {
-            if (_directSessions.ContainsKey(peer.ProtocolPeerId))
-                return;
-
-            await _peer.ConnectAsync(peer.IpAddress, 5555, peer.ProtocolPeerId, this);
+            await task;
         }
         finally
         {
-            _sessionLock.Release();
+            _connectInFlight.TryRemove(new KeyValuePair<string, Task>(peer.ProtocolPeerId, task));
+        }
+    }
+
+    private async Task ConnectOnceAsync(PeerNode peer, CancellationToken ct)
+    {
+        if (_directSessions.ContainsKey(peer.ProtocolPeerId))
+            return;
+
+        try
+        {
+            await _peer.ConnectAsync(peer.IpAddress, 5555, peer.ProtocolPeerId, this, ct);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _nextAllowedConnectUtc[peer.ProtocolPeerId] = DateTime.UtcNow.AddSeconds(10);
+            throw;
+        }
+        catch (Exception ex) when (ex is SocketException or IOException)
+        {
+            _nextAllowedConnectUtc[peer.ProtocolPeerId] = DateTime.UtcNow.AddSeconds(2);
+            throw;
+        }
+        catch
+        {
+            _nextAllowedConnectUtc[peer.ProtocolPeerId] = DateTime.UtcNow.AddSeconds(3);
+            throw;
         }
     }
 
@@ -409,7 +442,7 @@ public sealed class LLMChatService : IZcspService
 
         try
         {
-            await _peer.ConnectAsync(server.IpAddress, 5555, server.ProtocolPeerId, this);
+            await _peer.ConnectAsync(server.IpAddress, 5555, server.ProtocolPeerId, this, ct);
             return true;
         }
         catch

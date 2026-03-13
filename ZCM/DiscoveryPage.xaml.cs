@@ -121,8 +121,10 @@ public partial class DiscoveryPage : ContentPage
         // Ensure we're on UI thread (timer already is, but safe).
         MainThread.BeginInvokeOnMainThread(() =>
         {
-            // Add/update
-            foreach (var peer in _store.Peers.OrderByDescending(p => p.LastSeen))
+            // Add/update (exclude server peers)
+            foreach (var peer in _store.Peers
+                         .Where(p => p.Role != NodeRole.Server)
+                         .OrderByDescending(p => p.LastSeen))
             {
                 var key = peer.ProtocolPeerId;
 
@@ -140,11 +142,12 @@ public partial class DiscoveryPage : ContentPage
                 }
             }
 
-            // Remove peers that disappeared (optional, but keeps UI clean)
+            // Remove peers that disappeared or are servers
             for (int i = Peers.Count - 1; i >= 0; i--)
             {
                 var key = Peers[i].ProtocolPeerId;
-                if (_store.Peers.All(p => p.ProtocolPeerId != key))
+                if (_store.Peers.All(p => p.ProtocolPeerId != key)
+                    || _store.Peers.Any(p => p.ProtocolPeerId == key && p.Role == NodeRole.Server))
                 {
                     _index.Remove(key);
                     Peers.RemoveAt(i);

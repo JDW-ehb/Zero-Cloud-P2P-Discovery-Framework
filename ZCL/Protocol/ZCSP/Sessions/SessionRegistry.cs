@@ -34,6 +34,14 @@ namespace ZCL.Protocol.ZCSP.Sessions
             return false;
         }
 
+        public void ClearAll()
+        {
+            foreach (var session in _sessions.Values.ToList())
+            {
+                session.ForceClose();
+                _sessions.TryRemove(session.Id, out _);
+            }
+        }
         public bool Remove(Guid sessionId)
         {
             return _sessions.TryRemove(sessionId, out _);
@@ -47,5 +55,16 @@ namespace ZCL.Protocol.ZCSP.Sessions
                     _sessions.TryRemove(id, out _);
             }
         }
+
+
+        public Session AddExisting(Guid id, string peerId, DateTime expiresAtUtc)
+        {
+            var session = new Session(id, peerId, expiresAtUtc);
+            _sessions[session.Id] = session;
+            return session;
+        }
+
+
+
     }
 }

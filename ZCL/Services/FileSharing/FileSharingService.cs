@@ -49,7 +49,8 @@ public sealed class FileSharingService : IZcspService
     private readonly ConcurrentDictionary<Guid, SharedFileDto> _knownFiles = new();
     private readonly ConcurrentDictionary<Guid, FileStream> _activeDownloads = new();
     private readonly ConcurrentDictionary<Guid, long> _receivedBytes = new();
-
+    private readonly ConcurrentDictionary<string, Task> _connectInFlight = new();
+    private readonly ConcurrentDictionary<string, DateTime> _nextAllowedConnectUtc = new();
 
 
     private sealed record SessionContext(
@@ -154,23 +155,61 @@ public sealed class FileSharingService : IZcspService
         if (_directSessions.ContainsKey(peer.ProtocolPeerId))
             return;
 
-        await _sessionLock.WaitAsync(ct);
+        // Basic backoff gate (prevents retry storms)
+        if (_nextAllowedConnectUtc.TryGetValue(peer.ProtocolPeerId, out var next) &&
+            DateTime.UtcNow < next)
+            return;
+
+        // Single-flight: if a connect is already running for this peer, await it.
+        var task = _connectInFlight.GetOrAdd(peer.ProtocolPeerId, _ => ConnectOnceAsync(peer, ct));
         try
         {
-            if (_directSessions.ContainsKey(peer.ProtocolPeerId))
-                return;
-
-            Debug.WriteLine($"[FileSharing] Connecting to {peer.ProtocolPeerId}");
-
-            await _peer.ConnectAsync(
-                peer.IpAddress,
-                5555,
-                peer.ProtocolPeerId,
-                this);
+            await task;
         }
         finally
         {
-            _sessionLock.Release();
+            // Remove only if this exact task is still registered
+            _connectInFlight.TryRemove(new KeyValuePair<string, Task>(peer.ProtocolPeerId, task));
+        }
+    }
+
+    private async Task ConnectOnceAsync(PeerNode peer, CancellationToken ct)
+    {
+        // Double-check after awaiting other connect
+        if (_directSessions.ContainsKey(peer.ProtocolPeerId))
+            return;
+
+        Debug.WriteLine($"[FileSharing] Connecting to {peer.ProtocolPeerId}");
+
+        try
+        {
+            await _peer.ConnectAsync(peer.IpAddress, 5555, peer.ProtocolPeerId, this, ct);
+        }
+        catch (SocketException ex)
+        {
+            // Exponential-ish backoff (simple, effective)
+            _nextAllowedConnectUtc[peer.ProtocolPeerId] = DateTime.UtcNow.AddSeconds(2);
+            Debug.WriteLine($"[FileSharing] Connect failed (SocketException): {ex.Message}");
+            throw;
+        }
+        catch (IOException ex)
+        {
+            _nextAllowedConnectUtc[peer.ProtocolPeerId] = DateTime.UtcNow.AddSeconds(2);
+            Debug.WriteLine($"[FileSharing] Connect failed (IO): {ex.Message}");
+            throw;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            // Auth failures should backoff longer (no point spamming)
+            _nextAllowedConnectUtc[peer.ProtocolPeerId] = DateTime.UtcNow.AddSeconds(10);
+            Debug.WriteLine($"[FileSharing] Connect failed (Unauthorized): {ex.Message}");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _nextAllowedConnectUtc[peer.ProtocolPeerId] = DateTime.UtcNow.AddSeconds(3);
+            Debug.WriteLine($"[FileSharing] Connect failed: {ex.Message}");
+            throw;
         }
     }
 

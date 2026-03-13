@@ -5,6 +5,8 @@
     xmlns:conv="clr-namespace:ZCM.Converters"
     xmlns:controls="clr-namespace:ZCM.Controls"
     x:Class="ZCM.Pages.MessagingPage"
+    Shell.NavBarIsVisible="False"
+    Title="Messaging"
     BackgroundColor="#1e1e1e">
 
     <ContentPage.Resources>
@@ -15,136 +17,171 @@
         </ResourceDictionary>
     </ContentPage.Resources>
 
-    <Grid ColumnDefinitions="320,*">
+    <!-- Root overlay container -->
+    <Grid>
 
-        <Grid Grid.Column="0"
-              RowDefinitions="Auto,Auto,*"
-              Padding="16"
-              BackgroundColor="#151515">
+        <controls:DrawerHost x:Name="Drawer" DrawerWidth="240">
+            <controls:DrawerHost.Drawer>
+                <controls:SidebarView x:Name="Sidebar" />
+            </controls:DrawerHost.Drawer>
 
-            <Label Text="Messaging"
-                   FontSize="22"
-                   TextColor="White" />
+            <controls:DrawerHost.Main>
+                <Grid ColumnDefinitions="320,*">
 
-            <Label Grid.Row="1"
-                   Margin="0,10"
-                   Text="{Binding StatusMessage}"
-                   FontSize="12"
-                   TextColor="{Binding IsConnected, Converter={StaticResource BoolToColorConverter}}" />
+                    <Grid Grid.Column="0"
+                          RowDefinitions="Auto,Auto,Auto,*"
+                          Padding="16"
+                          BackgroundColor="#151515">
 
-            <CollectionView Grid.Row="2"
-                            ItemsSource="{Binding Conversations}"
-                            SelectionMode="Single"
-                            SelectionChanged="OnConversationSelectionChanged">
+                        <!-- Header row -->
+                        <Grid Grid.Row="0"
+                              ColumnDefinitions="Auto,*"
+                              ColumnSpacing="12">
 
-                <CollectionView.ItemTemplate>
-                    <DataTemplate>
-                        <Frame Padding="12"
-                               Margin="0,6"
-                               CornerRadius="14"
-                               HasShadow="False"
-                               BackgroundColor="#1F1F1F">
+                            <Button Text="☰"
+                                    WidthRequest="44"
+                                    HeightRequest="44"
+                                    FontSize="20"
+                                    BackgroundColor="#2A2A2A"
+                                    TextColor="White"
+                                    CornerRadius="12"
+                                    Command="{Binding Source={x:Reference Drawer}, Path=ToggleCommand}" />
 
-                            <Grid ColumnDefinitions="Auto,*,Auto"
-                                  RowDefinitions="Auto,Auto">
-
-                                <BoxView WidthRequest="10"
-                                         HeightRequest="10"
-                                         CornerRadius="5"
-                                         VerticalOptions="Center"
-                                         Color="{Binding IsOnline, Converter={StaticResource BoolToColorConverter}}" />
-
-                                <Label Grid.Column="1"
-                                       Text="{Binding DisplayName}"
-                                       FontSize="14"
-                                       FontAttributes="Bold"
-                                       TextColor="White" />
-
-                                <Label Grid.Column="2"
-                                       Text="{Binding LastTimestamp, Converter={StaticResource ChatTimestampConverter}}"
-                                       FontSize="11"
-                                       TextColor="#AAAAAA"
-                                       HorizontalOptions="End" />
-
-                                <Label Grid.Row="1"
-                                       Grid.Column="1"
-                                       Grid.ColumnSpan="2"
-                                       Text="{Binding LastMessage}"
-                                       FontSize="12"
-                                       TextColor="#CCCCCC"
-                                       LineBreakMode="TailTruncation" />
-                            </Grid>
-                        </Frame>
-                    </DataTemplate>
-                </CollectionView.ItemTemplate>
-
-            </CollectionView>
-        </Grid>
-
-        <Grid Grid.Column="1"
-              RowDefinitions="*,Auto"
-              Padding="16">
-
-            <CollectionView
-                x:Name="MessagesView"
-                ItemsSource="{Binding Messages}"
-                ItemsUpdatingScrollMode="KeepScrollOffset"
-                Scrolled="OnMessagesScrolled"
-                VerticalScrollBarVisibility="Never"
-                HorizontalScrollBarVisibility="Never">
-
-                <CollectionView.ItemTemplate>
-                    <DataTemplate>
-                        <Grid Margin="0,6">
-
-                            <Frame Padding="12"
-                                   CornerRadius="16"
-                                   HasShadow="False"
-                                   MaximumWidthRequest="520"
-                                   HorizontalOptions="{Binding IsOutgoing, Converter={StaticResource BoolToLayoutConverter}}"
-                                   BackgroundColor="{Binding IsOutgoing, Converter={StaticResource BoolToColorConverter}}">
-
-                                <VerticalStackLayout Spacing="4">
-
-                                    <controls:SelectableLabel
-                                        Text="{Binding Content}"
-                                        TextColor="White"
-                                        LineBreakMode="WordWrap" />
-
-                                    <Label Text="{Binding Timestamp, Converter={StaticResource ChatTimestampConverter}}"
-                                           FontSize="10"
-                                           TextColor="#CCCCCC"
-                                           HorizontalOptions="End" />
-                                </VerticalStackLayout>
-
-                            </Frame>
+                            <Label Grid.Column="1"
+                                   Text="Messaging"
+                                   FontSize="22"
+                                   VerticalOptions="Center"
+                                   TextColor="White" />
                         </Grid>
-                    </DataTemplate>
-                </CollectionView.ItemTemplate>
 
-            </CollectionView>
+                        <!-- Status -->
+                        <Label Grid.Row="1"
+                               Margin="0,10"
+                               Text="{Binding StatusMessage}"
+                               FontSize="12"
+                               TextColor="{Binding IsConnected, Converter={StaticResource BoolToColorConverter}}" />
 
-            <Grid Grid.Row="1"
-                  ColumnDefinitions="*,Auto"
-                  Margin="0,12,0,0">
+                        <CollectionView Grid.Row="3"
+                                        ItemsSource="{Binding Conversations}"
+                                        SelectionMode="Single"
+                                        SelectionChanged="OnConversationSelectionChanged">
+                            <CollectionView.ItemsLayout>
+                                <LinearItemsLayout Orientation="Vertical" ItemSpacing="18" />
+                            </CollectionView.ItemsLayout>
 
-                <Entry Text="{Binding OutgoingMessage}"
-                       Placeholder="Type a message…"
-                       BackgroundColor="#2A2A2A"
-                       TextColor="White"
-                       HeightRequest="44"
-                       ReturnType="Send"
-                       Completed="OnMessageEntryCompleted" />
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate>
+                                    <Frame Padding="12"
+                                           Margin="0,4"
+                                           CornerRadius="14"
+                                           HasShadow="False"
+                                           BackgroundColor="#1F1F1F">
 
-                <Button Grid.Column="1"
-                        Text="Send"
-                        Command="{Binding SendMessageCommand}"
-                        Margin="8,0,0,0"
-                        BackgroundColor="#6B5DD3"
-                        TextColor="White"
-                        CornerRadius="10" />
-            </Grid>
+                                        <Grid ColumnDefinitions="Auto,*,Auto"
+                                              RowDefinitions="Auto,Auto">
 
-        </Grid>
+                                            <BoxView WidthRequest="10"
+                                                     HeightRequest="10"
+                                                     CornerRadius="5"
+                                                     VerticalOptions="Center"
+                                                     Color="{Binding IsOnline, Converter={StaticResource BoolToColorConverter}}" />
+
+                                            <Label Grid.Column="1"
+                                                   Text="{Binding DisplayName}"
+                                                   FontSize="14"
+                                                   FontAttributes="Bold"
+                                                   TextColor="White" />
+
+                                            <Label Grid.Column="2"
+                                                   Text="{Binding LastTimestamp, Converter={StaticResource ChatTimestampConverter}}"
+                                                   FontSize="11"
+                                                   TextColor="#AAAAAA"
+                                                   HorizontalOptions="End" />
+
+                                            <Label Grid.Row="1"
+                                                   Grid.Column="1"
+                                                   Grid.ColumnSpan="2"
+                                                   Text="{Binding LastMessage}"
+                                                   FontSize="12"
+                                                   TextColor="#CCCCCC"
+                                                   LineBreakMode="TailTruncation" />
+                                        </Grid>
+                                    </Frame>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+
+                        </CollectionView>
+                    </Grid>
+
+                    <Grid Grid.Column="1"
+                          RowDefinitions="*,Auto"
+                          Padding="16">
+
+                        <CollectionView
+                            x:Name="MessagesView"
+                            ItemsSource="{Binding Messages}"
+                            ItemsUpdatingScrollMode="KeepScrollOffset"
+                            Scrolled="OnMessagesScrolled"
+                            VerticalScrollBarVisibility="Never"
+                            HorizontalScrollBarVisibility="Never">
+
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,6">
+                                        <Frame Padding="12"
+                                               CornerRadius="16"
+                                               HasShadow="False"
+                                               MaximumWidthRequest="520"
+                                               HorizontalOptions="{Binding IsOutgoing, Converter={StaticResource BoolToLayoutConverter}}"
+                                               BackgroundColor="{Binding IsOutgoing, Converter={StaticResource BoolToColorConverter}}">
+
+                                            <VerticalStackLayout Spacing="4">
+                                                <controls:SelectableLabel
+                                                    Text="{Binding Content}"
+                                                    TextColor="White"
+                                                    LineBreakMode="WordWrap" />
+
+                                                <Label Text="{Binding Timestamp, Converter={StaticResource ChatTimestampConverter}}"
+                                                       FontSize="10"
+                                                       TextColor="#CCCCCC"
+                                                       HorizontalOptions="End" />
+                                            </VerticalStackLayout>
+                                        </Frame>
+                                    </Grid>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+
+                        <Grid Grid.Row="1"
+                              ColumnDefinitions="*,Auto"
+                              Margin="0,12,0,0">
+
+                            <Entry Text="{Binding OutgoingMessage}"
+                                   Placeholder="Type a message…"
+                                   BackgroundColor="#2A2A2A"
+                                   TextColor="White"
+                                   HeightRequest="44"
+                                   ReturnType="Send"
+                                   Completed="OnMessageEntryCompleted" />
+
+                            <Button Grid.Column="1"
+                                    Text="Send"
+                                    Command="{Binding SendMessageCommand}"
+                                    Margin="8,0,0,0"
+                                    BackgroundColor="#6B5DD3"
+                                    TextColor="White"
+                                    CornerRadius="10" />
+                        </Grid>
+
+                    </Grid>
+                </Grid>
+            </controls:DrawerHost.Main>
+        </controls:DrawerHost>
+
+        <!-- Notification overlay layer -->
+        <Grid x:Name="NotificationLayer"
+              InputTransparent="True"
+              ZIndex="999" />
+
     </Grid>
 </ContentPage>

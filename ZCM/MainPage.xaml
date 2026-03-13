@@ -2,117 +2,462 @@
 <ContentPage
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    x:Class="ZCM.MainPage"
+    xmlns:conv="clr-namespace:ZCM.Converters"
     Shell.NavBarIsVisible="False"
-    BackgroundColor="#1e1e1e">
+    BackgroundColor="#111111"
+    x:Class="ZCM.MainPage">
 
-    <Grid ColumnDefinitions="260,*"
-          RowDefinitions="*"
-          Padding="0">
+    <ContentPage.Resources>
+        <conv:OnlineStatusColorConverter x:Key="OnlineStatusColorConverter"/>
+    </ContentPage.Resources>
 
-        <VerticalStackLayout
-            Grid.Column="0"
-            Padding="16"
-            Spacing="14"
-            BackgroundColor="#151515">
+    <Grid ColumnDefinitions="240,*">
 
-            <Label
-                Text="Zero-Cloud"
-                FontSize="20"
-                TextColor="White"
-                FontAttributes="Bold" />
+        <!-- SIDEBAR -->
+        <Grid Grid.Column="0"
+              Padding="20"
+              BackgroundColor="#151515"
+              RowDefinitions="*,Auto">
 
-            <Button
-                Text="LLM"
-                Clicked="LlmButton_Clicked"
-                BackgroundColor="#C9B037"
-                TextColor="Black"
-                CornerRadius="10" />
+            <VerticalStackLayout Grid.Row="0" Spacing="16">
 
-            <Button
-                Text="MSG"
-                Clicked="MessagingButton_Clicked"
-                BackgroundColor="#2D6CDF"
-                TextColor="White"
-                CornerRadius="10" />
+                <Label Text="FallbackMesh"
+                       FontSize="22"
+                       TextColor="White"
+                       FontAttributes="Bold"/>
 
-            <Button
-                Text="Share"
-                Clicked="ShareButton_Clicked"
-                BackgroundColor="#27AE60"
-                TextColor="White"
-                CornerRadius="10" />
- 
+                <Button Text="Dashboard"
+                        BackgroundColor="#2A2A2A"
+                        TextColor="White"
+                        CornerRadius="12"/>
 
-            <Button
-       Text="Settings"
-       Clicked="SettingsButton_Clicked"
-       BackgroundColor="#2D6CDF"
-       TextColor="White"
-       CornerRadius="10" />
-        </VerticalStackLayout>
+                <Button Text="Discovery"
+                        Clicked="DiscoveryButton_Clicked"
+                        BackgroundColor="#2A2A2A"
+                        TextColor="White"
+                        CornerRadius="12"/>
 
+                <Label Text="Services"
+                       Margin="0,20,0,0"
+                       FontSize="14"
+                       TextColor="#888888"/>
+
+                <Button Text="LLM"
+                        Clicked="LlmButton_Clicked"
+                        IsEnabled="{Binding AdvertisesLLMChat}"
+                        BackgroundColor="#2A2A2A"
+                        TextColor="White"
+                        CornerRadius="12"/>
+
+                <Button Text="MSG"
+                        Clicked="MessagingButton_Clicked"
+                        IsEnabled="{Binding AdvertisesMessaging}"
+                        BackgroundColor="#2A2A2A"
+                        TextColor="White"
+                        CornerRadius="12"/>
+
+                <Button Text="Share"
+                        Clicked="ShareButton_Clicked"
+                        IsEnabled="{Binding AdvertisesFileSharing}"
+                        BackgroundColor="#2A2A2A"
+                        TextColor="White"
+                        CornerRadius="12"/>
+
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Grid.Row="1" Spacing="12">
+
+                <Button Text="Settings"
+                        Clicked="SettingsButton_Clicked"
+                        BackgroundColor="#2A2A2A"
+                        TextColor="White"
+                        CornerRadius="12"/>
+
+                <Button Text="Exit App"
+                        Clicked="ExitButton_Clicked"
+                        BackgroundColor="#2A2A2A"
+                        TextColor="#E74C3C"
+                        CornerRadius="12"/>
+
+            </VerticalStackLayout>
+
+        </Grid>
+
+
+        <!-- DASHBOARD -->
         <Grid Grid.Column="1"
-              RowDefinitions="Auto,*"
-              Padding="16">
+              Padding="24"
+              ColumnDefinitions="2*,1*"
+              RowDefinitions="1.2*,1*,Auto"
+              RowSpacing="24"
+              ColumnSpacing="24">
 
-            <Label
-                Text="Discover"
-                FontSize="18"
-                TextColor="White"
-                FontAttributes="Bold"
-                Margin="0,0,0,12" />
 
-            <CollectionView
-                Grid.Row="1"
-                ItemsSource="{Binding Peers}"
-                SelectionMode="None">
+            <!-- NETWORK OVERVIEW -->
+            <Frame Grid.Row="0"
+                   Grid.Column="0"
+                   Grid.ColumnSpan="1"
+                   BackgroundColor="#212121"
+                   CornerRadius="18"
+                   Padding="20">
 
-                <CollectionView.ItemsLayout>
-                    <GridItemsLayout Orientation="Vertical" Span="4" />
-                </CollectionView.ItemsLayout>
+                <VerticalStackLayout Spacing="16">
 
-                <CollectionView.ItemTemplate>
-                    <DataTemplate>
-                        <Border
-                            Stroke="#2b2b2b"
-                            StrokeThickness="1"
-                            Padding="14"
-                            Margin="8"
-                            BackgroundColor="#212121">
+                    <Label Text="Network Overview"
+                           FontSize="18"
+                           TextColor="White"
+                           FontAttributes="Bold"/>
 
-                            <Border.GestureRecognizers>
-                                <TapGestureRecognizer
-                                    Tapped="OnPeerTapped"
-                                    CommandParameter="{Binding .}" />
-                            </Border.GestureRecognizers>
+                    <Grid ColumnDefinitions="160,220,220,*"
+      ColumnSpacing="40"
+      HorizontalOptions="Fill"
+      VerticalOptions="Center">
 
-                            <Border.StrokeShape>
-                                <RoundRectangle CornerRadius="14" />
-                            </Border.StrokeShape>
+                        <!-- DONUT -->
+                        <GraphicsView x:Name="PeerDonutView"
+                  WidthRequest="140"
+                  HeightRequest="140"
+                  VerticalOptions="Center"
+                  HorizontalOptions="Center"
+                  Margin="100,35,0,0"/>
 
-                            <VerticalStackLayout Spacing="10">
-                                <Label Text="{Binding HostName}"
-                                       FontSize="16"
-                                       TextColor="White"
-                                       FontAttributes="Bold" />
+                        <!-- NETWORK METRICS -->
+                        <VerticalStackLayout Grid.Column="1"
+                         Spacing="6"
+                         VerticalOptions="Center"
+                         Margin="50,20,0,0">
 
-                                <Label Text="{Binding StatusText}"
-                                       FontSize="12"
-                                       TextColor="#CCCCCC" />
+                            <Label Text="Network"
+               FontAttributes="Bold"
+               TextColor="#AAAAAA"
+               FontSize="13"/>
 
-                                <Label Text="{Binding LastSeenText}"
-                                       FontSize="12"
-                                       TextColor="#999999" />
-                            </VerticalStackLayout>
+                            <Label Text="{Binding OnlineCount, StringFormat='Peers Online: {0}'}"
+               TextColor="White"/>
 
-                        </Border>
-                    </DataTemplate>
-                </CollectionView.ItemTemplate>
+                            <Label Text="{Binding OfflineCount, StringFormat='Peers Offline: {0}'}"
+               TextColor="White"/>
 
-            </CollectionView>
+                            <Label Text="{Binding SharedFilesCount, StringFormat='Shared Files: {0}'}"
+               TextColor="White"/>
+
+                        </VerticalStackLayout>
+
+
+                        <!-- MESSAGING METRICS -->
+                        <VerticalStackLayout Grid.Column="2"
+                         Spacing="6"
+                         VerticalOptions="Center">
+
+                            <Label Text="Messaging"
+               FontAttributes="Bold"
+               TextColor="#AAAAAA"
+               FontSize="13"/>
+
+                            <Label Text="{Binding TotalMessagesCount, StringFormat='Total Messages: {0}'}"
+               TextColor="White"/>
+
+                            <Label Text="{Binding PeersMessagedCount, StringFormat='Peers Messaged: {0}'}"
+               TextColor="White"/>
+
+                            <Label Text="{Binding PeersNeverMessagedCount, StringFormat='Peers Never Messaged: {0}'}"
+               TextColor="White"/>
+
+                            <Label Text="{Binding MessagingPeersCount, StringFormat='Messaging Peers: {0}'}"
+               TextColor="White"/>
+
+                        </VerticalStackLayout>
+
+
+                        <!-- ENABLED SERVICES -->
+                        <VerticalStackLayout Grid.Column="3"
+                         Spacing="6"
+                         VerticalOptions="Center">
+
+                            <Label Text="Enabled Services"
+               FontAttributes="Bold"
+               TextColor="#AAAAAA"
+               FontSize="13"/>
+
+                            <Label Text="FileSharing"
+               TextColor="White"
+               IsVisible="{Binding AdvertisesFileSharing}"/>
+
+                            <Label Text="LLMChat"
+               TextColor="White"
+               IsVisible="{Binding AdvertisesLLMChat}"/>
+
+                            <Label Text="Messaging"
+               TextColor="White"
+               IsVisible="{Binding AdvertisesMessaging}"/>
+
+                        </VerticalStackLayout>
+
+                    </Grid>
+
+                </VerticalStackLayout>
+
+            </Frame>
+
+
+            <!-- ACTIVITY -->
+            <Frame Grid.Row="0"
+                   Grid.Column="1"
+                   Grid.RowSpan="2"
+                   BackgroundColor="#212121"
+                   CornerRadius="18"
+                   Padding="20">
+
+                <Grid RowDefinitions="Auto,*" RowSpacing="12">
+
+                    <Label Text="Activity"
+                           FontSize="18"
+                           TextColor="White"
+                           FontAttributes="Bold"/>
+
+                    <CollectionView Grid.Row="1"
+                                    ItemsSource="{Binding ActivityFeed}"
+                                    SelectionMode="None">
+
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+
+                                <Frame BackgroundColor="#2A2A2A"
+                                       Padding="8"
+                                       CornerRadius="10"
+                                       Margin="0,4">
+
+                                    <Label Text="{Binding}"
+                                           FontSize="12"
+                                           TextColor="#CCCCCC"/>
+
+                                </Frame>
+
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+
+                    </CollectionView>
+
+                </Grid>
+
+            </Frame>
+
+
+            <!-- RECENT CONVERSATIONS -->
+            <Frame Grid.Row="1"
+                   Grid.Column="0"
+                   BackgroundColor="#212121"
+                   CornerRadius="18"
+                   Padding="20">
+
+                <VerticalStackLayout Spacing="12">
+
+                    <Label Text="Recent Conversations"
+                           FontSize="18"
+                           TextColor="White"
+                           FontAttributes="Bold"/>
+
+                    <CollectionView ItemsSource="{Binding RecentConversations}"
+                                    SelectionMode="None">
+
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+
+                                <Frame BackgroundColor="#1A1A1A"
+                                       Padding="14"
+                                       CornerRadius="14"
+                                       Margin="0,6">
+
+                                    <Grid ColumnDefinitions="Auto,*"
+                                          ColumnSpacing="12">
+
+                                        <BoxView WidthRequest="10"
+                                                 HeightRequest="10"
+                                                 CornerRadius="5"
+                                                 VerticalOptions="Center"
+                                                 Color="{Binding IsOnline, Converter={StaticResource OnlineStatusColorConverter}}"/>
+
+                                        <VerticalStackLayout Grid.Column="1"
+                                                             Spacing="2">
+
+                                            <Label Text="{Binding PeerName}"
+                                                   FontAttributes="Bold"
+                                                   TextColor="White"/>
+
+                                            <Label Text="{Binding LastMessage}"
+                                                   FontSize="12"
+                                                   TextColor="#CCCCCC"
+                                                   LineBreakMode="TailTruncation"/>
+
+                                        </VerticalStackLayout>
+
+                                    </Grid>
+
+                                </Frame>
+
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+
+                    </CollectionView>
+
+                </VerticalStackLayout>
+
+            </Frame>
+
+
+            <!-- FILES SHARED -->
+            <Frame Grid.Row="2"
+                   Grid.Column="0"
+                   BackgroundColor="#212121"
+                   CornerRadius="18"
+                   Padding="20"
+                   HeightRequest="315">
+
+                <VerticalStackLayout Spacing="12">
+
+                    <Label Text="{Binding SharedFilesCount, StringFormat='Files Shared ({0})'}"
+                           FontSize="18"
+                           TextColor="White"
+                           FontAttributes="Bold"/>
+
+                    <CollectionView ItemsSource="{Binding SharedFiles}"
+                                    SelectionMode="None"
+                                    VerticalOptions="FillAndExpand"
+                                    MaximumHeightRequest="240">
+
+                        <CollectionView.EmptyView>
+                            <Label Text="No shared files found (yet)"
+                                   TextColor="#888888"
+                                   Margin="0,6,0,0"/>
+                        </CollectionView.EmptyView>
+
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Frame BackgroundColor="#1A1A1A"
+                                       Padding="12"
+                                       CornerRadius="12"
+                                       HasShadow="False"
+                                       Margin="0,4">
+
+                                    <Grid ColumnDefinitions="*,Auto"
+                                          RowDefinitions="Auto,Auto"
+                                          ColumnSpacing="12"
+                                          RowSpacing="4">
+
+                                        <Label Text="{Binding FileName}"
+                                               FontAttributes="Bold"
+                                               TextColor="White"
+                                               LineBreakMode="TailTruncation"/>
+
+                                        <Label Grid.Column="1"
+                                               Text="{Binding FileSizeText}"
+                                               TextColor="#AAAAAA"
+                                               FontSize="12"
+                                               HorizontalTextAlignment="End"
+                                               VerticalOptions="Center"/>
+
+                                        <HorizontalStackLayout Grid.Row="1"
+                                                               Spacing="12">
+
+                                            <Label Text="{Binding PeerName, StringFormat='From: {0}'}"
+                                                   FontSize="11"
+                                                   TextColor="#888888"/>
+
+                                            <Label Text="{Binding FileType}"
+                                                   FontSize="11"
+                                                   TextColor="#888888"/>
+
+                                            <Label Text="{Binding SharedSince, StringFormat='{0:dd/MM/yyyy}'}"
+                                                   FontSize="11"
+                                                   TextColor="#888888"/>
+
+                                        </HorizontalStackLayout>
+
+                                    </Grid>
+                                </Frame>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+
+                    </CollectionView>
+
+                </VerticalStackLayout>
+
+            </Frame>
+
+
+            <!-- TRUST & SECURITY -->
+            <Frame Grid.Row="2"
+                   Grid.Column="1"
+                   BackgroundColor="#212121"
+                   CornerRadius="18"
+                   Padding="20"
+                   HeightRequest="315">
+
+                <Grid RowDefinitions="Auto,Auto,Auto,*"
+                      RowSpacing="6">
+
+                    <Label Grid.Row="0"
+                           Text="Trust &amp; Security"
+                           FontSize="18"
+                           TextColor="White"
+                           FontAttributes="Bold"/>
+
+                    <Label Grid.Row="1"
+                           Text="Network secret active"
+                           TextColor="#CCCCCC"/>
+
+                    <Label Grid.Row="2"
+                           Text="{Binding TrustedGroupsCount, StringFormat='{}{0} Trusted groups enabled'}"
+                           TextColor="#CCCCCC"/>
+
+                    <CollectionView Grid.Row="3"
+                                    ItemsSource="{Binding TrustGroupLines}"
+                                    SelectionMode="None"
+                                    VerticalOptions="FillAndExpand"
+                                    Margin="0,6,0,0">
+
+                        <CollectionView.EmptyView>
+                            <Label Text="No trust groups found"
+                                   TextColor="#888888"
+                                   Margin="0,6,0,0"/>
+                        </CollectionView.EmptyView>
+
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Frame BackgroundColor="#1A1A1A"
+                                       Padding="12"
+                                       CornerRadius="12"
+                                       HasShadow="False"
+                                       Margin="0,4">
+
+                                    <Grid ColumnDefinitions="Auto,*"
+                                          ColumnSpacing="10">
+
+                                        <BoxView WidthRequest="10"
+                                                 HeightRequest="10"
+                                                 CornerRadius="5"
+                                                 VerticalOptions="Center"
+                                                 Color="{Binding IsEnabled, Converter={StaticResource OnlineStatusColorConverter}}"/>
+
+                                        <Label Grid.Column="1"
+                                               Text="{Binding Name}"
+                                               TextColor="White"
+                                               FontSize="13"
+                                               VerticalOptions="Center"/>
+
+                                    </Grid>
+                                </Frame>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+
+                    </CollectionView>
+
+                </Grid>
+
+            </Frame>
 
         </Grid>
 
     </Grid>
+
 </ContentPage>

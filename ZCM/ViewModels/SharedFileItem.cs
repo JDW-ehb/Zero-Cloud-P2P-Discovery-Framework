@@ -12,6 +12,12 @@ public sealed class SharedFileItem
     public long Size { get; init; }
     public DateTime SharedSince { get; init; }
 
+    /// <summary>True when this file belongs to the local peer.</summary>
+    public bool IsLocal { get; init; }
+
+    /// <summary>Owner peer name (populated in aggregate views).</summary>
+    public string? OwnerHostName { get; init; }
+
     public string SizeText
     {
         get

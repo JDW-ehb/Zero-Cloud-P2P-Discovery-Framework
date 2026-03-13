@@ -2,209 +2,234 @@
 <ContentPage
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:controls="clr-namespace:ZCM.Controls"
     x:Class="ZCM.Pages.FileSharingPage"
+    Title="File Sharing"
+    Shell.NavBarIsVisible="False"
     BackgroundColor="#1E1E1E">
 
-    <Grid ColumnDefinitions="320,*">
+    <controls:DrawerHost x:Name="Drawer" DrawerWidth="240">
+        <controls:DrawerHost.Drawer>
+            <controls:SidebarView x:Name="Sidebar" />
+        </controls:DrawerHost.Drawer>
 
-        <Grid Grid.Column="0"
-              RowDefinitions="Auto,Auto,*,Auto"
-              Padding="16"
-              BackgroundColor="#151515">
+        <controls:DrawerHost.Main>
+            <Grid ColumnDefinitions="320,*">
 
-            <Label Text="File Sharing"
-                   FontSize="22"
-                   FontAttributes="Bold"
-                   TextColor="White" />
+                <Grid Grid.Column="0"
+                      RowDefinitions="Auto,Auto,Auto,Auto,*,Auto"
+                      Padding="16"
+                      BackgroundColor="#151515">
 
-            <Frame Grid.Row="1"
-                   Margin="0,16"
-                   Padding="16"
-                   CornerRadius="16"
-                   BackgroundColor="#1F1F1F"
-                   HasShadow="False">
+                    <!-- Header -->
+                    <Grid Grid.Row="0"
+                          ColumnDefinitions="Auto,*"
+                          ColumnSpacing="12">
 
-                <VerticalStackLayout Spacing="10">
+                        <Button Text="☰"
+                                WidthRequest="44"
+                                HeightRequest="44"
+                                FontSize="20"
+                                BackgroundColor="#2A2A2A"
+                                TextColor="White"
+                                CornerRadius="12"
+                                Command="{Binding Source={x:Reference Drawer}, Path=ToggleCommand}" />
 
-                    <Label Text="Local shared files"
-                           FontSize="14"
+                        <Label Grid.Column="1"
+                               Text="File Sharing"
+                               FontSize="22"
+                               FontAttributes="Bold"
+                               VerticalOptions="Center"
+                               TextColor="White" />
+
+                    </Grid>
+
+                    <Frame Grid.Row="1"
+                           Margin="0,16"
+                           Padding="16"
+                           CornerRadius="16"
+                           BackgroundColor="#1F1F1F"
+                           HasShadow="False">
+
+                        <VerticalStackLayout Spacing="10">
+                            <Label Text="Local shared files"
+                                   FontSize="14"
+                                   FontAttributes="Bold"
+                                   TextColor="White"/>
+
+                            <Label Text="Manage which files you expose to other peers"
+                                   FontSize="12"
+                                   TextColor="#AAAAAA"/>
+
+                            <Button Text="Manage shared files"
+                                    Clicked="OnMySharedFilesClicked"
+                                    BackgroundColor="#27AE60"
+                                    TextColor="White"
+                                    CornerRadius="10"
+                                    Padding="12,8"/>
+                        </VerticalStackLayout>
+                    </Frame>
+
+                    <!-- Quick-filter buttons -->
+                    <VerticalStackLayout Grid.Row="2" Spacing="8" Margin="0,0,0,12">
+
+                        <Button Text="My Files"
+                                Clicked="OnMyFilesClicked"
+                                BackgroundColor="#2A2A2A"
+                                TextColor="White"
+                                CornerRadius="12"
+                                Padding="12,10"
+                                HorizontalOptions="Fill" />
+
+                        <Button Text="All Network Files"
+                                Clicked="OnAllNetworkFilesClicked"
+                                BackgroundColor="#2A2A2A"
+                                TextColor="White"
+                                CornerRadius="12"
+                                Padding="12,10"
+                                HorizontalOptions="Fill" />
+
+                    </VerticalStackLayout>
+
+                    <!-- Separator label -->
+                    <Label Grid.Row="3"
+                           Text="Peers"
+                           FontSize="12"
+                           FontAttributes="Bold"
+                           TextColor="#888888"
+                           Margin="4,0,0,6" />
+
+                    <CollectionView Grid.Row="4"
+                                    ItemsSource="{Binding Peers}"
+                                    SelectionMode="Single"
+                                    SelectionChanged="OnPeerSelectionChanged">
+
+                        <CollectionView.ItemsLayout>
+                            <LinearItemsLayout Orientation="Vertical"
+                                               ItemSpacing="12" />
+                        </CollectionView.ItemsLayout>
+
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Frame Padding="12"
+                                       CornerRadius="14"
+                                       BackgroundColor="#1F1F1F"
+                                       HasShadow="False">
+
+                                    <Label Text="{Binding HostName}"
+                                           FontAttributes="Bold"
+                                           TextColor="White"/>
+                                </Frame>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+
+                    <Frame Grid.Row="5"
+                           Margin="0,16,0,0"
+                           Padding="14"
+                           CornerRadius="14"
+                           BackgroundColor="#1F1F1F"
+                           HasShadow="False"
+                           IsVisible="{Binding IsDownloading}">
+
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="{Binding DownloadFileName}"
+                                   TextColor="White"
+                                   FontSize="12"
+                                   LineBreakMode="TailTruncation"/>
+
+                            <ProgressBar Progress="{Binding DownloadProgress}"
+                                         HeightRequest="8"
+                                         BackgroundColor="#333333"
+                                         ProgressColor="#27AE60"/>
+                        </VerticalStackLayout>
+                    </Frame>
+
+                </Grid>
+
+                <Grid Grid.Column="1"
+                      RowDefinitions="Auto,Auto,*"
+                      Padding="20">
+
+                    <Label Text="{Binding FilesHeaderText}"
+                           FontSize="18"
                            FontAttributes="Bold"
                            TextColor="White"/>
 
-                    <Label Text="Manage which files you expose to other peers"
-                           FontSize="12"
-                           TextColor="#AAAAAA"/>
+                    <!-- Column headers — same widths as item rows -->
+                    <Grid Grid.Row="1"
+                          Margin="14,16,14,6"
+                          ColumnDefinitions="*,100,80,80,120"
+                          ColumnSpacing="20">
 
-                    <Button Text="Manage shared files"
-                            Clicked="OnMySharedFilesClicked"
-                            BackgroundColor="#27AE60"
-                            TextColor="White"
-                            CornerRadius="10"
-                            Padding="12,8"/>
-                </VerticalStackLayout>
-            </Frame>
+                        <Label Text="File name"
+                               FontAttributes="Bold"
+                               TextColor="#AAAAAA"
+                               VerticalOptions="Center"/>
 
-            <CollectionView Grid.Row="2"
-                            ItemsSource="{Binding Peers}"
-                            SelectionMode="Single"
-                            SelectionChanged="OnPeerSelectionChanged">
+                        <Label Grid.Column="1" Text="Date"   FontAttributes="Bold" TextColor="#AAAAAA" HorizontalTextAlignment="Center" VerticalOptions="Center"/>
+                        <Label Grid.Column="2" Text="Type"   FontAttributes="Bold" TextColor="#AAAAAA" HorizontalTextAlignment="Center" VerticalOptions="Center"/>
+                        <Label Grid.Column="3" Text="Size"   FontAttributes="Bold" TextColor="#AAAAAA" HorizontalTextAlignment="Center" VerticalOptions="Center"/>
+                        <Label Grid.Column="4" Text=""        VerticalOptions="Center"/>
+                    </Grid>
 
-                <CollectionView.ItemsLayout>
-                    <LinearItemsLayout Orientation="Vertical"
-                                       ItemSpacing="12" />
-                </CollectionView.ItemsLayout>
+                    <CollectionView Grid.Row="2"
+                                    ItemsSource="{Binding Files}"
+                                    SelectionMode="None">
 
-                <CollectionView.ItemTemplate>
-                    <DataTemplate>
-                        <Frame Padding="12"
-                               CornerRadius="14"
-                               BackgroundColor="#1F1F1F"
-                               HasShadow="False">
+                        <CollectionView.ItemsLayout>
+                            <LinearItemsLayout Orientation="Vertical" ItemSpacing="14" />
+                        </CollectionView.ItemsLayout>
 
-                            <Label Text="{Binding HostName}"
-                                   FontAttributes="Bold"
-                                   TextColor="White"/>
-                        </Frame>
-                    </DataTemplate>
-                </CollectionView.ItemTemplate>
-            </CollectionView>
+                        <CollectionView.EmptyView>
+                            <Label Text="Select a peer or filter to view shared files"
+                                   TextColor="#666666"
+                                   HorizontalOptions="Center"
+                                   VerticalOptions="Center"/>
+                        </CollectionView.EmptyView>
 
-            <Frame Grid.Row="3"
-                   Margin="0,16,0,0"
-                   Padding="14"
-                   CornerRadius="14"
-                   BackgroundColor="#1F1F1F"
-                   HasShadow="False"
-                   IsVisible="{Binding IsDownloading}">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Frame Padding="14"
+                                       CornerRadius="14"
+                                       BackgroundColor="#1F1F1F"
+                                       HasShadow="False">
 
-                <VerticalStackLayout Spacing="8">
+                                    <!-- Same column widths as the header -->
+                                    <Grid ColumnDefinitions="*,100,80,80,120"
+                                          ColumnSpacing="20"
+                                          VerticalOptions="Center">
 
-                    <Label Text="{Binding DownloadFileName}"
-                           TextColor="White"
-                           FontSize="12"
-                           LineBreakMode="TailTruncation"/>
+                                        <VerticalStackLayout Spacing="2">
+                                            <Label Text="{Binding Name}" TextColor="White" LineBreakMode="TailTruncation"/>
+                                            <Label Text="{Binding OwnerHostName}"
+                                                   TextColor="#888888"
+                                                   FontSize="11"
+                                                   IsVisible="{Binding OwnerHostName, Converter={x:Static x:NullToBoolConverter.Instance}}" />
+                                        </VerticalStackLayout>
 
-                    <ProgressBar Progress="{Binding DownloadProgress}"
-                                 HeightRequest="8"
-                                 BackgroundColor="#333333"
-                                 ProgressColor="#27AE60"/>
+                                        <Label Grid.Column="1" Text="{Binding SharedSinceText}" TextColor="#CCCCCC" HorizontalTextAlignment="Center" VerticalOptions="Center"/>
+                                        <Label Grid.Column="2" Text="{Binding Type}"            TextColor="#CCCCCC" HorizontalTextAlignment="Center" VerticalOptions="Center"/>
+                                        <Label Grid.Column="3" Text="{Binding SizeText}"        TextColor="#CCCCCC" HorizontalTextAlignment="Center" VerticalOptions="Center"/>
 
-                </VerticalStackLayout>
-            </Frame>
+                                        <Button Grid.Column="4"
+                                                Text="Download"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.DownloadCommand}"
+                                                CommandParameter="{Binding .}"
+                                                BackgroundColor="#6B5DD3"
+                                                TextColor="White"
+                                                CornerRadius="10"
+                                                Padding="16,6"/>
+                                    </Grid>
+                                </Frame>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
 
-        </Grid>
+                    </CollectionView>
 
-        <Grid Grid.Column="1"
-              RowDefinitions="Auto,Auto,*"
-              Padding="20">
+                </Grid>
 
-            <Label Text="Shared files"
-                   FontSize="18"
-                   FontAttributes="Bold"
-                   TextColor="White"/>
-
-            <Grid Grid.Row="1"
-                  Margin="20,16,0,6"
-                  ColumnDefinitions="700,50,70,60,120"
-                  ColumnSpacing="16">
-
-                <Label Text="File name"
-                       FontAttributes="Bold"
-                       TextColor="#AAAAAA"
-                       VerticalOptions="Center"/>
-
-                <Label Grid.Column="1"
-                       Text="Date"
-                       FontAttributes="Bold"
-                       TextColor="#AAAAAA"
-                       HorizontalTextAlignment="Center"
-                       VerticalOptions="Center"/>
-
-                <Label Grid.Column="2"
-                       Text="Type"
-                       FontAttributes="Bold"
-                       TextColor="#AAAAAA"
-                       HorizontalTextAlignment="Center"
-                       VerticalOptions="Center"/>
-
-                <Label Grid.Column="3"
-                       Text="Size"
-                       FontAttributes="Bold"
-                       TextColor="#AAAAAA"
-                       HorizontalTextAlignment="Center"
-                       VerticalOptions="Center"/>
-
-                <Label Grid.Column="4"
-                       Text=""
-                       VerticalOptions="Center"/>
             </Grid>
-
-            <CollectionView Grid.Row="2"
-                            ItemsSource="{Binding Files}"
-                            SelectionMode="None">
-
-                <CollectionView.ItemsLayout>
-                    <LinearItemsLayout Orientation="Vertical"
-                                       ItemSpacing="14" />
-                </CollectionView.ItemsLayout>
-
-                <CollectionView.EmptyView>
-                    <Label Text="Select a peer to view shared files"
-                           TextColor="#666666"
-                           HorizontalOptions="Center"
-                           VerticalOptions="Center"/>
-                </CollectionView.EmptyView>
-
-                <CollectionView.ItemTemplate>
-                    <DataTemplate>
-
-                        <Frame Padding="14"
-                               CornerRadius="14"
-                               BackgroundColor="#1F1F1F"
-                               HasShadow="False">
-
-                            <Grid ColumnDefinitions="3*,Auto,Auto,Auto,Auto"
-                                  ColumnSpacing="20"
-                                  VerticalOptions="Center">
-
-                                <Label Text="{Binding Name}"
-                                       TextColor="White"
-                                       LineBreakMode="TailTruncation"/>
-
-                                <Label Grid.Column="1"
-                                       Text="{Binding SharedSinceText}"
-                                       TextColor="#CCCCCC"
-                                       HorizontalOptions="Center"/>
-
-                                <Label Grid.Column="2"
-                                       Text="{Binding Type}"
-                                       TextColor="#CCCCCC"
-                                       HorizontalOptions="Center"/>
-
-                                <Label Grid.Column="3"
-                                       Text="{Binding SizeText}"
-                                       TextColor="#CCCCCC"
-                                       HorizontalOptions="Center"/>
-
-                                <Button Grid.Column="4"
-                                        Text="Download"
-                                        Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.DownloadCommand}"
-                                        CommandParameter="{Binding .}"
-                                        BackgroundColor="#6B5DD3"
-                                        TextColor="White"
-                                        CornerRadius="10"
-                                        Padding="16,6"/>
-                            </Grid>
-
-                        </Frame>
-
-                    </DataTemplate>
-                </CollectionView.ItemTemplate>
-
-            </CollectionView>
-
-        </Grid>
-
-    </Grid>
-
+        </controls:DrawerHost.Main>
+    </controls:DrawerHost>
 </ContentPage>

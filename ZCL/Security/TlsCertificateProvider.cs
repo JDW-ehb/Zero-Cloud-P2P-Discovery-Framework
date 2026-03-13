@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -7,56 +8,17 @@ using System.Text;
 
 namespace ZCL.Security
 {
-    internal static class TlsCertificateProvider
+    public static class TlsCertificateProvider
     {
-
-        public static X509Certificate2 LoadOrCreateIdentityCertificate(
-            string baseDirectory,
-            string? peerLabel = null,
-            string? pfxPassword = null,
-            string? pfxFileName = null)
+        public static X509Certificate2 CreateNetworkIdentityCertificate(
+            string peerLabel,
+            byte[] networkSecret)
         {
-            if (string.IsNullOrWhiteSpace(baseDirectory))
-                throw new ArgumentException("baseDirectory is required.", nameof(baseDirectory));
-
-            Directory.CreateDirectory(baseDirectory);
-
-            pfxFileName ??= TlsConstants.DefaultPfxFileName;
-            pfxPassword ??= TlsConstants.DefaultPfxPassword;
-
-            var pfxPath = Path.Combine(baseDirectory, pfxFileName);
-
-            if (File.Exists(pfxPath))
-            {
-                var loaded = new X509Certificate2(
-                    pfxPath,
-                    pfxPassword,
-                    X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
-
-                // Ensure private key is present (needed for AuthenticateAsServer)
-                if (!loaded.HasPrivateKey)
-                    throw new InvalidOperationException("Loaded TLS identity cert has no private key.");
-
-                return loaded;
-            }
-
-            var created = CreateSelfSignedIdentityCertificate(peerLabel);
-            SavePfx(created, pfxPath, pfxPassword);
-            return created;
-        }
-
-
-        public static X509Certificate2 CreateSelfSignedIdentityCertificate(string? peerLabel = null)
-        {
-            peerLabel ??= Environment.MachineName;
-
             using var rsa = RSA.Create(3072);
 
-            var subject = new X500DistinguishedName($"CN={TlsConstants.SubjectCnPrefix} - {EscapeCn(peerLabel)}");
+            var subject = new X500DistinguishedName($"CN=ZC Peer - {peerLabel}");
 
-            var req = new CertificateRequest(
-                subject,
-                rsa,
+            var req = new CertificateRequest(subject, rsa,
                 HashAlgorithmName.SHA256,
                 RSASignaturePadding.Pkcs1);
 
@@ -65,28 +27,20 @@ namespace ZCL.Security
 
             req.CertificateExtensions.Add(
                 new X509KeyUsageExtension(
-                    X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment,
+                    X509KeyUsageFlags.DigitalSignature |
+                    X509KeyUsageFlags.KeyEncipherment,
                     true));
+            var proof = new HMACSHA256(networkSecret)
+            .ComputeHash(req.PublicKey.EncodedKeyValue.RawData);
 
-            var eku = new OidCollection
-            {
-                new Oid("1.3.6.1.5.5.7.3.1"), 
-                new Oid("1.3.6.1.5.5.7.3.2"), 
-            };
-            req.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(eku, true));
+            var payload = Convert.ToHexString(proof);
 
-            req.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(req.PublicKey, false));
+            req.CertificateExtensions.Add(
+                new X509Extension(
+                    new Oid("1.3.6.1.4.1.55555.1.99"),
+                    Encoding.UTF8.GetBytes(payload),
+                    false));
 
-            var tagHex = ComputeMembershipTagHex(req.PublicKey);
-            var payload = $"{TlsConstants.MembershipTagPrefix}{tagHex}";
-            var payloadBytes = Encoding.UTF8.GetBytes(payload);
-
-            var membershipExt = new X509Extension(
-                new Oid(TlsConstants.MembershipTagOid),
-                payloadBytes,
-                critical: false);
-
-            req.CertificateExtensions.Add(membershipExt);
 
             var notBefore = DateTimeOffset.UtcNow.AddMinutes(-5);
             var notAfter = DateTimeOffset.UtcNow.AddYears(5);
@@ -99,24 +53,6 @@ namespace ZCL.Security
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
         }
 
-        public static string ComputeMembershipTagHex(PublicKey publicKey)
-        {
-            if (publicKey == null) throw new ArgumentNullException(nameof(publicKey));
-
-            var alg = publicKey.EncodedParameters?.RawData ?? Array.Empty<byte>();
-            var key = publicKey.EncodedKeyValue?.RawData ?? Array.Empty<byte>();
-
-            var material = new byte[alg.Length + key.Length];
-            Buffer.BlockCopy(alg, 0, material, 0, alg.Length);
-            Buffer.BlockCopy(key, 0, material, alg.Length, key.Length);
-
-            var secretBytes = Encoding.UTF8.GetBytes(TlsConstants.SharedSecret);
-            using var hmac = new HMACSHA256(secretBytes);
-
-            var tag = hmac.ComputeHash(material);
-            return Convert.ToHexString(tag);
-        }
-
         public static void SavePfx(X509Certificate2 cert, string pfxPath, string password)
         {
             if (cert == null) throw new ArgumentNullException(nameof(cert));
@@ -127,8 +63,34 @@ namespace ZCL.Security
         }
 
         private static string EscapeCn(string s)
+            => s.Replace(",", "_").Replace(";", "_").Replace("\n", "_").Replace("\r", "_");
+
+        public static void DeleteLocalIdentityCertificate(string baseDirectory)
         {
-            return s.Replace(",", "_").Replace(";", "_").Replace("\n", "_").Replace("\r", "_");
+            if (string.IsNullOrWhiteSpace(baseDirectory))
+                throw new ArgumentException(nameof(baseDirectory));
+
+            var pfxPath = Path.Combine(baseDirectory, TlsConstants.DefaultPfxFileName);
+
+            if (File.Exists(pfxPath))
+                File.Delete(pfxPath);
+        }
+
+        public static string ComputeMembershipTagHex(PublicKey publicKey, byte[] secretBytes)
+        {
+            if (publicKey == null) throw new ArgumentNullException(nameof(publicKey));
+            if (secretBytes == null || secretBytes.Length == 0) throw new ArgumentException("secretBytes required.", nameof(secretBytes));
+
+            var alg = publicKey.EncodedParameters?.RawData ?? Array.Empty<byte>();
+            var key = publicKey.EncodedKeyValue?.RawData ?? Array.Empty<byte>();
+
+            var material = new byte[alg.Length + key.Length];
+            Buffer.BlockCopy(alg, 0, material, 0, alg.Length);
+            Buffer.BlockCopy(key, 0, material, alg.Length, key.Length);
+
+            using var hmac = new HMACSHA256(secretBytes);
+            var tag = hmac.ComputeHash(material);
+            return Convert.ToHexString(tag);
         }
     }
 }

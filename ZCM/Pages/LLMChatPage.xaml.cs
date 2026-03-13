@@ -3,13 +3,16 @@ using ZCL.Models;
 using ZCL.Protocol.ZCSP;
 using ZCL.Repositories.IA;
 using ZCL.Services.LLM;
+using ZCM.Controls;
 using ZCM.ViewModels;
 
 namespace ZCM.Pages;
 
 [QueryProperty(nameof(Peer), "Peer")]
-public partial class LLMChatPage : ContentPage
+public partial class LLMChatPage : ContentPage, IDrawerPage
 {
+    public DrawerHost? PageDrawer => Drawer;
+
     private readonly LLMChatViewModel _vm;
 
     private PeerNode? _preselectPeer;
@@ -17,6 +20,8 @@ public partial class LLMChatPage : ContentPage
     public LLMChatPage()
     {
         InitializeComponent();
+
+        Sidebar.Host = Drawer;
 
         _vm = new LLMChatViewModel(
             ServiceHelper.GetService<ZcspPeer>(),
